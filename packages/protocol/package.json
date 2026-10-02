@@ -44,11 +44,11 @@
     "check": "npm run fmt:check && npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
-    "@types/node": "^24.19.0",
+    "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.11.0",
     "prettier": "^3.9.9",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.71.0",
     "viem": "^2.57.2",
     "vitest": "^4.1.11"
