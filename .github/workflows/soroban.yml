@@ -42,7 +42,7 @@ jobs:
         # workspace does not touch either, so pulling them would cost a minute for nothing.
         # persist-credentials is off because no step after this one needs to talk to the remote,
         # and a token left in .git/config is a token a later step can read.
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: false
           persist-credentials: false
@@ -93,7 +93,7 @@ jobs:
 
       - name: Restore the pinned stellar-cli
         id: stellar-cli-cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.local/bin/stellar
           # Keyed on the version alone, which is correct: the binary for a given release never
@@ -179,7 +179,7 @@ jobs:
         # Useful for two things: diffing a size regression against the previous run, and handing
         # a reviewer the exact bytes a pull request produces without asking them to build it.
         if: success()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: soroban-wasm-${{ github.sha }}
           path: soroban/target/wasm32v1-none/release/hyperion_*.wasm
