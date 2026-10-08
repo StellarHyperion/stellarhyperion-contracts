@@ -5,7 +5,7 @@ use soroban_sdk::{testutils::Address as _, Address, String};
 
 use super::doubles::{evm_destination, not_an_evm_address};
 use super::setup::{World, EVM_DECIMALS, HUNDRED};
-use crate::types::{AdminAction, Destination, OutboundRequest};
+use crate::types::{AdminAction, Destination, OutboundRequest, RouteConfig};
 
 fn dest(world: &World) -> Destination {
     Destination {
@@ -556,4 +556,68 @@ fn the_treasury_is_the_only_place_fees_go() {
     assert_eq!(w.token().balance(&w.treasury), HUNDRED / 1_000);
     assert_eq!(w.token().balance(&stranger), 0);
     assert_eq!(w.token().balance(&w.router_id), 0);
+}
+
+#[test]
+fn transfers_respect_route_max_single_transfer() {
+    let w = World::new();
+
+    // Set max single transfer to exactly HUNDRED.
+    w.run_action(AdminAction::SetRouteConfig(
+        RouteKind::Cctp,
+        RouteConfig {
+            max_single_transfer: HUNDRED,
+        },
+    ));
+
+    assert_eq!(
+        w.router().get_route_config(&RouteKind::Cctp),
+        Some(RouteConfig {
+            max_single_transfer: HUNDRED,
+        })
+    );
+
+    // Boundary check: sending exactly HUNDRED succeeds.
+    let nonce = w.router().bridge_out(
+        &w.user,
+        &OutboundRequest {
+            token: w.token_id.clone(),
+            amount: HUNDRED,
+            route: RouteKind::Cctp,
+            destination: dest(&w),
+            destination_decimals: EVM_DECIMALS,
+            min_destination_amount: 0,
+        },
+    );
+    assert_eq!(nonce, 1);
+
+    // Exceeding the route limit is rejected with ExceedsRouteLimit.
+    assert_eq!(
+        w.router().try_bridge_out(
+            &w.user,
+            &OutboundRequest {
+                token: w.token_id.clone(),
+                amount: HUNDRED + 1,
+                route: RouteKind::Cctp,
+                destination: dest(&w),
+                destination_decimals: EVM_DECIMALS,
+                min_destination_amount: 0,
+            },
+        ),
+        Err(Ok(HyperionError::ExceedsRouteLimit))
+    );
+
+    // Sending less than the route limit succeeds.
+    let nonce_under = w.router().bridge_out(
+        &w.user,
+        &OutboundRequest {
+            token: w.token_id.clone(),
+            amount: HUNDRED - 10,
+            route: RouteKind::Cctp,
+            destination: dest(&w),
+            destination_decimals: EVM_DECIMALS,
+            min_destination_amount: 0,
+        },
+    );
+    assert_eq!(nonce_under, 2);
 }

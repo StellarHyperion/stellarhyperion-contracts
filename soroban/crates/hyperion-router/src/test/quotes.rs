@@ -11,7 +11,7 @@ use soroban_sdk::Address;
 
 use super::doubles::evm_destination;
 use super::setup::{World, EVM_DECIMALS, FEE_BPS, FLOW_LIMIT, HUNDRED};
-use crate::types::{AdminAction, Destination, OutboundRequest, RouteQuote};
+use crate::types::{AdminAction, Destination, OutboundRequest, RouteConfig, RouteQuote};
 
 fn quote_for(quotes: &soroban_sdk::Vec<RouteQuote>, route: RouteKind) -> RouteQuote {
     quotes
@@ -344,4 +344,31 @@ fn quoting_is_free_and_changes_nothing() {
         w.router().flow_available(&w.token_id, &RouteKind::Cctp),
         FLOW_LIMIT
     );
+}
+
+#[test]
+fn a_quote_reports_exceeds_route_limit_when_amount_is_too_high() {
+    let w = World::new();
+    w.run_action(AdminAction::SetRouteConfig(
+        RouteKind::Cctp,
+        RouteConfig {
+            max_single_transfer: HUNDRED,
+        },
+    ));
+
+    let q_over = quote_for(
+        &w.router()
+            .quote_routes(&w.token_id, &(HUNDRED + 1), &EVM_DECIMALS),
+        RouteKind::Cctp,
+    );
+    assert!(!q_over.available);
+    assert_eq!(q_over.reason, HyperionError::ExceedsRouteLimit as u32);
+
+    let q_ok = quote_for(
+        &w.router()
+            .quote_routes(&w.token_id, &HUNDRED, &EVM_DECIMALS),
+        RouteKind::Cctp,
+    );
+    assert!(q_ok.available);
+    assert_eq!(q_ok.reason, 0);
 }

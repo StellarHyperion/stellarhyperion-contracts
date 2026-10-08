@@ -38,6 +38,16 @@ pub struct TokenConfig {
     pub enabled: bool,
 }
 
+/// Per-route settings.
+///
+/// Limits that apply to an entire route rather than to a single asset.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RouteConfig {
+    /// Ceiling on the gross amount a single transfer may carry over this route.
+    pub max_single_transfer: i128,
+}
+
 /// A transfer the router sent out, kept so the indexer and the app can find it again.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -117,6 +127,8 @@ pub enum AdminAction {
     SetTimelockDelay(u64),
     SetFlowWindow(u32),
     Upgrade(BytesN<32>),
+    SetRouteConfig(RouteKind, RouteConfig),
+    SetRouteMaxSingleTransfer(RouteKind, i128),
 }
 
 #[contracttype]
