@@ -98,4 +98,6 @@ pub enum HyperionError {
     GasFloatTooLow = 45,
     /// Somebody tried to move an asset the contract holds on purpose.
     ProtectedAsset = 46,
+    /// A single transfer exceeds the maximum amount permitted for the chosen route.
+    ExceedsRouteLimit = 47,
 }

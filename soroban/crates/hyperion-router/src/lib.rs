@@ -26,7 +26,7 @@ pub use storage::DataKey;
 pub use timelock::{GRACE_PERIOD, MAX_TIMELOCK_DELAY, MIN_TIMELOCK_DELAY};
 pub use types::{
     AdminAction, Config, Destination, InboundRecord, Origin, OutboundRequest, PendingClaim,
-    QueuedAction, Recipient, RouteQuote, TokenConfig, TransferRecord,
+    QueuedAction, Recipient, RouteConfig, RouteQuote, TokenConfig, TransferRecord,
 };
 
 use hyperion_core::{
@@ -121,6 +121,11 @@ impl HyperionRouter {
         }
         if !storage::route_enabled(&env, route) {
             return Err(HyperionError::RouteDisabled);
+        }
+        if let Some(route_cfg) = storage::route_config(&env, route) {
+            if route_cfg.max_single_transfer > 0 && amount > route_cfg.max_single_transfer {
+                return Err(HyperionError::ExceedsRouteLimit);
+            }
         }
 
         // A destination that is not a left-padded EVM word is refused rather than truncated.
@@ -510,6 +515,7 @@ impl HyperionRouter {
         for token in tokens.iter() {
             let _ = storage::token_config(&env, &token);
             for route in routes.iter() {
+                let _ = storage::route_config(&env, route);
                 storage::touch_flow(&env, &token, route);
             }
         }
@@ -564,6 +570,10 @@ impl HyperionRouter {
 
     pub fn is_route_enabled(env: Env, route: RouteKind) -> bool {
         storage::route_enabled(&env, route)
+    }
+
+    pub fn get_route_config(env: Env, route: RouteKind) -> Option<RouteConfig> {
+        storage::route_config(&env, route)
     }
 
     pub fn flow_available(
@@ -641,6 +651,11 @@ fn quote_one(
     }
     if storage::adapter(env, route).is_err() {
         return unavailable(route, amount, HyperionError::AdapterNotSet);
+    }
+    if let Some(route_cfg) = storage::route_config(env, route) {
+        if route_cfg.max_single_transfer > 0 && amount > route_cfg.max_single_transfer {
+            return unavailable(route, amount, HyperionError::ExceedsRouteLimit);
+        }
     }
 
     let split = match apply_fee(amount, cfg.fee_bps) {
