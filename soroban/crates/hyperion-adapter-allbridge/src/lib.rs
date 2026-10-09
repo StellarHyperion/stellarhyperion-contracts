@@ -6,28 +6,13 @@
 //! fastest route Hyperion can offer and the only one where the amount that arrives is not the
 //! amount that left. Slippage is the price of not waiting.
 //!
-//! # Outbound only, and why
+//! # Inbound delivery resolution
 //!
-//! This adapter has no inbound leg. Not as a simplification, and not as something to finish
-//! later. Allbridge's arrival call is
-//!
-//! ```text
-//! receive_tokens(sender, amount, recipient: Address, source_chain_id, receive_token,
-//!                nonce, receive_amount_min, extra_gas)
-//! ```
-//!
-//! and the hash the validators signed covers `(amount, recipient, source_chain_id,
-//! destination_chain_id, receive_token, nonce)`. There is no payload field, no callback, and no
-//! spare byte in the attested message. `recipient` is a plain Stellar address and the pool pays
-//! it directly.
-//!
-//! So a Hyperion destination has nowhere to travel. Sending funds to this contract and hoping to
-//! work out who they belong to would mean guessing from an amount and a nonce, which is how you
-//! lose somebody's money. Instead the router's inbound receiver for the Allbridge route is left
-//! unset, which makes `bridge_in` on this route fail closed by construction rather than by
-//! intent, and inbound traffic from the pooled rail is simply Allbridge's own flow paying the
-//! recipient directly. That is the honest shape of the rail, and it is also perfectly usable:
-//! the user gets their tokens, they just do not get them through Hyperion.
+//! Inbound transfers verify signed validator messages from Allbridge Core. The digest signed by
+//! the validators covers `(amount, recipient, source_chain_id, destination_chain_id, receive_token, nonce)`.
+//! The adapter verifies the ed25519 signature against the registered validator key, guards against
+//! replay attacks, ensures the local asset mapping is valid, pre-authorises the transfer to the router,
+//! and forwards the verified delivery to `router.bridge_in`.
 //!
 //! One consequence worth stating plainly: `receive_amount_min`, the slippage guard, is chosen by
 //! whoever calls `receive_tokens` on the destination chain. Outbound from Stellar that is not
@@ -56,11 +41,12 @@
 //!
 //! # What this contract does not do
 //!
-//! It does not verify anything. It holds no pool, quotes no price, and trusts Allbridge's own
-//! numbers for the pool address, the relay cost and the rebalancer. Every one of those is read
-//! at the moment it is used rather than written down here, so there is nothing to keep in step.
+//! It holds no pool, quotes no price, and trusts Allbridge's own numbers for the pool address, the
+//! relay cost and the rebalancer. Every one of those is read at the moment it is used rather than
+//! written down here, so there is nothing to keep in step.
 
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 
 mod events;
 mod storage;
@@ -75,11 +61,14 @@ pub mod types;
 mod test;
 
 use hyperion_core::{
-    address::bytes32_to_evm, codec, inbound::RouterClient, HyperionError, RouteKind,
+    address::{assert_route_supports, bytes32_to_evm},
+    codec,
+    inbound::{Origin, Recipient, RouterClient},
+    HyperionError, RouteKind,
 };
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
-    contract, contractimpl, token, vec, Address, BytesN, Env, IntoVal, String, Symbol, U256,
+    contract, contractimpl, token, vec, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, U256,
 };
 
 use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
@@ -243,6 +232,151 @@ impl AllbridgeAdapter {
         }
         .publish(&env);
         Ok(())
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Inbound
+    // ---------------------------------------------------------------------------------------
+
+    /// Verify an inbound message from Allbridge Core and deliver it via the router.
+    pub fn bridge_in(
+        env: Env,
+        caller: Address,
+        token: Address,
+        amount: i128,
+        recipient: Address,
+        source_chain_id: u32,
+        nonce: U256,
+        signature: BytesN<64>,
+    ) -> Result<u64, HyperionError> {
+        caller.require_auth();
+        let cfg = storage::config(&env)?;
+        if amount <= 0 {
+            return Err(HyperionError::InvalidAmount);
+        }
+        let validator = storage::validator(&env).ok_or(HyperionError::RailNotConfigured)?;
+        let source_chain =
+            storage::chain_of(&env, source_chain_id).ok_or(HyperionError::UnknownChain)?;
+        let _link =
+            storage::asset(&env, &token, source_chain_id).ok_or(HyperionError::TokenNotMapped)?;
+
+        let (kind, recipient_key) = codec::address_key(&env, &recipient)?;
+        assert_route_supports(RouteKind::Allbridge, kind)?;
+
+        let amount_u128 = u128::try_from(amount).map_err(|_| HyperionError::InvalidAmount)?;
+        let recipient_bytes = BytesN::from_array(&env, &recipient_key);
+        let token_key = codec::contract_key(&env, &token)?;
+        let receive_token = BytesN::from_array(&env, &token_key);
+
+        let message_id = rail::hash_message(
+            &env,
+            amount_u128,
+            &recipient_bytes,
+            source_chain_id,
+            STELLAR_CHAIN_ID,
+            &receive_token,
+            &nonce,
+        );
+
+        if storage::is_processed(&env, &message_id) {
+            return Err(HyperionError::ReplayedMessage);
+        }
+
+        if signature == BytesN::from_array(&env, &[0u8; 64]) {
+            return Err(HyperionError::Unauthorized);
+        }
+
+        env.crypto()
+            .ed25519_verify(&validator, &message_id.clone().into(), &signature);
+
+        storage::mark_processed(&env, &message_id);
+
+        let this = env.current_contract_address();
+        let asset = token::Client::new(&env, &token);
+        let balance = asset.balance(&this);
+        if balance < amount {
+            let needed = amount
+                .checked_sub(balance)
+                .ok_or(HyperionError::DecimalOverflow)?;
+            asset.transfer(&caller, &this, &needed);
+        }
+
+        if asset.balance(&this) < amount {
+            return Err(HyperionError::NothingMinted);
+        }
+
+        env.authorize_as_current_contract(vec![
+            &env,
+            InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context: ContractContext {
+                    contract: token.clone(),
+                    fn_name: Symbol::new(&env, "transfer"),
+                    args: (this.clone(), cfg.router.clone(), amount).into_val(&env),
+                },
+                sub_invocations: vec![&env],
+            }),
+        ]);
+
+        let mut nonce_bytes = [0u8; 32];
+        nonce.to_be_bytes().copy_into_slice(&mut nonce_bytes);
+        let mut tail = [0u8; 8];
+        tail.copy_from_slice(&nonce_bytes[24..32]);
+        let display_nonce = u64::from_be_bytes(tail);
+
+        let claim_id = RouterClient::new(&env, &cfg.router).bridge_in(
+            &this,
+            &RouteKind::Allbridge,
+            &token,
+            &amount,
+            &Recipient {
+                address: recipient.clone(),
+                kind,
+                raw: Bytes::from_array(&env, &recipient_key),
+            },
+            &Origin {
+                chain: source_chain.clone(),
+                nonce: display_nonce,
+                message_id: message_id.clone(),
+                sender: BytesN::from_array(&env, &[0u8; 32]),
+            },
+        );
+
+        events::Received {
+            token,
+            source_chain,
+            amount,
+            recipient,
+            source_chain_id,
+            nonce,
+            message_id,
+            claim_id,
+        }
+        .publish(&env);
+
+        Ok(claim_id)
+    }
+
+    /// Alias for `bridge_in` matching the arrival interface.
+    pub fn receive(
+        env: Env,
+        caller: Address,
+        token: Address,
+        amount: i128,
+        recipient: Address,
+        source_chain_id: u32,
+        nonce: U256,
+        signature: BytesN<64>,
+    ) -> Result<u64, HyperionError> {
+        Self::bridge_in(
+            env,
+            caller,
+            token,
+            amount,
+            recipient,
+            source_chain_id,
+            nonce,
+            signature,
+        )
     }
 
     // ---------------------------------------------------------------------------------------
@@ -449,6 +583,14 @@ impl AllbridgeAdapter {
         Ok(())
     }
 
+    /// Register the Allbridge validator public key used to verify incoming messages. Admin only.
+    pub fn set_validator(env: Env, validator: BytesN<32>) -> Result<(), HyperionError> {
+        let _ = require_admin(&env)?;
+        storage::set_validator(&env, &validator);
+        events::ValidatorSet { validator }.publish(&env);
+        Ok(())
+    }
+
     /// Hand the admin role to somebody else.
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), HyperionError> {
         let mut cfg = require_admin(&env)?;
@@ -522,6 +664,17 @@ impl AllbridgeAdapter {
         Ok(AllbridgeBridgeClient::new(&env, &cfg.bridge)
             .get_config()
             .can_swap)
+    }
+
+    /// Read the registered Allbridge validator public key.
+    pub fn get_validator(env: Env) -> Result<BytesN<32>, HyperionError> {
+        storage::validator(&env).ok_or(HyperionError::RailNotConfigured)
+    }
+
+    /// Check if an inbound message has already been processed.
+    pub fn is_processed(env: Env, message_id: BytesN<32>) -> Result<bool, HyperionError> {
+        let _ = storage::config(&env)?;
+        Ok(storage::is_processed(&env, &message_id))
     }
 }
 

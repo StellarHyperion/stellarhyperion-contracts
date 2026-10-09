@@ -19,8 +19,8 @@
 
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
-    contract, contractimpl, contracttype, token, vec, Address, Bytes, BytesN, Env, IntoVal, Map,
-    Symbol, U256,
+    contract, contractimpl, contracttype, token, vec, Address, BytesN, Env, IntoVal, Map, Symbol,
+    U256,
 };
 
 use crate::rail::{AnotherBridge, BridgeConfig};
@@ -487,18 +487,13 @@ fn hash_message(
     receive_token: &BytesN<32>,
     nonce: &U256,
 ) -> BytesN<32> {
-    let mut buf = Bytes::new(env);
-    buf.extend_from_slice(&[0u8; 16]);
-    buf.extend_from_slice(&amount.to_be_bytes());
-    buf.extend_from_array(&recipient.to_array());
-    buf.append(&U256::from_u32(env, source_chain_id).to_be_bytes());
-    buf.extend_from_array(&receive_token.to_array());
-    buf.append(&nonce.to_be_bytes());
-    buf.extend_from_slice(&1u8.to_be_bytes());
-
-    let digest: BytesN<32> = env.crypto().keccak256(&buf).into();
-    let mut out = digest.to_array();
-    out[0] = source_chain_id as u8;
-    out[1] = destination_chain_id as u8;
-    BytesN::from_array(env, &out)
+    crate::rail::hash_message(
+        env,
+        amount,
+        recipient,
+        source_chain_id,
+        destination_chain_id,
+        receive_token,
+        nonce,
+    )
 }

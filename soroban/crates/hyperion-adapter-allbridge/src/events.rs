@@ -77,3 +77,26 @@ pub struct AdminChanged {
     pub old: Address,
     pub new: Address,
 }
+
+/// A message Allbridge attested and delivered, and that this adapter passed on to the router.
+#[contractevent(topics = ["hyperion", "abr_in"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Received {
+    #[topic]
+    pub token: Address,
+    #[topic]
+    pub source_chain: String,
+    pub amount: i128,
+    pub recipient: Address,
+    pub source_chain_id: u32,
+    pub nonce: U256,
+    pub message_id: BytesN<32>,
+    /// Nonzero when the router had to park the delivery instead of handing it straight over.
+    pub claim_id: u64,
+}
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorSet {
+    pub validator: BytesN<32>,
+}
