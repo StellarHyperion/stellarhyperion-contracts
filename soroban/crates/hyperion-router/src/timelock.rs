@@ -2,7 +2,7 @@ use hyperion_core::{HyperionError, MAX_FEE_BPS};
 use soroban_sdk::{ContractExecutable, Env};
 
 use crate::storage;
-use crate::types::{AdminAction, Config, QueuedAction, TokenConfig};
+use crate::types::{AdminAction, Config, QueuedAction, RouteConfig, TokenConfig};
 
 /// Shortest and longest delay the router will accept.
 ///
@@ -78,9 +78,13 @@ fn validate(action: &AdminAction) -> Result<(), HyperionError> {
         }
         AdminAction::RaiseTokenFlowLimit(_, limit)
         | AdminAction::SetRouteFlowLimit(_, _, limit)
+        | AdminAction::SetRouteMaxSingleTransfer(_, limit)
             if *limit < 0 =>
         {
             return Err(HyperionError::InvalidLimit)
+        }
+        AdminAction::SetRouteConfig(_, cfg) if cfg.max_single_transfer < 0 => {
+            return Err(HyperionError::InvalidLimit);
         }
         _ => {}
     }
@@ -172,6 +176,21 @@ pub fn apply(env: &Env, action: &AdminAction) -> Result<(), HyperionError> {
         AdminAction::Upgrade(wasm_hash) => {
             env.deployer()
                 .update_current_contract(ContractExecutable::Wasm(wasm_hash.clone()));
+        }
+        AdminAction::SetRouteConfig(route, route_cfg) => {
+            if route_cfg.max_single_transfer < 0 {
+                return Err(HyperionError::InvalidLimit);
+            }
+            storage::set_route_config(env, *route, route_cfg);
+        }
+        AdminAction::SetRouteMaxSingleTransfer(route, limit) => {
+            if *limit < 0 {
+                return Err(HyperionError::InvalidLimit);
+            }
+            let route_cfg = RouteConfig {
+                max_single_transfer: *limit,
+            };
+            storage::set_route_config(env, *route, &route_cfg);
         }
     }
     Ok(())

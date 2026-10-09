@@ -6,7 +6,7 @@ use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 use super::doubles::all_routes;
 use super::setup::{World, EVM_DECIMALS, HUNDRED};
 use crate::timelock::{GRACE_PERIOD, MAX_TIMELOCK_DELAY, MIN_TIMELOCK_DELAY};
-use crate::types::{AdminAction, Destination, OutboundRequest};
+use crate::types::{AdminAction, Destination, OutboundRequest, RouteConfig};
 use crate::{HyperionRouter, HyperionRouterClient};
 
 // ------------------------------------------------------------------------------------------
@@ -529,5 +529,67 @@ fn a_router_that_was_never_initialised_refuses_everything_that_matters() {
     assert_eq!(
         client.try_queue_action(&who, &AdminAction::SetFeeBps(1)),
         Err(Ok(HyperionError::NotInitialized))
+    );
+}
+
+#[test]
+fn route_max_single_transfer_can_be_updated_through_timelock() {
+    let w = World::new();
+
+    // Verify initial route config is None
+    assert_eq!(w.router().get_route_config(&RouteKind::Cctp), None);
+
+    // Update via SetRouteConfig
+    w.run_action(AdminAction::SetRouteConfig(
+        RouteKind::Cctp,
+        RouteConfig {
+            max_single_transfer: 50_000,
+        },
+    ));
+
+    assert_eq!(
+        w.router().get_route_config(&RouteKind::Cctp),
+        Some(RouteConfig {
+            max_single_transfer: 50_000,
+        })
+    );
+
+    // Update via SetRouteMaxSingleTransfer
+    w.run_action(AdminAction::SetRouteMaxSingleTransfer(
+        RouteKind::Cctp,
+        75_000,
+    ));
+
+    assert_eq!(
+        w.router().get_route_config(&RouteKind::Cctp),
+        Some(RouteConfig {
+            max_single_transfer: 75_000,
+        })
+    );
+}
+
+#[test]
+fn negative_route_limit_is_refused_at_queue_time() {
+    let w = World::new();
+
+    assert_eq!(
+        w.router().try_queue_action(
+            &w.admin,
+            &AdminAction::SetRouteMaxSingleTransfer(RouteKind::Cctp, -1),
+        ),
+        Err(Ok(HyperionError::InvalidLimit))
+    );
+
+    assert_eq!(
+        w.router().try_queue_action(
+            &w.admin,
+            &AdminAction::SetRouteConfig(
+                RouteKind::Cctp,
+                RouteConfig {
+                    max_single_transfer: -1,
+                },
+            ),
+        ),
+        Err(Ok(HyperionError::InvalidLimit))
     );
 }

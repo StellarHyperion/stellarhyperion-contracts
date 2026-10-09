@@ -1,7 +1,7 @@
 use hyperion_core::{FlowWindow, HyperionError, RouteKind};
 use soroban_sdk::{contracttype, Address, BytesN, Env};
 
-use crate::types::{Config, PendingClaim, QueuedAction, TokenConfig, TransferRecord};
+use crate::types::{Config, PendingClaim, QueuedAction, RouteConfig, TokenConfig, TransferRecord};
 
 /// Ledgers of headroom below which the router tops a key's lifetime back up.
 ///
@@ -22,6 +22,7 @@ pub enum DataKey {
     /// The only address allowed to call `bridge_in` for a given rail.
     RailReceiver(RouteKind),
     RouteEnabled(RouteKind),
+    RouteConfig(RouteKind),
     Token(Address),
     /// Per-route ceiling, overriding the token-wide one when present.
     RouteFlowLimit(Address, RouteKind),
@@ -116,6 +117,25 @@ pub fn set_route_enabled(env: &Env, route: RouteKind, enabled: bool) {
         .instance()
         .set(&DataKey::RouteEnabled(route), &enabled);
     env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn route_config(env: &Env, route: RouteKind) -> Option<RouteConfig> {
+    let key = DataKey::RouteConfig(route);
+    let cfg = env.storage().persistent().get(&key);
+    if cfg.is_some() {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    }
+    cfg
+}
+
+pub fn set_route_config(env: &Env, route: RouteKind, cfg: &RouteConfig) {
+    let key = DataKey::RouteConfig(route);
+    env.storage().persistent().set(&key, cfg);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
 }
 
 pub fn token_config(env: &Env, token: &Address) -> Result<TokenConfig, HyperionError> {
