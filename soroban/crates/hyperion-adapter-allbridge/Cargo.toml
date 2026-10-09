@@ -20,3 +20,4 @@ soroban-sdk = { workspace = true, features = ["testutils"] }
 # between the two is the part most worth checking and a mock router would agree with whatever
 # this adapter did. Only a dev dependency, so none of the router's code reaches the deployed WASM.
 hyperion-router = { path = "../hyperion-router" }
+ed25519-dalek = "2.2.0"

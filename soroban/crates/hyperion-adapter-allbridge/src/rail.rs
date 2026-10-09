@@ -91,3 +91,32 @@ pub trait AllbridgeMessenger {
 pub trait AllbridgePool {
     fn swap_to_v_usd(env: Env, user: Address, amount: u128, zero_fee: bool) -> u128;
 }
+
+/// Allbridge's message digest, byte for byte.
+///
+/// The two overwritten bytes at the front are not a quirk to be tidied away. The messenger reads
+/// the source and destination chain out of them, so a digest built without them routes nowhere.
+pub fn hash_message(
+    env: &Env,
+    amount: u128,
+    recipient: &BytesN<32>,
+    source_chain_id: u32,
+    destination_chain_id: u32,
+    receive_token: &BytesN<32>,
+    nonce: &U256,
+) -> BytesN<32> {
+    let mut buf = soroban_sdk::Bytes::new(env);
+    buf.extend_from_slice(&[0u8; 16]);
+    buf.extend_from_slice(&amount.to_be_bytes());
+    buf.extend_from_array(&recipient.to_array());
+    buf.append(&U256::from_u32(env, source_chain_id).to_be_bytes());
+    buf.extend_from_array(&receive_token.to_array());
+    buf.append(&nonce.to_be_bytes());
+    buf.extend_from_slice(&1u8.to_be_bytes());
+
+    let digest: BytesN<32> = env.crypto().keccak256(&buf).into();
+    let mut out = digest.to_array();
+    out[0] = source_chain_id as u8;
+    out[1] = destination_chain_id as u8;
+    BytesN::from_array(env, &out)
+}

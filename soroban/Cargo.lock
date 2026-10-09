@@ -980,6 +980,7 @@ dependencies = [
 name = "hyperion-adapter-allbridge"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
  "hyperion-core",
  "hyperion-router",
  "soroban-sdk",
