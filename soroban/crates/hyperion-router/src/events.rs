@@ -55,6 +55,15 @@ pub struct ClaimSettled {
     pub settled_by: Address,
 }
 
+#[contractevent(topics = ["hyperion", "claim_ttl"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClaimTtlExtended {
+    #[topic]
+    pub claim_id: u64,
+    pub threshold: u32,
+    pub extend_to: u32,
+}
+
 #[contractevent(topics = ["hyperion", "pause"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PauseSet {
@@ -156,6 +165,15 @@ pub fn claim_settled(env: &Env, claim: &PendingClaim, settled_by: &Address) {
         claim_id: claim.id,
         amount: claim.amount,
         settled_by: settled_by.clone(),
+    }
+    .publish(env);
+}
+
+pub fn claim_ttl_extended(env: &Env, claim_id: u64, threshold: u32, extend_to: u32) {
+    ClaimTtlExtended {
+        claim_id,
+        threshold,
+        extend_to,
     }
     .publish(env);
 }

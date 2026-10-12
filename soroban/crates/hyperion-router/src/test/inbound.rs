@@ -445,3 +445,33 @@ fn the_source_chain_name_is_kept_on_the_claim_for_the_indexer() {
     assert_eq!(claim.source_chain, chain);
     assert_eq!(claim.route, RouteKind::Allbridge);
 }
+
+#[test]
+fn anybody_can_extend_claim_ttl_for_an_existing_claim() {
+    let w = World::new();
+    let token = w.with_failable_token();
+    w.failable(&token).mint(&w.rail_id, &HUNDRED);
+    w.failable(&token).set_blocked(&w.recipient, &true);
+    let claim_id = w.rail().deliver(&Delivery {
+        route: RouteKind::Cctp,
+        token: token.clone(),
+        amount: HUNDRED,
+        recipient: w.recipient.clone(),
+        recipient_kind: AddressKind::Account,
+        source_chain: w.ethereum(),
+        source_nonce: 11,
+    });
+    assert_eq!(claim_id, 1);
+
+    // Permissionless bump succeeds
+    assert_eq!(w.router().try_extend_claim_ttl(&claim_id), Ok(Ok(())));
+}
+
+#[test]
+fn extending_ttl_for_a_nonexistent_claim_returns_claim_not_found() {
+    let w = World::new();
+    assert_eq!(
+        w.router().try_extend_claim_ttl(&999),
+        Err(Ok(HyperionError::ClaimNotFound))
+    );
+}

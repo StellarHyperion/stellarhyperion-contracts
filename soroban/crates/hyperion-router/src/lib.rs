@@ -527,6 +527,15 @@ impl HyperionRouter {
         }
     }
 
+    /// Push archival date back on a specific parked claim entry.
+    ///
+    /// Permissionless: anybody can pay the fee to keep an uncollected claim alive without touching any funds.
+    pub fn extend_claim_ttl(env: Env, claim_id: u64) -> Result<(), HyperionError> {
+        storage::extend_claim_ttl(&env, claim_id)?;
+        events::claim_ttl_extended(&env, claim_id, storage::BUMP_THRESHOLD, storage::BUMP_TO);
+        Ok(())
+    }
+
     // ---------------------------------------------------------------------------------------
     // Views
     // ---------------------------------------------------------------------------------------

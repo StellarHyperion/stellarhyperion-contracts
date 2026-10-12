@@ -294,6 +294,17 @@ pub fn set_claim(env: &Env, record: &PendingClaim) {
         .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
 }
 
+pub fn extend_claim_ttl(env: &Env, id: u64) -> Result<(), HyperionError> {
+    let key = DataKey::Claim(id);
+    if !env.storage().persistent().has(&key) {
+        return Err(HyperionError::ClaimNotFound);
+    }
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    Ok(())
+}
+
 pub fn next_queue_id(env: &Env) -> u64 {
     let current: u64 = env
         .storage()
