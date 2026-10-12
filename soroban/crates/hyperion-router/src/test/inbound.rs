@@ -475,4 +475,3 @@ fn extending_ttl_for_a_nonexistent_claim_returns_claim_not_found() {
         Err(Ok(HyperionError::ClaimNotFound))
     );
 }
-
