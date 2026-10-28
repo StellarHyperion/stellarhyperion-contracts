@@ -10,7 +10,7 @@ trust assumption and is not offered by the current testnet app.
 
 The testnet app is scoped to Stellar USDC to its seven-decimal ITS representation on Ethereum
 Sepolia. That representation is not Circle's native Sepolia USDC. A route is usable only after the
-operator links the lane and token and deploys the paid-transfer contract changes described below.
+operator links the lane and token and deploys the paid-transfer contract changes described below. The current deployment is active and has passed a real wallet-to-Sepolia acceptance transfer.
 
 ## Paid Stellar transfers
 
@@ -25,9 +25,7 @@ The legacy `bridge_out` and `dispatch` interfaces remain compatible and do not a
 The current app uses the paid entry point and refuses a deployment missing either new method.
 A successful source transaction is a dispatch, not proof of destination delivery.
 
-Both router and adapter WASM must be upgraded before this path can be used on the recorded testnet
-addresses. The router upgrade uses its existing timelock; the adapter upgrade requires its admin.
-No deployment or upgrade is implied by a local build or this README.
+The current wallet-owned router and adapter expose the paid entry point. Their activation and actual source/destination transactions are recorded in `deployments/evidence/2026-10-28-paid-its.json`. Future router upgrades use the existing timelock; adapter upgrades require its admin.
 See [the exact activation runbook](docs/TESTNET_ACTIVATION.md) for reviewed artifacts, admin commands and the live acceptance test.
 
 ## Organization overview

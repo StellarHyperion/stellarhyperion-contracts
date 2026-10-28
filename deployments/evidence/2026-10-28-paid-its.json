@@ -1,15 +1,11 @@
 {
   "schemaVersion": 1,
-  "status": "router-configuration-timelocked",
+  "status": "active-acceptance-verified",
   "network": "stellar-testnet",
   "sourceCommit": "218a81b",
   "implementationCommit": "60b3310",
   "identity": "hyperion-testnet-20261028",
   "deployer": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
-  "plannedContracts": {
-    "router": "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V",
-    "axelar": "CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ"
-  },
   "wasmHashes": {
     "router": "072629035ad4e4113d6f7fa0ae3c9c2c0d4d9c44e32eb73e1661526469a2f971",
     "axelar": "5f32139554d29edc3501a39ae3d05761101234523dd48b4d9e2d81ebf001f2c3"
@@ -107,6 +103,41 @@
       "createdAt": "1793192935",
       "status": "SUCCESS",
       "returnValue": null
+    },
+    {
+      "name": "execute-1",
+      "hash": "168a45d14f622ec647413ce6b1da5bc9550b60ba6bd28beb83c0612c49d0724f",
+      "status": "SUCCESS",
+      "ledger": 5436728,
+      "createdAt": "1793207280"
+    },
+    {
+      "name": "execute-2",
+      "hash": "d0d3135ec2fa8dba78204c738025b8290c9c8c7fe9d502ba368e4732941f9b38",
+      "status": "SUCCESS",
+      "ledger": 5436730,
+      "createdAt": "1793207290"
+    },
+    {
+      "name": "execute-3",
+      "hash": "2377addc9e5411ac88ac39cf34a13ad19bd8b3f2eae1c19c84c2bfdc968d3952",
+      "status": "SUCCESS",
+      "ledger": 5436731,
+      "createdAt": "1793207295"
+    },
+    {
+      "name": "execute-4",
+      "hash": "23bbb4ccb66ef2a9a171df2f148136444428837a9f65bed336ab72f48367366e",
+      "status": "SUCCESS",
+      "ledger": 5436733,
+      "createdAt": "1793207305"
+    },
+    {
+      "name": "acceptance-source",
+      "hash": "b95ca748421ea4774dea6a08edebc3ad3a301244034cd10f1209f3cea234862d",
+      "status": "SUCCESS",
+      "ledger": 5436752,
+      "createdAt": "1793207400"
     }
   ],
   "contracts": {
@@ -217,10 +248,81 @@
     }
   ],
   "acceptance": {
-    "status": "awaiting-router-timelock",
+    "status": "delivered",
     "sender": "GBQIDJU4YPHVI6E7LIYGQ2NEEQ7VW55SFWTRPOHYW52BLW65KF2WUPC3",
     "recipient": "0x6ef8032ffE4943F27388172549f6700f18BB8b38",
     "destination": "sepolia",
-    "plannedGrossAmount": "1000000"
-  }
+    "plannedGrossAmount": "1000000",
+    "network": "stellar-testnet",
+    "router": "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V",
+    "grossAmount": "1000000",
+    "balanceBefore": "20000000",
+    "recipientBalanceBefore": "0",
+    "fee": "3000",
+    "destinationAmount": "997000",
+    "sourceHash": "b95ca748421ea4774dea6a08edebc3ad3a301244034cd10f1209f3cea234862d",
+    "destinationHash": "0x1fdb81fcdec18071adbdf47e359f0b9e4adc6be685c1e3bfcfb39689485037b6",
+    "sourceBalanceAfter": "1.9000000",
+    "indexedTransfer": {
+      "id": "1",
+      "stage": "delivered",
+      "route": 1,
+      "origin": {
+        "chain": "stellar-testnet",
+        "nonce": "1",
+        "sender": "GBQIDJU4YPHVI6E7LIYGQ2NEEQ7VW55SFWTRPOHYW52BLW65KF2WUPC3",
+        "token": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+        "symbol": "USDC",
+        "decimals": 7,
+        "grossAmount": "1000000",
+        "fee": "3000",
+        "netAmount": "997000",
+        "block": "5436752",
+        "txHash": "b95ca748421ea4774dea6a08edebc3ad3a301244034cd10f1209f3cea234862d",
+        "observedAt": "2026-10-28T17:10:00.000Z"
+      },
+      "destination": {
+        "chain": "sepolia",
+        "recipient": "0x0000000000000000000000006ef8032ffe4943f27388172549f6700f18bb8b38",
+        "delivered": true,
+        "block": "12013724",
+        "txHash": "0x1fdb81fcdec18071adbdf47e359f0b9e4adc6be685c1e3bfcfb39689485037b6",
+        "deliveredAt": "2026-10-28T17:11:00.000Z"
+      },
+      "rail": {
+        "status": "delivered",
+        "railStatus": "executed/received",
+        "reference": "0x77a06059f22e3f07568879f5c94d05e010d6f0779279fec7b4bb8e4179d1f24d-341093876",
+        "attestedAt": "2026-10-28T17:10:17.000Z",
+        "lastError": null
+      },
+      "claim": null
+    },
+    "destinationReceipt": {
+      "status": "success",
+      "block": "12013724",
+      "confirmationsAtIndependentCheck": 15,
+      "token": "0xFd5a146686d16060ef9c595B37C30b248402304c",
+      "recipientBalance": "997000"
+    }
+  },
+  "verifiedRouter": {
+    "config": {
+      "admin": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+      "fee_bps": 30,
+      "flow_window_ledgers": 720,
+      "guardian": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+      "paused": false,
+      "timelock_delay": "3600",
+      "treasury": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA"
+    },
+    "token": {
+      "decimals": 7,
+      "enabled": true,
+      "flow_limit": "10000000000000"
+    },
+    "adapter": "CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ",
+    "enabled": true
+  },
+  "activatedAt": "2026-10-28T17:08:25.000Z"
 }

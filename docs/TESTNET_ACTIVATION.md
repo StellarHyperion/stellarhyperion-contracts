@@ -1,102 +1,49 @@
-# Activate paid Stellar ITS transfers on testnet
+# Current Stellar Testnet deployment
 
-This is an operator runbook, not a deployment receipt. No operation below has been submitted by the implementation work. Use the existing admin's named Stellar CLI identity; do not generate a replacement identity for these contracts.
+The paid ITS router and adapter were deployed with the dedicated `hyperion-testnet-20261028` CLI wallet and activated after the normal 3600-second router timelock. This wallet owns the fresh deployment; it does not control the older October 1 router.
 
-## Scope and verified prerequisites
+| Setting          | Confirmed value                                              |
+| ---------------- | ------------------------------------------------------------ |
+| Router           | `CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V`   |
+| ITS adapter      | `CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ`   |
+| Admin / treasury | `GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA`   |
+| Stellar USDC SAC | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`   |
+| Destination      | `sepolia` / Axelar `ethereum-sepolia`                        |
+| Received token   | `0xFd5a146686d16060ef9c595B37C30b248402304c`, seven decimals |
+| Activated        | `2026-10-28T17:08:25Z`                                       |
 
-- Source: Stellar Testnet router `CDMOLDF4SJDEDRWTDF7XAYMSRE6L3YEHHIRF57CFWNQYNC6ZOZ5LWCWF`.
-- Adapter: `CBK3TPRQR5A3H2AWESOUX4MVYOP63VNQ5EYHCX26EEJUC5B5FLB4DV5O`, bare ITS route 1.
-- Admin: `GCHPVETUL5E4YKDLMRIBFUGFK4PMYOVKPFALVSYMP2QDYAVBA3ITQDAI`.
-- Stellar USDC SAC: `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`.
-- ITS token id: `6fa24fa7ef4c8df79b33d677daca86b3934fc9a8a2fb58cdef14f9840ad91481`.
-- Destination: Hyperion key `sepolia`, Axelar name `ethereum-sepolia`, EVM chain 11155111.
-- Destination ITS: `0xB5FB4BE02232B1bBA4dC8f81dc24C26980dE9e3C`.
-- Destination token: `0xFd5a146686d16060ef9c595B37C30b248402304c`, seven decimals. This is the ITS representation of Stellar USDC, not Circle's native Sepolia USDC.
+The received asset is the ITS representation of Stellar USDC, not Circle's native Sepolia USDC. Route 1 sends directly to the recipient through ITS and needs no EVM Hyperion adapter.
 
-Unsigned RPC reads on 2026-10-28 confirmed the source token registration, destination token and ITS trust for `ethereum-sepolia`. The Hyperion adapter had no token mapping or Sepolia link. The existing router/adapter do not expose the new paid-transfer methods. Recheck network state before writing.
+## Deployment evidence
 
-The router upgrade is timelocked (currently 3600 seconds). The adapter upgrade and mapping/linking require adapter admin authorization. This lane sends directly through ITS to the recipient; no EVM Hyperion adapter is required. Its unused peer field is twenty zero bytes.
+`deployments/stellar-testnet-phase1.json` is the canonical app/indexer record, retaining its historical filename. `deployments/evidence/2026-10-28-paid-its.json` records actual transaction hashes, ledgers, artifact hashes, token mapping, lane link, queued actions, execution and transfer acceptance status. Check that evidence for the latest source/destination verification result.
 
-## Review local artifacts
+The router uses WASM `072629035ad4e4113d6f7fa0ae3c9c2c0d4d9c44e32eb73e1661526469a2f971`; the adapter uses `5f32139554d29edc3501a39ae3d05761101234523dd48b4d9e2d81ebf001f2c3`, built from implementation commit `60b3310`. All four configuration actions were confirmed after their original timelock matured. No shortened timelock or bootstrap bypass was used.
 
-Run from the contracts repository root:
+The older deployment is preserved in `deployments/archive/stellar-testnet-2026-10-01.json`. Its separate admin upgrade instructions are historical in `docs/LEGACY_TESTNET_UPGRADE.md`. Do not run those old-address commands against this fresh deployment.
 
-```bash
-cd soroban
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cd ..
-script/stellar/build.sh
-sha256sum soroban/target/wasm32v1-none/release/hyperion_router.wasm
-sha256sum soroban/target/wasm32v1-none/release/hyperion_adapter_axelar.wasm
-```
+## Verified acceptance transfer
 
-The reviewed build from contract commit `60b3310` produced:
+A real CLI wallet signature through the frontend application helpers sent 0.1 USDC. Stellar confirmed source transaction `b95ca748421ea4774dea6a08edebc3ad3a301244034cd10f1209f3cea234862d`. The protocol fee was 0.0003 USDC; 0.0997 USDC arrived on Sepolia in transaction `0x1fdb81fcdec18071adbdf47e359f0b9e4adc6be685c1e3bfcfb39689485037b6`. Independent RPC reads confirmed the recipient token balance and successful receipt; the backend verified matching ITS/payment events and persisted delivered status. The live acceptance test passed.
 
-| Artifact    | SHA-256                                                            |
-| ----------- | ------------------------------------------------------------------ |
-| Router      | `072629035ad4e4113d6f7fa0ae3c9c2c0d4d9c44e32eb73e1661526469a2f971` |
-| ITS adapter | `5f32139554d29edc3501a39ae3d05761101234523dd48b4d9e2d81ebf001f2c3` |
+## Operate and verify
 
-A different toolchain may produce different bytes; review a changed artifact before installing it. The source-account authorization path was covered by the full 414-test Soroban suite, including exact sender authorization, fee/gas accounting and atomic failure rollback.
+Use Node 22.13 or newer and a Stellar CLI identity held outside Git. The configured admin identity is named above; private key material must remain in the CLI store. Application users connect their own Stellar Testnet wallets and need the canonical USDC trustline/balance plus testnet XLM for relay and network fees.
 
-## Upload and queue the router upgrade
+Run the backend with PostgreSQL, the canonical deployment record, indexing and rail polling enabled. Redis is required only for an enabled keeper. Start Next with its backend API origin configured. The frontend verifies the live router, mapping, ITS destination token and paid-transfer methods before allowing a signature.
 
-These commands spend testnet XLM and change on-chain state. Keep the CLI output and action id for crash recovery. The identity must already resolve to the admin above.
+The frontend's opt-in `test/live-transfer.test.ts` uses the actual application quote and submission helpers with a named CLI wallet. It spends 0.1 testnet USDC plus relay/network fees, saves the real source hash before broadcast, and checks destination token balance and verified indexer delivery. It is skipped in normal test runs. Set these public/non-secret inputs only when intentionally running a live test:
 
 ```bash
-STELLAR_IDENTITY=hyperion-deploy
-ROUTER=CDMOLDF4SJDEDRWTDF7XAYMSRE6L3YEHHIRF57CFWNQYNC6ZOZ5LWCWF
-ADAPTER=CBK3TPRQR5A3H2AWESOUX4MVYOP63VNQ5EYHCX26EEJUC5B5FLB4DV5O
-ADMIN=GCHPVETUL5E4YKDLMRIBFUGFK4PMYOVKPFALVSYMP2QDYAVBA3ITQDAI
-TOKEN=CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
-TOKEN_ID=6fa24fa7ef4c8df79b33d677daca86b3934fc9a8a2fb58cdef14f9840ad91481
-
-# Public-address check only. Stop if this identity is not the current admin.
-stellar keys address "$STELLAR_IDENTITY"
-stellar contract invoke --id "$ROUTER" --source-account "$STELLAR_IDENTITY" --network testnet --is-view -- get_config
-stellar contract invoke --id "$ADAPTER" --source-account "$STELLAR_IDENTITY" --network testnet --is-view -- get_config
-
-# Assign the hashes actually returned by these uploads. Compare them with the reviewed artifacts.
-ROUTER_HASH=$(stellar contract upload --wasm soroban/target/wasm32v1-none/release/hyperion_router.wasm --source-account "$STELLAR_IDENTITY" --network testnet)
-ADAPTER_HASH=$(stellar contract upload --wasm soroban/target/wasm32v1-none/release/hyperion_adapter_axelar.wasm --source-account "$STELLAR_IDENTITY" --network testnet)
-
-stellar contract invoke --id "$ROUTER" --source-account "$STELLAR_IDENTITY" --network testnet --send yes -- queue_action --caller "$ADMIN" --action "{\"Upgrade\":[\"$ROUTER_HASH\"]}"
+HYPERION_LIVE_TESTNET=1 \
+HYPERION_TESTNET_IDENTITY=hyperion-testnet-user-20261028 \
+HYPERION_TESTNET_RECIPIENT=0x6ef8032ffE4943F27388172549f6700f18BB8b38 \
+NEXT_PUBLIC_HYPERION_API_URL=http://127.0.0.1:8080 \
+HYPERION_TESTNET_APP_URL=http://127.0.0.1:3100 \
+HYPERION_TESTNET_PROOF=/tmp/hyperion-live-transfer-proof.json \
+npx vitest run test/live-transfer.test.ts
 ```
 
-Record the returned queue id as `UPGRADE_ID`. Do not repeat `queue_action` on restart if the existing action is still pending. Read `get_queued` and preserve its `eta` and `expires_at`.
+Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed ITS/token payment and the recipient's actual received-token balance.
 
-```bash
-# Set UPGRADE_ID to the returned integer, never to a guessed value.
-stellar contract invoke --id "$ROUTER" --source-account "$STELLAR_IDENTITY" --network testnet --is-view -- get_queued --id "$UPGRADE_ID"
-```
-
-Wait until the ledger timestamp reaches `eta`. The grace period is seven days; an expired action must be queued again. Do not change the timelock to shorten the wait.
-
-## Execute, map and link
-
-Recheck that the pending action contains the reviewed router hash before executing it.
-
-```bash
-stellar contract invoke --id "$ADAPTER" --source-account "$STELLAR_IDENTITY" --network testnet --send yes -- upgrade --wasm_hash "$ADAPTER_HASH"
-stellar contract invoke --id "$ROUTER" --source-account "$STELLAR_IDENTITY" --network testnet --send yes -- execute_action --caller "$ADMIN" --id "$UPGRADE_ID"
-stellar contract invoke --id "$ADAPTER" --source-account "$STELLAR_IDENTITY" --network testnet --send yes -- map_token --token "$TOKEN" --token_id "$TOKEN_ID"
-stellar contract invoke --id "$ADAPTER" --source-account "$STELLAR_IDENTITY" --network testnet --send yes -- link_chain --chain sepolia --axelar_chain ethereum-sepolia --peer 0000000000000000000000000000000000000000
-
-stellar contract invoke --id "$ADAPTER" --source-account "$STELLAR_IDENTITY" --network testnet --is-view -- token_id_for --token "$TOKEN"
-stellar contract invoke --id "$ADAPTER" --source-account "$STELLAR_IDENTITY" --network testnet --is-view -- get_link --chain sepolia
-```
-
-Mapping and linking can overwrite existing configuration; read before retrying and stop on an unexpected value. The old `script/stellar/link.sh` is a general multi-rail helper and is not the acceptance test for this direct ITS lane.
-
-Update the canonical deployment record only after confirmed execution, preserving transaction hashes, action id and artifact hashes. Copy that record to the frontend/backend and commit the deployment evidence separately.
-
-## Acceptance transfer
-
-1. Run the backend migrations, a continuous indexer and rail poller, and the Next application. Configure the frontend API origin. Check backend readiness and RPC retention before interpreting history.
-2. Use a Stellar wallet on Testnet with XLM and the recorded USDC asset/trustline. The app links to the Stellar testnet account funder. Obtain the correct test USDC asset from its issuer's faucet; no arbitrary token with the same symbol is accepted.
-3. Confirm the app reports the lane ready, then send a small amount to a controlled Sepolia address. Review exact USDC debit/fee and live XLM relay gas in the wallet.
-4. Save the actual source transaction hash. Require source confirmation, then a successful sufficiently confirmed destination receipt with the expected ITS/token payment events. Verify the recipient's token balance changed by the expected amount.
-5. Restart the backend and verify the same transfer remains indexed once, with the actual destination transaction and received token. Do not call the dapp activated until this passes.
-
-A local unit test, gas estimate, deployment record, source confirmation or Axelar `executed` status alone does not establish a delivered cross-chain transfer. If relay gas becomes insufficient, operator intervention may be needed; this implementation does not advertise automated gas top-ups.
+For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
