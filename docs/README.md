@@ -7,3 +7,5 @@ a design document rewritten to match what was built stops being useful for the t
 document is for, which is telling you what somebody intended before they found out what was hard.
 Where the implementation diverged from it, the code says so in a comment at the point of
 divergence.
+
+`TESTNET_ACTIVATION.md` records the current supported ITS lane, reviewed paid-transfer artifacts, operator commands and the required acceptance test.

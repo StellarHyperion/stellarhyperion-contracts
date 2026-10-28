@@ -28,16 +28,17 @@ A successful source transaction is a dispatch, not proof of destination delivery
 Both router and adapter WASM must be upgraded before this path can be used on the recorded testnet
 addresses. The router upgrade uses its existing timelock; the adapter upgrade requires its admin.
 No deployment or upgrade is implied by a local build or this README.
+See [the exact activation runbook](docs/TESTNET_ACTIVATION.md) for reviewed artifacts, admin commands and the live acceptance test.
 
 ## Organization overview
 
 The StellarHyperion organization divides cross-chain routing across three dedicated repositories:
 
-| Repository | Purpose | Core Technologies |
-|---|---|---|
-| `stellarhyperion-contracts` | On-chain routers, adapters, and shared protocol SDK | Soroban (Rust), EVM (Solidity, Foundry), TypeScript |
-| `stellarhyperion-backend` | Event indexer, rail pollers, keeper upkeep, and REST API | Fastify, Postgres, Redis, BullMQ, viem, stellar-sdk |
-| `stellarhyperion-frontend` | User interface, live switchyard, and transfer tracker | Next.js 16, React 19, CSS modules, wagmi, Stellar Wallets Kit |
+| Repository                  | Purpose                                                  | Core Technologies                                      |
+| --------------------------- | -------------------------------------------------------- | ------------------------------------------------------ |
+| `stellarhyperion-contracts` | On-chain routers, adapters, and shared protocol SDK      | Soroban (Rust), EVM (Solidity, Foundry), TypeScript    |
+| `stellarhyperion-backend`   | Event indexer, rail pollers, keeper upkeep, and REST API | Fastify, Postgres, Redis, BullMQ, viem, stellar-sdk    |
+| `stellarhyperion-frontend`  | Stellar testnet transfers and verified status            | Next.js 16, React 19, CSS modules, Stellar Wallets Kit |
 
 Each repository maintains independent continuous integration, dependency definitions, and issue governance while sharing protocol constants and wire codecs from `@hyperion/protocol`.
 
@@ -66,11 +67,11 @@ docs/                 the architecture document this was built from
 
 ## The test suites
 
-| Tree | Tests | Run it with |
-|---|---|---|
-| Soroban | 414 | `cd soroban && cargo test --workspace` |
-| EVM | 365 | `cd evm && FOUNDRY_PROFILE=ci forge test` |
-| Protocol package | 300 | `cd packages/protocol && npm run check` |
+| Tree             | Tests | Run it with                               |
+| ---------------- | ----- | ----------------------------------------- |
+| Soroban          | 414   | `cd soroban && cargo test --workspace`    |
+| EVM              | 365   | `cd evm && FOUNDRY_PROFILE=ci forge test` |
+| Protocol package | 300   | `cd packages/protocol && npm run check`   |
 
 The current local Soroban suite passes 414 tests. EVM tests and generated-ABI parity require
 Foundry, initialized submodules, and a fresh EVM build. Test counts in other trees should be read
@@ -94,7 +95,7 @@ the checksum goes on the wire little endian, a muxed address has one spare bit i
 character that has to be zero, and the ed25519 key comes first with the eight byte sub account id
 last.
 
-**Stellar carries seven decimals and USDC carries six.** Every hop across that boundary either
+**Token representations can have different decimals.** Stellar USDC and its current Sepolia ITS representation use seven; native EVM USDC commonly uses six. A hop across a precision boundary either
 loses a digit or refuses to. This code refuses: the fee is taken on the whole amount, the remainder
 is floored to something the destination can represent, and a transfer whose remainder floors to
 nothing is rejected by name rather than rounded to zero. The fee is charged against the gross and
@@ -175,10 +176,10 @@ characters returns wasm hashes and a tarball checksum and nothing else.
 
 Addresses recorded in `deployments/stellar-testnet-phase1.json`:
 
-| | |
-|---|---|
-| Router | `CDMOLDF4SJDEDRWTDF7XAYMSRE6L3YEHHIRF57CFWNQYNC6ZOZ5LWCWF` |
-| Axelar ITS adapter | `CBK3TPRQR5A3H2AWESOUX4MVYOP63VNQ5EYHCX26EEJUC5B5FLB4DV5O` |
+|                     |                                                            |
+| ------------------- | ---------------------------------------------------------- |
+| Router              | `CDMOLDF4SJDEDRWTDF7XAYMSRE6L3YEHHIRF57CFWNQYNC6ZOZ5LWCWF` |
+| Axelar ITS adapter  | `CBK3TPRQR5A3H2AWESOUX4MVYOP63VNQ5EYHCX26EEJUC5B5FLB4DV5O` |
 | USDC asset contract | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 
 There is no CCTP adapter on Stellar yet, and that is a gap rather than a bug. Circle deploys those
@@ -197,12 +198,12 @@ list, and a malformed record never reaches disk.
 
 Soroban has a hard 64KB ceiling per contract, enforced by the ledger rather than by politeness.
 
-| Contract | Size | Of the limit |
-|---|---|---|
-| `hyperion_router.wasm` | 51.7 KB | 80% |
-| `hyperion_adapter_cctp.wasm` | 25.2 KB | 39% |
-| `hyperion_adapter_axelar.wasm` | 24.8 KB | 38% |
-| `hyperion_adapter_allbridge.wasm` | 23.7 KB | 37% |
+| Contract                          | Size    | Of the limit |
+| --------------------------------- | ------- | ------------ |
+| `hyperion_router.wasm`            | 51.7 KB | 80%          |
+| `hyperion_adapter_cctp.wasm`      | 25.2 KB | 39%          |
+| `hyperion_adapter_axelar.wasm`    | 24.8 KB | 38%          |
+| `hyperion_adapter_allbridge.wasm` | 23.7 KB | 37%          |
 
 The router at eighty percent is worth watching. `script/stellar/build.sh` warns past two thirds and
 fails past the limit, so this stops being a surprise.

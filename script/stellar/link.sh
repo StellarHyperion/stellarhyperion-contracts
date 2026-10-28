@@ -2,14 +2,9 @@
 #
 # Point a deployed Stellar adapter at its counterpart on the other chain.
 #
-# A separate step from the deployment, and not for tidiness. An adapter's peer cannot be named
-# before the peer exists, and `link_domain`, `map_asset`, `link_chain` and `map_token` are all once
-# only on purpose: repointing a live lane would let a different contract deliver on a chain people
-# are already using, which is a new trust assumption rather than a configuration change. So a
-# guessed peer address is a mistake no later transaction can undo, and the only safe order is to
-# deploy both sides first and link second.
-#
-# Run this after the far side exists and you have its addresses in front of you.
+# Linking and asset mapping are admin operations and can overwrite current configuration.
+# Read the existing lane before retrying. For the direct Stellar-to-Sepolia ITS testnet lane,
+# use docs/TESTNET_ACTIVATION.md; bare ITS does not require a far-side Hyperion peer.
 #
 # Usage:
 #   HYPERION_PEER_CHAIN=arc-testnet \
