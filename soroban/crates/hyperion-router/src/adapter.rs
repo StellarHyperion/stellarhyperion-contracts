@@ -22,3 +22,20 @@ pub trait RailAdapter {
         nonce: u64,
     );
 }
+
+#[soroban_sdk::contractclient(name = "PaidRailAdapterClient")]
+pub trait PaidRailAdapter {
+    fn gas_token(env: Env) -> Address;
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch_from(
+        env: Env,
+        caller: Address,
+        sender: Address,
+        token: Address,
+        amount: i128,
+        destination_chain: String,
+        destination: BytesN<32>,
+        nonce: u64,
+        gas_amount: i128,
+    );
+}

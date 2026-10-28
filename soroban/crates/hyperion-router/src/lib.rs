@@ -21,7 +21,7 @@ mod types;
 #[cfg(test)]
 mod test;
 
-pub use adapter::{RailAdapter, RailAdapterClient};
+pub use adapter::{PaidRailAdapter, PaidRailAdapterClient, RailAdapter, RailAdapterClient};
 pub use storage::DataKey;
 pub use timelock::{GRACE_PERIOD, MAX_TIMELOCK_DELAY, MIN_TIMELOCK_DELAY};
 pub use types::{
@@ -103,118 +103,24 @@ impl HyperionRouter {
         sender: Address,
         request: OutboundRequest,
     ) -> Result<u64, HyperionError> {
-        sender.require_auth();
-        let OutboundRequest {
-            token,
-            amount,
-            route,
-            destination,
-            destination_decimals,
-            min_destination_amount,
-        } = request;
-        let cfg = storage::config(&env)?;
-        if cfg.paused {
-            return Err(HyperionError::Paused);
-        }
-        if amount <= 0 {
-            return Err(HyperionError::InvalidAmount);
-        }
-        if !storage::route_enabled(&env, route) {
-            return Err(HyperionError::RouteDisabled);
-        }
-        if let Some(route_cfg) = storage::route_config(&env, route) {
-            if route_cfg.max_single_transfer > 0 && amount > route_cfg.max_single_transfer {
-                return Err(HyperionError::ExceedsRouteLimit);
-            }
-        }
-
-        // A destination that is not a left-padded EVM word is refused rather than truncated.
-        // Chopping the front off a Stellar key produces twenty bytes that look like a perfectly
-        // ordinary address, and funds sent there are simply gone.
-        let _ = bytes32_to_evm(&env, &destination.address)?;
-        if destination.chain.is_empty() {
-            return Err(HyperionError::UnknownChain);
-        }
-
-        let token_cfg = storage::token_config(&env, &token)?;
-        if !token_cfg.enabled {
-            return Err(HyperionError::TokenNotRegistered);
-        }
-
-        let split = apply_fee(amount, cfg.fee_bps)?;
-        let fee = split.fee;
-        let net = floor_to_representable(split.net, token_cfg.decimals, destination_decimals)?;
-        if net <= 0 {
-            return Err(HyperionError::AmountNotRepresentable);
-        }
-        let destination_amount =
-            convert_decimals_exact(net, token_cfg.decimals, destination_decimals)?;
-        if destination_amount < min_destination_amount {
-            return Err(HyperionError::SlippageExceeded);
-        }
-        let gross = fee + net;
-
-        // Charge the flow limit against what actually crosses, not against what the sender
-        // handed over. The fee never leaves Stellar, so it is not cross-chain exposure.
-        let limit = storage::effective_flow_limit(&env, &token, route)?;
-        let window = storage::flow_window(&env, &token, route);
-        let ledger = env.ledger().sequence();
-        let updated = flow::consume(&window, limit, net, ledger, cfg.flow_window_ledgers)?;
-        storage::set_flow_window(&env, &token, route, &updated);
-
-        let adapter_addr = storage::adapter(&env, route)?;
-        let this = env.current_contract_address();
-        let client = token::Client::new(&env, &token);
-
-        client.transfer(&sender, &this, &gross);
-        if fee > 0 {
-            client.transfer(&this, &cfg.treasury, &fee);
-        }
-        client.transfer(&this, &adapter_addr, &net);
-
-        let nonce = storage::next_out_nonce(&env);
-        RailAdapterClient::new(&env, &adapter_addr).dispatch(
-            &this,
-            &token,
-            &net,
-            &destination.chain,
-            &destination.address,
-            &nonce,
-        );
-
-        let record = TransferRecord {
-            nonce,
-            sender,
-            token,
-            gross_amount: gross,
-            fee,
-            net_amount: net,
-            destination_chain: destination.chain,
-            destination: destination.address,
-            route,
-            created_ledger: ledger,
-            created_at: env.ledger().timestamp(),
-        };
-        storage::set_transfer(&env, &record);
-        events::bridge_out(&env, &record);
-        Ok(nonce)
+        bridge_out_inner(env, sender, request, None)
     }
 
-    // ---------------------------------------------------------------------------------------
-    // Inbound
-    // ---------------------------------------------------------------------------------------
+    pub fn bridge_out_with_gas(
+        env: Env,
+        sender: Address,
+        request: OutboundRequest,
+        gas_amount: i128,
+    ) -> Result<u64, HyperionError> {
+        if request.route != RouteKind::AxelarIts {
+            return Err(HyperionError::UnsupportedRoute);
+        }
+        if gas_amount <= 0 {
+            return Err(HyperionError::InvalidAmount);
+        }
+        bridge_out_inner(env, sender, request, Some(gas_amount))
+    }
 
-    /// Deliver funds that arrived over `route`.
-    ///
-    /// Only the rail's own receiver contract can call this, and the check is an equality
-    /// against a stored address rather than a role bitmap, because there is exactly one right
-    /// answer per rail and anything looser is a mint function.
-    ///
-    /// Notice that pause does not appear here. Once a rail has attested a message the funds are
-    /// already committed on the far side, and refusing them on this side does not undo that, it
-    /// only strands them. Pausing stops new departures, not arrivals.
-    ///
-    /// Returns the claim id when delivery had to be parked, or zero when the recipient took it.
     pub fn bridge_in(
         env: Env,
         caller: Address,
@@ -703,4 +609,121 @@ fn quote_one(
         waits_on_attestation: route.waits_on_attestation(),
         is_canonical: route.is_canonical(),
     }
+}
+
+fn bridge_out_inner(
+    env: Env,
+    sender: Address,
+    request: OutboundRequest,
+    gas_amount: Option<i128>,
+) -> Result<u64, HyperionError> {
+    sender.require_auth();
+    let OutboundRequest {
+        token,
+        amount,
+        route,
+        destination,
+        destination_decimals,
+        min_destination_amount,
+    } = request;
+    let cfg = storage::config(&env)?;
+    if cfg.paused {
+        return Err(HyperionError::Paused);
+    }
+    if amount <= 0 {
+        return Err(HyperionError::InvalidAmount);
+    }
+    if !storage::route_enabled(&env, route) {
+        return Err(HyperionError::RouteDisabled);
+    }
+    if let Some(route_cfg) = storage::route_config(&env, route) {
+        if route_cfg.max_single_transfer > 0 && amount > route_cfg.max_single_transfer {
+            return Err(HyperionError::ExceedsRouteLimit);
+        }
+    }
+
+    // A destination that is not a left-padded EVM word is refused rather than truncated.
+    // Chopping the front off a Stellar key produces twenty bytes that look like a perfectly
+    // ordinary address, and funds sent there are simply gone.
+    let _ = bytes32_to_evm(&env, &destination.address)?;
+    if destination.chain.is_empty() {
+        return Err(HyperionError::UnknownChain);
+    }
+
+    let token_cfg = storage::token_config(&env, &token)?;
+    if !token_cfg.enabled {
+        return Err(HyperionError::TokenNotRegistered);
+    }
+
+    let split = apply_fee(amount, cfg.fee_bps)?;
+    let fee = split.fee;
+    let net = floor_to_representable(split.net, token_cfg.decimals, destination_decimals)?;
+    if net <= 0 {
+        return Err(HyperionError::AmountNotRepresentable);
+    }
+    let destination_amount = convert_decimals_exact(net, token_cfg.decimals, destination_decimals)?;
+    if destination_amount < min_destination_amount {
+        return Err(HyperionError::SlippageExceeded);
+    }
+    let gross = fee + net;
+
+    // Charge the flow limit against what actually crosses, not against what the sender
+    // handed over. The fee never leaves Stellar, so it is not cross-chain exposure.
+    let limit = storage::effective_flow_limit(&env, &token, route)?;
+    let window = storage::flow_window(&env, &token, route);
+    let ledger = env.ledger().sequence();
+    let updated = flow::consume(&window, limit, net, ledger, cfg.flow_window_ledgers)?;
+    storage::set_flow_window(&env, &token, route, &updated);
+
+    let adapter_addr = storage::adapter(&env, route)?;
+    let this = env.current_contract_address();
+    let client = token::Client::new(&env, &token);
+
+    let nonce = storage::next_out_nonce(&env);
+    if let Some(gas) = gas_amount {
+        if fee > 0 {
+            client.transfer(&sender, &cfg.treasury, &fee);
+        }
+        adapter::PaidRailAdapterClient::new(&env, &adapter_addr).dispatch_from(
+            &this,
+            &sender,
+            &token,
+            &net,
+            &destination.chain,
+            &destination.address,
+            &nonce,
+            &gas,
+        );
+    } else {
+        client.transfer(&sender, &this, &gross);
+        if fee > 0 {
+            client.transfer(&this, &cfg.treasury, &fee);
+        }
+        client.transfer(&this, &adapter_addr, &net);
+        RailAdapterClient::new(&env, &adapter_addr).dispatch(
+            &this,
+            &token,
+            &net,
+            &destination.chain,
+            &destination.address,
+            &nonce,
+        );
+    }
+
+    let record = TransferRecord {
+        nonce,
+        sender,
+        token,
+        gross_amount: gross,
+        fee,
+        net_amount: net,
+        destination_chain: destination.chain,
+        destination: destination.address,
+        route,
+        created_ledger: ledger,
+        created_at: env.ledger().timestamp(),
+    };
+    storage::set_transfer(&env, &record);
+    events::bridge_out(&env, &record);
+    Ok(nonce)
 }

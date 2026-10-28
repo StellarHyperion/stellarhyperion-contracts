@@ -17,8 +17,7 @@ use soroban_sdk::{contractclient, contracttype, Address, Bytes, BytesN, Env, Str
 
 /// What Axelar charges gas in, and how much of it.
 ///
-/// Hyperion never fills this in. See the note on `gas_token` in the crate documentation for why
-/// the gas payment happens from off chain instead.
+/// Paid transfers attach this exact amount through ITS; the source account authorizes it.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Token {
@@ -55,6 +54,8 @@ impl TokenManagerType {
 
 #[contractclient(name = "InterchainTokenServiceClient")]
 pub trait InterchainTokenService {
+    fn native_token_address(env: Env) -> Address;
+    fn gas_service(env: Env) -> Address;
     /// Send an interchain token to another chain, optionally with a payload for the recipient.
     ///
     /// `caller` pays: ITS burns from or transfers out of that address, so whoever is named here

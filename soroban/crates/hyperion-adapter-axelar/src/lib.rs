@@ -29,23 +29,11 @@
 //! settle themselves once they have opened the trustline. The same argument covers muxed
 //! accounts, which the bare shape has nowhere to put and this one carries fine.
 //!
-//! # Why no gas token
+//! # Relay gas
 //!
-//! Axelar's relayers want paying, and ITS takes a `gas_token` for that. Hyperion always passes
-//! `None`.
-//!
-//! The gas service charges its `spender`, and it does so one frame below ITS. Naming this
-//! adapter as the spender would therefore need an invoker authorisation covering a call this
-//! contract does not make, against a payload ITS computes internally from Axelar's own message
-//! schema. Reproducing that encoding here would mean carrying a copy of somebody else's wire
-//! format that breaks silently rather than loudly, and paying the gas service directly
-//! beforehand does not help either: the gateway credits a payment against the hash of the
-//! message it actually emitted, which does not exist yet.
-//!
-//! Axelar's answer to exactly this is `add_gas`, which tops up a message that has already been
-//! emitted. So Hyperion's keeper watches for the gateway event and pays on it from off chain,
-//! out of its own balance, against the real message id. One fewer authorisation for this
-//! contract to hold, and one less transcription of Axelar's internals to keep in step.
+//! `dispatch_from` takes gas and net tokens from the user's authenticated account through ITS.
+//! The source wallet signs the simulated authorization tree; no copy of Axelar's payload is
+//! needed to authorize its gas service. The legacy `dispatch` interface carries no gas payment.
 //!
 //! # What this contract does not do
 //!
@@ -80,7 +68,7 @@ use soroban_sdk::{
     Address, Bytes, BytesN, Env, IntoVal, String, Symbol,
 };
 
-use rail::{InterchainTokenServiceClient, TokenManagerType};
+use rail::{InterchainTokenServiceClient, Token, TokenManagerType};
 use types::{ChainLink, Config};
 
 #[contract]
@@ -108,6 +96,7 @@ impl AxelarAdapter {
         if !matches!(route, RouteKind::AxelarIts | RouteKind::AxelarGmp) {
             return Err(HyperionError::UnsupportedRoute);
         }
+        admin.require_auth();
         storage::set_config(
             &env,
             &Config {
@@ -213,6 +202,70 @@ impl AxelarAdapter {
             destination_address,
             token_manager_type: manager_type,
             note,
+            router_nonce: nonce,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// The native token ITS accepts for relay gas.
+    pub fn gas_token(env: Env) -> Result<Address, HyperionError> {
+        let cfg = storage::config(&env)?;
+        Ok(InterchainTokenServiceClient::new(&env, &cfg.its).native_token_address())
+    }
+
+    /// ITS takes net tokens and gas directly from the authenticated sender. This lets the
+    /// source account authorize ITS's actual nested gas call, without duplicating its payload.
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_from(
+        env: Env,
+        caller: Address,
+        sender: Address,
+        token: Address,
+        amount: i128,
+        destination_chain: String,
+        destination: BytesN<32>,
+        nonce: u64,
+        gas_amount: i128,
+    ) -> Result<(), HyperionError> {
+        caller.require_auth();
+        sender.require_auth();
+        let cfg = storage::config(&env)?;
+        if caller != cfg.router {
+            return Err(HyperionError::Unauthorized);
+        }
+        if cfg.route != RouteKind::AxelarIts {
+            return Err(HyperionError::UnsupportedRoute);
+        }
+        if amount <= 0 || gas_amount <= 0 {
+            return Err(HyperionError::InvalidAmount);
+        }
+        let link = storage::link(&env, &destination_chain).ok_or(HyperionError::UnknownChain)?;
+        let token_id = storage::token_id(&env, &token).ok_or(HyperionError::TokenNotMapped)?;
+        let recipient = bytes32_to_evm(&env, &destination)?;
+        let its = InterchainTokenServiceClient::new(&env, &cfg.its);
+        let destination_address = Bytes::from_array(&env, &recipient.to_array());
+        its.interchain_transfer(
+            &sender,
+            &token_id,
+            &link.axelar_chain,
+            &destination_address,
+            &amount,
+            &None,
+            &Some(Token {
+                address: its.native_token_address(),
+                amount: gas_amount,
+            }),
+        );
+        events::Dispatched {
+            token,
+            destination_chain,
+            amount,
+            token_id: token_id.clone(),
+            axelar_chain: link.axelar_chain,
+            destination_address,
+            token_manager_type: its.token_manager_type(&token_id),
+            note: None,
             router_nonce: nonce,
         }
         .publish(&env);

@@ -57,6 +57,7 @@ enum ItsKey {
     Limit(BytesN<32>),
     Last,
     Count,
+    Native,
 }
 
 #[contract]
@@ -83,6 +84,16 @@ impl MockIts {
             .instance()
             .set(&ItsKey::Manager(token_id.clone()), &manager);
         env.storage().instance().set(&ItsKey::Kind(token_id), &kind);
+    }
+
+    pub fn set_native(env: Env, token: Address) {
+        env.storage().instance().set(&ItsKey::Native, &token);
+    }
+    pub fn native_token_address(env: Env) -> Address {
+        env.storage().instance().get(&ItsKey::Native).unwrap()
+    }
+    pub fn gas_service(env: Env) -> Address {
+        env.current_contract_address()
     }
 
     pub fn set_trusted(env: Env, chain: String, trusted: bool) {

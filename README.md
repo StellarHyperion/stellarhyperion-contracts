@@ -3,16 +3,31 @@
 The on-chain half of Hyperion: a router on Stellar, a router on the EVM side, and one adapter per
 rail they route over.
 
-Hyperion is not a bridge. It never decides for itself that a cross-chain message is real. It hands
-transfers to rails that already made that decision and were audited for it, and it keeps the
-bookkeeping, the limits, the fee and the claims. `bridge_in` only ever acts on a call from the
-underlying rail's own verifier, and there is no path in this repository by which Hyperion attests
-anything.
+Hyperion routes transfers through chain-specific adapters and keeps protocol fees, limits and claims.
+CCTP and Axelar paths delegate authenticity checks to their underlying rail contracts. The Allbridge
+inbound adapter verifies a configured Ed25519 validator signature itself; that path has a different
+trust assumption and is not offered by the current testnet app.
 
-That is a smaller promise than most bridges make, and it is the reason the code looks the way it
-does. There is no validator set here, no multisig signing messages, no light client. What there is
-instead is a lot of arithmetic that has to be exactly right, four rails that each behave slightly
-differently, and three implementations of the same wire formats that have to agree.
+The testnet app is scoped to Stellar USDC to its seven-decimal ITS representation on Ethereum
+Sepolia. That representation is not Circle's native Sepolia USDC. A route is usable only after the
+operator links the lane and token and deploys the paid-transfer contract changes described below.
+
+## Paid Stellar transfers
+
+`HyperionRouter.bridge_out_with_gas(sender, request, gas_amount)` applies the same protocol fee,
+precision, pause and flow controls as `bridge_out`. It then charges only the protocol fee itself and
+calls `AxelarAdapter.dispatch_from`. ITS takes the net token amount and native XLM gas payment
+directly from the user's authenticated account. The wallet signs the simulated authorization tree,
+including ITS's real nested gas-service call. No Hyperion copy of the ITS message payload is needed.
+All token movements, fees, gas and the router nonce unwind together if any call fails.
+
+The legacy `bridge_out` and `dispatch` interfaces remain compatible and do not attach relay gas.
+The current app uses the paid entry point and refuses a deployment missing either new method.
+A successful source transaction is a dispatch, not proof of destination delivery.
+
+Both router and adapter WASM must be upgraded before this path can be used on the recorded testnet
+addresses. The router upgrade uses its existing timelock; the adapter upgrade requires its admin.
+No deployment or upgrade is implied by a local build or this README.
 
 ## Organization overview
 
@@ -34,7 +49,7 @@ soroban/              Rust workspace, five crates, compiled to wasm32v1-none
   hyperion-router       the router: fees, limits, claims, timelock, adapter dispatch
   hyperion-adapter-cctp      Circle CCTP V2
   hyperion-adapter-axelar    Axelar ITS and GMP
-  hyperion-adapter-allbridge Allbridge Core, outbound only and honest about it
+  hyperion-adapter-allbridge Allbridge pool outbound and configured-validator inbound
 
 evm/                  Foundry project, solc 0.8.28, via_ir
   src/HyperionRouter.sol        the same router, in the shape this chain wants
@@ -53,12 +68,13 @@ docs/                 the architecture document this was built from
 
 | Tree | Tests | Run it with |
 |---|---|---|
-| Soroban | 380 | `cd soroban && cargo test --workspace` |
+| Soroban | 414 | `cd soroban && cargo test --workspace` |
 | EVM | 365 | `cd evm && FOUNDRY_PROFILE=ci forge test` |
 | Protocol package | 300 | `cd packages/protocol && npm run check` |
 
-All 1,045 pass. The EVM suite includes fuzz tests at twenty thousand runs each, which is why it
-takes a minute and a half.
+The current local Soroban suite passes 414 tests. EVM tests and generated-ABI parity require
+Foundry, initialized submodules, and a fresh EVM build. Test counts in other trees should be read
+from a current run rather than treated as deployment evidence.
 
 The number worth more than the total is in the protocol package: `test/parity.test.ts` reads the
 Rust and the Solidity off disk and fails if the error numbering, the route tags, the address kinds,
@@ -155,9 +171,9 @@ driver signs through anvil's unlocked accounts and names only a public address, 
 well known development key never had to appear. Grepping the tracked tree for sixty four hex
 characters returns wasm hashes and a tarball checksum and nothing else.
 
-## Currently live
+## Recorded Stellar testnet contracts
 
-Stellar testnet, verified against `deployments/stellar-testnet-phase1.json`:
+Addresses recorded in `deployments/stellar-testnet-phase1.json`:
 
 | | |
 |---|---|
