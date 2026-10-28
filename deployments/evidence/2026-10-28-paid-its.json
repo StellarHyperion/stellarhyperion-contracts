@@ -1,0 +1,226 @@
+{
+  "schemaVersion": 1,
+  "status": "router-configuration-timelocked",
+  "network": "stellar-testnet",
+  "sourceCommit": "218a81b",
+  "implementationCommit": "60b3310",
+  "identity": "hyperion-testnet-20261028",
+  "deployer": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+  "plannedContracts": {
+    "router": "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V",
+    "axelar": "CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ"
+  },
+  "wasmHashes": {
+    "router": "072629035ad4e4113d6f7fa0ae3c9c2c0d4d9c44e32eb73e1661526469a2f971",
+    "axelar": "5f32139554d29edc3501a39ae3d05761101234523dd48b4d9e2d81ebf001f2c3"
+  },
+  "operations": [
+    {
+      "name": "upload-router",
+      "hash": "3e9e9b10cb0b21b970d6338f3518f51968dea7e06f83e8b498eafd59def370b8",
+      "ledger": 5433796,
+      "createdAt": "1793192620",
+      "status": "SUCCESS"
+    },
+    {
+      "name": "upload-axelar",
+      "hash": "a4381f87224229a4c1a5e0a3b47fb974f92fea5f8250b8b5c4dd477a34a585c7",
+      "ledger": 5433803,
+      "createdAt": "1793192655",
+      "status": "SUCCESS"
+    },
+    {
+      "name": "deploy-router",
+      "hash": "b25eccf3fa37bf218fdd5f8ab24f55f5d619a910c209f74e40c42e3bdf97b1c0",
+      "ledger": 5433808,
+      "createdAt": "1793192680",
+      "status": "SUCCESS"
+    },
+    {
+      "name": "init-router",
+      "hash": "119642ffa1e7f5bfda2d7cd2038c543485d89833c98994bbc4c06357a7f43585",
+      "ledger": 5433811,
+      "createdAt": "1793192695",
+      "status": "SUCCESS",
+      "returnValue": null
+    },
+    {
+      "name": "queue-token",
+      "hash": "68a75875481c83b6cbb56ab49b1ebb1c7a6927438d06db9a549c2b65c91cb6ab",
+      "ledger": 5433815,
+      "createdAt": "1793192715",
+      "status": "SUCCESS",
+      "returnValue": 1
+    },
+    {
+      "name": "deploy-axelar",
+      "hash": "96498942d623615ea910aa6771cc8c20ebace51c34746f8accfe84065d318333",
+      "ledger": 5433820,
+      "createdAt": "1793192740",
+      "status": "SUCCESS",
+      "returnValue": "CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ"
+    },
+    {
+      "name": "init-axelar",
+      "hash": "daa8b54d03cbb6310eb09fc00edec285bad29db3aff69e656247361c51e6e026",
+      "ledger": 5433829,
+      "createdAt": "1793192785",
+      "status": "SUCCESS",
+      "returnValue": null
+    },
+    {
+      "name": "queue-adapter",
+      "hash": "c360099710faf36ffc9ca83b77334647c282c1d9d5946e67335e9b6239143bb6",
+      "ledger": 5433825,
+      "createdAt": "1793192765",
+      "status": "SUCCESS",
+      "returnValue": 2
+    },
+    {
+      "name": "queue-receiver",
+      "hash": "61000b0f8e861bf7d56dbf75e5a120e7ad4b3ac5a0773832126d365fa8296cb5",
+      "ledger": 5433835,
+      "createdAt": "1793192815",
+      "status": "SUCCESS",
+      "returnValue": 3
+    },
+    {
+      "name": "queue-enable",
+      "hash": "594161b7b737c7c8c62240aea28e88e73ee885c126e5045b46b9928cccfab018",
+      "ledger": 5433837,
+      "createdAt": "1793192825",
+      "status": "SUCCESS",
+      "returnValue": 4
+    },
+    {
+      "name": "map-token",
+      "hash": "f0622f9d616ef6cac54b6064ba67eef6fa7f1abdc29d119dba7951516f584e8f",
+      "ledger": 5433844,
+      "createdAt": "1793192860",
+      "status": "SUCCESS",
+      "cliPresentationError": "Stellar CLI panicked decoding event after confirmed SUCCESS; verified on-chain mapping and did not resubmit."
+    },
+    {
+      "name": "link-sepolia",
+      "hash": "56cbc65c4ed683e20625fab69427ed4638220c12eb8e081e07c0be00c09785c0",
+      "ledger": 5433859,
+      "createdAt": "1793192935",
+      "status": "SUCCESS",
+      "returnValue": null
+    }
+  ],
+  "contracts": {
+    "router": "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V",
+    "axelar": "CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ"
+  },
+  "queuedActions": [
+    {
+      "action": [
+        "RegisterToken",
+        "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+        7,
+        "10000000000000"
+      ],
+      "eta": "1793196315",
+      "expires_at": "1793801115",
+      "id": "1",
+      "queued_at": "1793192715"
+    },
+    {
+      "action": [
+        "SetAdapter",
+        1,
+        "CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ"
+      ],
+      "eta": "1793196365",
+      "expires_at": "1793801165",
+      "id": "2",
+      "queued_at": "1793192765"
+    },
+    {
+      "action": [
+        "SetRailReceiver",
+        1,
+        "CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ"
+      ],
+      "eta": "1793196415",
+      "expires_at": "1793801215",
+      "id": "3",
+      "queued_at": "1793192815"
+    },
+    {
+      "action": ["EnableRoute", 1],
+      "eta": "1793196425",
+      "expires_at": "1793801225",
+      "id": "4",
+      "queued_at": "1793192825"
+    }
+  ],
+  "allActionsReadyAt": "2026-10-28T14:07:05.000Z",
+  "tokenId": "6fa24fa7ef4c8df79b33d677daca86b3934fc9a8a2fb58cdef14f9840ad91481",
+  "verifiedLane": {
+    "adapter": {
+      "admin": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+      "its": "CC7LAC4S7KAPIM26WKWFSOXWLNLSG7EXTC2EVY2H2UPKSTX3Z2A7M5YP",
+      "route": 1,
+      "router": "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V"
+    },
+    "link": {
+      "axelar_chain": "ethereum-sepolia",
+      "chain": "sepolia",
+      "peer": "0000000000000000000000000000000000000000"
+    },
+    "tokenId": "6fa24fa7ef4c8df79b33d677daca86b3934fc9a8a2fb58cdef14f9840ad91481"
+  },
+  "funding": [
+    {
+      "network": "stellar-testnet",
+      "identity": "hyperion-testnet-20261028",
+      "address": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+      "operations": [
+        {
+          "name": "add-usdc-trustline",
+          "hash": "46f87c2912cf089f05a2081538aada57271c6f43ae0fc065ddacc76fae21f1e8",
+          "status": "SUCCESS",
+          "ledger": 5433865,
+          "createdAt": "1793192965"
+        },
+        {
+          "name": "receive-two-test-usdc",
+          "hash": "36833a51e20553eb8614a0ba915d2f3d5399c2672613a7b8822f4c1e571c61b2",
+          "status": "SUCCESS",
+          "ledger": 5433866,
+          "createdAt": "1793192970"
+        }
+      ]
+    },
+    {
+      "network": "stellar-testnet",
+      "identity": "hyperion-testnet-user-20261028",
+      "address": "GBQIDJU4YPHVI6E7LIYGQ2NEEQ7VW55SFWTRPOHYW52BLW65KF2WUPC3",
+      "operations": [
+        {
+          "name": "add-usdc-trustline",
+          "hash": "599f20cdbfdedd08e5af43f21bf968f412bb06399edd4675fa6f574023fbf9d3",
+          "status": "SUCCESS",
+          "ledger": 5433878,
+          "createdAt": "1793193030"
+        },
+        {
+          "name": "receive-two-test-usdc",
+          "hash": "5f568a00246ba35678688cd5a6c8546dd6893f877c32a77231e099c24ebfd046",
+          "status": "SUCCESS",
+          "ledger": 5433879,
+          "createdAt": "1793193035"
+        }
+      ]
+    }
+  ],
+  "acceptance": {
+    "status": "awaiting-router-timelock",
+    "sender": "GBQIDJU4YPHVI6E7LIYGQ2NEEQ7VW55SFWTRPOHYW52BLW65KF2WUPC3",
+    "recipient": "0x6ef8032ffE4943F27388172549f6700f18BB8b38",
+    "destination": "sepolia",
+    "plannedGrossAmount": "1000000"
+  }
+}

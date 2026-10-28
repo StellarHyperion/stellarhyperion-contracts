@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-28T13:11:24.287Z",
+  "networks": {
+    "stellar-testnet": {
+      "family": "stellar",
+      "networkPassphrase": "Test SDF Network ; September 2015",
+      "router": "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V",
+      "adapters": {
+        "axelar-its": "CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ"
+      },
+      "tokens": {
+        "USDC": {
+          "sacId": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+          "code": "USDC",
+          "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+          "decimals": 7,
+          "flowLimit": "10000000000000",
+          "routes": ["axelar-its"]
+        }
+      },
+      "treasury": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+      "admin": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+      "guardian": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+      "feeBps": 30,
+      "flowWindow": 720,
+      "timelockDelay": 3600,
+      "wasmHashes": {
+        "router": "072629035ad4e4113d6f7fa0ae3c9c2c0d4d9c44e32eb73e1661526469a2f971",
+        "adapter-axelar": "5f32139554d29edc3501a39ae3d05761101234523dd48b4d9e2d81ebf001f2c3"
+      },
+      "deployedAt": {
+        "ledger": 5433808,
+        "timestamp": "2026-10-28T13:04:40.000Z"
+      },
+      "commit": "60b3310",
+      "deployer": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+      "peerChain": "sepolia",
+      "queuedActionIds": [1, 2, 3, 4],
+      "queuedActions": [
+        "register USDC",
+        "set axelar adapter",
+        "set axelar receiver",
+        "enable axelar its"
+      ],
+      "activation": {
+        "status": "timelocked",
+        "readyAt": "2026-10-28T14:07:05.000Z",
+        "evidence": "evidence/2026-10-28-paid-its.json"
+      }
+    }
+  }
+}
