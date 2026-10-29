@@ -21,7 +21,7 @@ DOMAINS = {"sepolia": 0, "base-sepolia": 6, "arc-testnet": 26}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=["queue", "activate"])
+    parser.add_argument("phase", choices=["queue", "forwarding", "activate"])
     parser.add_argument("--identity", required=True)
     args = parser.parse_args()
     record_path = ROOT / "deployments/evidence/2026-10-29-cctp.json"
@@ -127,10 +127,48 @@ def main():
         save()
         print(json.dumps({"adapter": adapter, "queuedIds": [item["id"] for item in record["queuedActions"]],
                           "activateAfter": record["activateAfter"]}))
+    elif args.phase == "forwarding":
+        if "adapter" not in record:
+            raise RuntimeError("Queue the CCTP adapter first.")
+        for label, filename in [("forwardingWasmHash", "hyperion_adapter_cctp.wasm"),
+                                ("routerForwardingWasmHash", "hyperion_router.wasm")]:
+            wasm = ROOT / "soroban/target/wasm32v1-none/release" / filename
+            code_hash = hashlib.sha256(wasm.read_bytes()).hexdigest()
+            if label in record and record[label] != code_hash:
+                raise RuntimeError("The reviewed forwarding artifact changed.")
+            uploaded = run("contract", "upload", "--wasm", str(wasm),
+                           "--source-account", args.identity, "--network", "testnet")
+            if uploaded != code_hash:
+                raise RuntimeError("Uploaded code does not match the forwarding artifact.")
+            record[label] = code_hash
+            save()
+        if "forwardingUpgradedAt" not in record:
+            invoke(record["adapter"], "upgrade", "--wasm_hash", record["forwardingWasmHash"])
+            record["forwardingUpgradedAt"] = int(time.time())
+            save()
+        action = {"Upgrade": record["routerForwardingWasmHash"]}
+        if "routerUpgrade" not in record:
+            existing = None
+            for action_id in range(1, int(invoke(router, "queue_count", view=True)) + 1):
+                try:
+                    candidate = invoke(router, "get_queued", "--id", str(action_id), view=True)
+                    if candidate["action"] == action:
+                        existing = candidate
+                except subprocess.CalledProcessError as error:
+                    if "Error(Contract" not in error.stderr:
+                        raise
+            if existing is None:
+                action_id = invoke(router, "queue_action", "--caller", admin, "--action", json.dumps(action))
+                existing = invoke(router, "get_queued", "--id", str(action_id), view=True)
+            record["routerUpgrade"] = existing
+            record["activateAfter"] = max(record["activateAfter"], int(existing["eta"]))
+            save()
+        print(json.dumps({"routerUpgrade": record["routerUpgrade"], "activateAfter": record["activateAfter"]}))
     else:
         if len(record["queuedActions"]) != 3 or time.time() < record["activateAfter"]:
             raise RuntimeError("All three actions must be queued and their original timelock must mature.")
-        for queued in record["queuedActions"]:
+        actions = ([record["routerUpgrade"]] if "routerUpgrade" in record else []) + record["queuedActions"]
+        for queued in actions:
             if queued.get("executed"):
                 continue
             try:
@@ -141,6 +179,8 @@ def main():
                     applied = invoke(router, "get_adapter", "--route", "0", view=True) == record["adapter"]
                 elif "SetRailReceiver" in action:
                     applied = invoke(router, "get_rail_receiver", "--route", "0", view=True) == record["adapter"]
+                elif "Upgrade" in action:
+                    applied = invoke(router, "supports_paid_route", "--route", "0", view=True) is True
                 else:
                     applied = invoke(router, "is_route_enabled", "--route", "0", view=True) is True
                 if not applied:
