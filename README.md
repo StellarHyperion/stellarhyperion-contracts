@@ -127,12 +127,7 @@ deployment is: deploy, configure the adapters, queue the router changes, wait, e
 are built around that rather than against it, and phase two is safe to run twice so a run
 interrupted by a gas spike picks up where it left off.
 
-Linking an adapter to its counterpart on the other chain is a third, separate step. A peer cannot be
-named before it exists, and `link_domain`, `map_asset`, `link_chain` and `map_token` are all once
-only on purpose, because repointing a live lane would let a different contract deliver on a chain
-people are already using. That is a new trust assumption rather than a configuration change. A
-guessed peer address is therefore a mistake no later transaction can undo, and the only safe order
-is to deploy both sides first and link second.
+Linking an adapter to the trusted rail or remote messenger is a separate configuration step. Read the deployed token, domain and peer settings before signing. Mapping and link setters can overwrite existing configuration, so changing a live lane changes its trust assumptions. CCTP uses Circle's published messenger/transmitter pairing; direct ITS sends use the registered ITS token and destination token manager. See `docs/TESTNET_ACTIVATION.md` for the verified active testnet deployment.
 
 ```bash
 # EVM, end to end on a throwaway chain. Deploys stand in rails, runs phase one, proves the
@@ -172,38 +167,31 @@ characters returns wasm hashes and a tarball checksum and nothing else.
 
 ## Recorded Stellar testnet contracts
 
-Addresses recorded in `deployments/stellar-testnet-phase1.json`:
+`deployments/stellar-testnet-phase1.json` is the canonical active deployment. Its historical filename is retained. Identical copies supply the frontend and backend.
 
-|                     |                                                            |
+| Setting             | Active contract                                            |
 | ------------------- | ---------------------------------------------------------- |
-| Router              | `CDMOLDF4SJDEDRWTDF7XAYMSRE6L3YEHHIRF57CFWNQYNC6ZOZ5LWCWF` |
-| Axelar ITS adapter  | `CBK3TPRQR5A3H2AWESOUX4MVYOP63VNQ5EYHCX26EEJUC5B5FLB4DV5O` |
+| Router              | `CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V` |
+| Axelar ITS adapter  | `CDFYEPIXO676W6E6Z4GOOR33JMRUC6DGUBGO4OWYKTO7HOGRJ6ARNOSJ` |
+| Circle CCTP adapter | `CARH6IA4TA5QAJNQG4B4I7N4336JEBS3GYLPZSEBUCWSNYTDRC7L3AHT` |
 | USDC asset contract | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 
-There is no CCTP adapter on Stellar yet, and that is a gap rather than a bug. Circle deploys those
-contracts per network from `circlefin/stellar-cctp` and does not publish a fixed address list, so
-there is nothing safe to point an adapter at. The router answers a CCTP transfer with
-`AdapterNotSet`, which is the correct answer. The Axelar adapter is deployed and initialized and
-linked to nothing, for the reason in the section above.
+ITS route 1 delivers the seven-decimal Stellar USDC representation to Ethereum Sepolia. CCTP route 0 delivers six-decimal native Circle USDC to Ethereum Sepolia, Base Sepolia and Arc Testnet using paid automatic forwarding. Both routes are active, and real source/destination acceptance is recorded under `deployments/evidence/`. A fresh XLM-only wallet also completed actual conversion into USDC followed by an ITS payout. Details and receipt-verification requirements are in [the activation runbook](docs/TESTNET_ACTIVATION.md).
 
-The record is assembled by a script that hands it to the protocol package's own
-`parseDeploymentSet` before writing. That is why it is a node script and not a heredoc: an address
-with a transposed character parses fine as a string and survives a cast, so every contract id in
-the record is checked against the real strkey codec and every rail name against the real route
-list, and a malformed record never reaches disk.
+The older October 1 deployment is archived under `deployments/archive/`. It is not the current app router. Records are validated with the protocol package's `parseDeploymentSet`; activation also reads deployed methods and code hashes rather than treating a JSON address as proof of availability.
 
 ## Contract sizes
 
 Soroban has a hard 64KB ceiling per contract, enforced by the ledger rather than by politeness.
 
-| Contract                          | Size    | Of the limit |
-| --------------------------------- | ------- | ------------ |
-| `hyperion_router.wasm`            | 51.7 KB | 80%          |
-| `hyperion_adapter_cctp.wasm`      | 25.2 KB | 39%          |
-| `hyperion_adapter_axelar.wasm`    | 24.8 KB | 38%          |
-| `hyperion_adapter_allbridge.wasm` | 23.7 KB | 37%          |
+| Contract                          | Size         | Of the limit |
+| --------------------------------- | ------------ | ------------ |
+| `hyperion_router.wasm`            | 56,031 bytes | 86%          |
+| `hyperion_adapter_cctp.wasm`      | 27,357 bytes | 42%          |
+| `hyperion_adapter_axelar.wasm`    | 24.8 KB      | 38%          |
+| `hyperion_adapter_allbridge.wasm` | 23.7 KB      | 37%          |
 
-The router at eighty percent is worth watching. `script/stellar/build.sh` warns past two thirds and
+The router at eighty-six percent is worth watching. `script/stellar/build.sh` warns past two thirds and
 fails past the limit, so this stops being a surprise.
 
 ## Working on it

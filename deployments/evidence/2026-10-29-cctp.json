@@ -5,12 +5,8 @@
   "source": "https://developers.circle.com/cctp/references/stellar-contracts",
   "tokenMessenger": "CDNG7HXAPBWICI2E3AUBP3YZWZELJLYSB6F5CC7WLDTLTHVM74SLRTHP",
   "messageTransmitter": "CBJ6MTCKKZG73PMDZCJMSFRD7DQEMI4FKDH7CGDSV4W6FHCRBCQAVVJY",
-  "domains": {
-    "sepolia": 0,
-    "base-sepolia": 6,
-    "arc-testnet": 26
-  },
-  "status": "queued",
+  "domains": { "sepolia": 0, "base-sepolia": 6, "arc-testnet": 26 },
+  "status": "active",
   "queuedActions": [
     {
       "action": {
@@ -22,7 +18,8 @@
       "eta": 1793267350,
       "expires_at": 1793872150,
       "id": 5,
-      "queued_at": 1793263750
+      "queued_at": 1793263750,
+      "executed": true
     },
     {
       "action": {
@@ -34,16 +31,16 @@
       "eta": 1793267360,
       "expires_at": 1793872160,
       "id": 6,
-      "queued_at": 1793263760
+      "queued_at": 1793263760,
+      "executed": true
     },
     {
-      "action": {
-        "EnableRoute": 0
-      },
+      "action": { "EnableRoute": 0 },
       "eta": 1793267370,
       "expires_at": 1793872170,
       "id": 7,
-      "queued_at": 1793263770
+      "queued_at": 1793263770,
+      "executed": true
     }
   ],
   "wasmHash": "5ca51ffbee6a3fcb030448f0599bb29887710cf972c9ccd765aad91c8eff0c4b",
@@ -59,6 +56,87 @@
     "eta": 1793268115,
     "expires_at": 1793872915,
     "id": 8,
-    "queued_at": 1793264515
+    "queued_at": 1793264515,
+    "executed": true
+  },
+  "activatedAt": 1793268224,
+  "acceptance": {
+    "status": "delivered",
+    "verifiedAt": "2026-10-29T10:17:56.015Z",
+    "verification": "Successful Stellar transaction, complete Circle forwarding record, confirmed canonical EVM receipt, matching finalized Circle MessageReceived and exact native-USDC mint to recipient, and independently indexed delivered payout.",
+    "transfers": [
+      {
+        "destination": "sepolia",
+        "sourceHash": "d2d112fdef5b381534eb10e92806bd0025f307ffb0b2da0d0d3194d3f7892ca2",
+        "destinationHash": "0xb8a185a1e723443ab0b787225006fe56db80009fe796c69e8c4f6b8bf31db555",
+        "sender": "GBQIDJU4YPHVI6E7LIYGQ2NEEQ7VW55SFWTRPOHYW52BLW65KF2WUPC3",
+        "recipient": "0x6ef8032ffE4943F27388172549f6700f18BB8b38",
+        "grossAmount": "3000000",
+        "protocolFee": "9000",
+        "burnAmount": "2991000",
+        "sourceDecimals": 7,
+        "destinationToken": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+        "destinationAmount": "38033",
+        "destinationDecimals": 6,
+        "sourceLedger": 5448984,
+        "sourceConfirmedAt": "2026-10-29T10:09:20Z",
+        "destinationBlock": "12018814",
+        "destinationBlockHash": "0xe8efed50ca5974ecaa839602d090cf08e233b5cc3711557d001a51f9febe7a9d",
+        "destinationConfirmedAt": "2026-10-29T10:09:36.000Z",
+        "confirmationsAtVerification": "41",
+        "messageNonce": "0x6fec0b06d885c2ca9c8c40d868fc97cd750d7de8796bcec116a21967832524bd",
+        "forwardState": "COMPLETE",
+        "forwardingFee": "261067",
+        "status": "delivered"
+      },
+      {
+        "destination": "base-sepolia",
+        "sourceHash": "32625b8565111bafac0eff8c218c09332a79f5ea7df4ca48dc568cc68f8e153e",
+        "destinationHash": "0x6c69ef4219b7ac35075f76f3fa1d9db1fdd1995c56b4452ea1523155f6f7520b",
+        "sender": "GBQIDJU4YPHVI6E7LIYGQ2NEEQ7VW55SFWTRPOHYW52BLW65KF2WUPC3",
+        "recipient": "0x6ef8032ffE4943F27388172549f6700f18BB8b38",
+        "grossAmount": "3000000",
+        "protocolFee": "9000",
+        "burnAmount": "2991000",
+        "sourceDecimals": 7,
+        "destinationToken": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        "destinationAmount": "240087",
+        "destinationDecimals": 6,
+        "sourceLedger": 5449015,
+        "sourceConfirmedAt": "2026-10-29T10:11:55Z",
+        "destinationBlock": "51734266",
+        "destinationBlockHash": "0xebfbf4763f8ffe313899ce425c506ba615109032bfcf841c703d07fbcfbbbd1c",
+        "destinationConfirmedAt": "2026-10-29T10:12:02.000Z",
+        "confirmationsAtVerification": "1728",
+        "messageNonce": "0x11a09f843b6594adf8dbac21f5acc97bd459d9d659acd4ccdaaeadbf68c393b1",
+        "forwardState": "COMPLETE",
+        "forwardingFee": "59013",
+        "status": "delivered"
+      },
+      {
+        "destination": "arc-testnet",
+        "sourceHash": "b98caaca2fde473f899af6fa1741ead6899f8c88e48234596f5690e81f5c6dbe",
+        "destinationHash": "0x29d7454b4c04dd3300b834a8a07a3f2b2f6e79b78d4426d3cd30d04e88c449bc",
+        "sender": "GBQIDJU4YPHVI6E7LIYGQ2NEEQ7VW55SFWTRPOHYW52BLW65KF2WUPC3",
+        "recipient": "0x6ef8032ffE4943F27388172549f6700f18BB8b38",
+        "grossAmount": "3000000",
+        "protocolFee": "9000",
+        "burnAmount": "2991000",
+        "sourceDecimals": 7,
+        "destinationToken": "0x3600000000000000000000000000000000000000",
+        "destinationAmount": "276441",
+        "destinationDecimals": 6,
+        "sourceLedger": 5449062,
+        "sourceConfirmedAt": "2026-10-29T10:15:50Z",
+        "destinationBlock": "69654001",
+        "destinationBlockHash": "0x882f12ba9c9d6cc7e4d4a6c0138000e1d19df3ad0313b9028a5e832eca85a6f6",
+        "destinationConfirmedAt": "2026-10-29T10:15:57.000Z",
+        "confirmationsAtVerification": "231",
+        "messageNonce": "0xbba586f3a027fdbf2c1384dcfde69bf20b2436898c46eb66ada851c6fa177974",
+        "forwardState": "COMPLETE",
+        "forwardingFee": "22659",
+        "status": "delivered"
+      }
+    ]
   }
 }
