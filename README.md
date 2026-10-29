@@ -231,6 +231,10 @@ before writing a single file. Every dependency there is a dev dependency, the lo
 committed, and the flag lives in the repository because an install flag that only exists on one
 machine is a build that only works on one machine.
 
+## Verification status
+
+As of October 29, 2026, the published implementation passed Soroban, EVM, ABI parity and Anvil transfer checks in CI. Dependency security checks remain enforced and currently fail for the transitive `crypto-bigint` 0.5.5 timing advisory [RUSTSEC-2026-0387](https://github.com/RustCrypto/crypto-bigint/pull/1365), plus Vite and Vitest development-tool advisories. These findings have not been suppressed or resolved by the website deployment. See the [CI reports](https://github.com/StellarHyperion/stellarhyperion-contracts/actions/workflows/ci.yml) for details. The deployed contracts remain the separately verified testnet artifacts recorded above.
+
 ## Contributing
 
 `.github/CONTRIBUTING.md` covers the toolchains. The pull request template asks what changed, which
