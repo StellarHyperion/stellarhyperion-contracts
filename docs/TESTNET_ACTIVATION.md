@@ -26,13 +26,13 @@ The older deployment is preserved in `deployments/archive/stellar-testnet-2026-1
 
 A real CLI wallet signature through the frontend application helpers sent 0.1 USDC. Stellar confirmed source transaction `b95ca748421ea4774dea6a08edebc3ad3a301244034cd10f1209f3cea234862d`. The protocol fee was 0.0003 USDC; 0.0997 USDC arrived on Sepolia in transaction `0x1fdb81fcdec18071adbdf47e359f0b9e4adc6be685c1e3bfcfb39689485037b6`. Independent RPC reads confirmed the recipient token balance and successful receipt; the backend verified matching ITS/payment events and persisted delivered status. The live acceptance test passed.
 
-## Operate and verify
-
 ## Adding Circle CCTP
 
 The additional adapter `CARH6IA4TA5QAJNQG4B4I7N4336JEBS3GYLPZSEBUCWSNYTDRC7L3AHT` is deployed against Circle's published Stellar Testnet messenger and transmitter. Domains 0, 6 and 26 are linked to Sepolia, Base Sepolia and Arc Testnet. Router actions 5, 6 and 7 are queued under the existing 3600-second timelock. Their exact maturity and configuration are recorded in `deployments/evidence/2026-10-29-cctp.json`. The route remains unavailable until activation; deployment alone is not an available lane.
 
-`python3 script/stellar/enable-cctp.py queue --identity hyperion-testnet-20261028` resumes preparation without creating duplicate adapters or pending changes. After the recorded `activateAfter`, run the same command with `activate` in place of `queue`. The tool verifies Circle's domain, messenger pairing, pause state and remote messenger links, records confirmed steps atomically, and checks the installed adapter, receiver and enabled route. It never shortens or bypasses the timelock. The existing ITS lane remains intact.
+`python3 script/stellar/enable-cctp.py queue --identity hyperion-testnet-20261028` resumes preparation without creating duplicate adapters or pending changes. The `forwarding` stage uploads the reviewed forwarding code, upgrades the new CCTP adapter and queues router upgrade action 8. After the latest recorded `activateAfter`, run the same command with `activate`. It executes the router upgrade before enabling CCTP. The tool verifies Circle's domain, messenger pairing, pause state and remote messenger links, records confirmed steps atomically, and checks the installed adapter, receiver and enabled route. It never shortens or bypasses the timelock. The existing ITS lane remains intact.
+
+Paid CCTP dispatch uses Circle's documented `cctp-forward` hook and a live USDC forwarding budget. The router enforces the minimum destination amount after that budget, so Circle fees cannot silently reduce the quoted minimum. The application requests standard finality and the forwarding service handles the EVM mint. A destination receipt must still establish actual delivery.
 
 ## Running the application
 
