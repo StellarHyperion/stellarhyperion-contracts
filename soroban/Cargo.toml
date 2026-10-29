@@ -17,7 +17,7 @@ repository = "https://github.com/StellarHyperion/stellarhyperion-contracts"
 rust-version = "1.87"
 
 [workspace.dependencies]
-soroban-sdk = "28.0.0"
+soroban-sdk = "29.0.1"
 hyperion-core = { path = "crates/hyperion-core" }
 
 [profile.release]
