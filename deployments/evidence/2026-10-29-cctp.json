@@ -48,5 +48,17 @@
   ],
   "wasmHash": "5ca51ffbee6a3fcb030448f0599bb29887710cf972c9ccd765aad91c8eff0c4b",
   "adapter": "CARH6IA4TA5QAJNQG4B4I7N4336JEBS3GYLPZSEBUCWSNYTDRC7L3AHT",
-  "activateAfter": 1793267370
+  "activateAfter": 1793268115,
+  "forwardingWasmHash": "80f109e7467ace6899f865a4f77079917a2bea8a5def593a4d87c08c09206af4",
+  "routerForwardingWasmHash": "281d946ea78b194c0ef44ad9488ed02b2aa6912fb4f6fbab523ad38f1e0803f1",
+  "forwardingUpgradedAt": 1793264493,
+  "routerUpgrade": {
+    "action": {
+      "Upgrade": "281d946ea78b194c0ef44ad9488ed02b2aa6912fb4f6fbab523ad38f1e0803f1"
+    },
+    "eta": 1793268115,
+    "expires_at": 1793872915,
+    "id": 8,
+    "queued_at": 1793264515
+  }
 }
