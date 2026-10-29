@@ -28,6 +28,14 @@ A real CLI wallet signature through the frontend application helpers sent 0.1 US
 
 ## Operate and verify
 
+## Adding Circle CCTP
+
+The additional adapter `CARH6IA4TA5QAJNQG4B4I7N4336JEBS3GYLPZSEBUCWSNYTDRC7L3AHT` is deployed against Circle's published Stellar Testnet messenger and transmitter. Domains 0, 6 and 26 are linked to Sepolia, Base Sepolia and Arc Testnet. Router actions 5, 6 and 7 are queued under the existing 3600-second timelock. Their exact maturity and configuration are recorded in `deployments/evidence/2026-10-29-cctp.json`. The route remains unavailable until activation; deployment alone is not an available lane.
+
+`python3 script/stellar/enable-cctp.py queue --identity hyperion-testnet-20261028` resumes preparation without creating duplicate adapters or pending changes. After the recorded `activateAfter`, run the same command with `activate` in place of `queue`. The tool verifies Circle's domain, messenger pairing, pause state and remote messenger links, records confirmed steps atomically, and checks the installed adapter, receiver and enabled route. It never shortens or bypasses the timelock. The existing ITS lane remains intact.
+
+## Running the application
+
 Use Node 22.13 or newer and a Stellar CLI identity held outside Git. The configured admin identity is named above; private key material must remain in the CLI store. Application users connect their own Stellar Testnet wallets and need the canonical USDC trustline/balance plus testnet XLM for relay and network fees.
 
 Run the backend with PostgreSQL, the canonical deployment record, indexing and rail polling enabled. Redis is required only for an enabled keeper. Start Next with its backend API origin configured. The frontend verifies the live router, mapping, ITS destination token and paid-transfer methods before allowing a signature.

@@ -1,0 +1,52 @@
+{
+  "network": "testnet",
+  "router": "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V",
+  "admin": "GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA",
+  "source": "https://developers.circle.com/cctp/references/stellar-contracts",
+  "tokenMessenger": "CDNG7HXAPBWICI2E3AUBP3YZWZELJLYSB6F5CC7WLDTLTHVM74SLRTHP",
+  "messageTransmitter": "CBJ6MTCKKZG73PMDZCJMSFRD7DQEMI4FKDH7CGDSV4W6FHCRBCQAVVJY",
+  "domains": {
+    "sepolia": 0,
+    "base-sepolia": 6,
+    "arc-testnet": 26
+  },
+  "status": "queued",
+  "queuedActions": [
+    {
+      "action": {
+        "SetAdapter": [
+          0,
+          "CARH6IA4TA5QAJNQG4B4I7N4336JEBS3GYLPZSEBUCWSNYTDRC7L3AHT"
+        ]
+      },
+      "eta": 1793267350,
+      "expires_at": 1793872150,
+      "id": 5,
+      "queued_at": 1793263750
+    },
+    {
+      "action": {
+        "SetRailReceiver": [
+          0,
+          "CARH6IA4TA5QAJNQG4B4I7N4336JEBS3GYLPZSEBUCWSNYTDRC7L3AHT"
+        ]
+      },
+      "eta": 1793267360,
+      "expires_at": 1793872160,
+      "id": 6,
+      "queued_at": 1793263760
+    },
+    {
+      "action": {
+        "EnableRoute": 0
+      },
+      "eta": 1793267370,
+      "expires_at": 1793872170,
+      "id": 7,
+      "queued_at": 1793263770
+    }
+  ],
+  "wasmHash": "5ca51ffbee6a3fcb030448f0599bb29887710cf972c9ccd765aad91c8eff0c4b",
+  "adapter": "CARH6IA4TA5QAJNQG4B4I7N4336JEBS3GYLPZSEBUCWSNYTDRC7L3AHT",
+  "activateAfter": 1793267370
+}
