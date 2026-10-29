@@ -1,0 +1,93 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -14 +14 @@
+-rust-version = "1.84.0"
++rust-version = "1.87"
+@@ -130 +130 @@
+-version = "0.16.7"
++version = "0.17.0"
+@@ -138 +138 @@
+-version = "0.13.5"
++version = "0.14.3"
+@@ -155 +155 @@
+-version = "0.13.3"
++version = "0.14.0"
+@@ -172 +172 @@
+-version = "0.13.2"
++version = "0.14.0"
+@@ -186 +186 @@
+-version = "0.7.2"
++version = "0.8.1"
+@@ -238 +238 @@
+-version = "0.13.1"
++version = "0.14.0"
+@@ -257 +257 @@
+-version = "0.13.2"
++version = "0.14.0"
+@@ -301,0 +302,5 @@
++
++[[test]]
++name = "hyperion_crypto_compatibility"
++path = "tests/hyperion_crypto_compatibility.rs"
++required-features = ["testutils"]
+--- a/src/crypto/mod.rs
++++ b/src/crypto/mod.rs
+@@ -12 +12 @@
+-use elliptic_curve::scalar::IsHigh;
++use elliptic_curve::{scalar::IsHigh, CurveArithmetic};
+@@ -20,3 +20 @@
+-use ecdsa::{signature::hazmat::PrehashVerifier, PrimeCurve, Signature, SignatureSize};
+-use elliptic_curve::CurveArithmetic;
+-use generic_array::ArrayLength;
++use ecdsa::{signature::hazmat::PrehashVerifier, EcdsaCurve, Signature};
+@@ -173,2 +171 @@
+-        C: PrimeCurve + CurveArithmetic,
+-        SignatureSize<C>: ArrayLength<u8>,
++        C: EcdsaCurve + CurveArithmetic,
+@@ -202,2 +199 @@
+-        C: PrimeCurve + CurveArithmetic,
+-        SignatureSize<C>: ArrayLength<u8>,
++        C: EcdsaCurve + CurveArithmetic,
+@@ -257,3 +253 @@
+-            recovered_key
+-                .to_encoded_point(/*compress:*/ false)
+-                .as_bytes(),
++            recovered_key.to_sec1_point(/*compress:*/ false).as_bytes(),
+--- a/src/cost_runner/util.rs
++++ b/src/cost_runner/util.rs
+@@ -45,3 +45 @@
+-            recovered_key
+-                .to_encoded_point(/*compress:*/ false)
+-                .as_bytes(),
++            recovered_key.to_sec1_point(/*compress:*/ false).as_bytes(),
+--- a/tests/secp256r1_sig_ver.rs
++++ b/tests/secp256r1_sig_ver.rs
+@@ -2,2 +2,2 @@
+-    use elliptic_curve::sec1::FromEncodedPoint;
+-    use generic_array::GenericArray;
++    use elliptic_curve::sec1::{FromSec1Point, Sec1Point};
++    use elliptic_curve::array::Array;
+@@ -6 +6 @@
+-        AffinePoint, EncodedPoint,
++        AffinePoint,
+@@ -23,3 +23,3 @@
+-                AffinePoint::from_encoded_point(&EncodedPoint::from_affine_coordinates(
+-                    &GenericArray::from_slice(hex::decode(test_vector.qx).unwrap().as_slice()),
+-                    &GenericArray::from_slice(hex::decode(test_vector.qy).unwrap().as_slice()),
++                AffinePoint::from_sec1_point(&Sec1Point::<p256::NistP256>::from_affine_coordinates(
++                    &Array::from_slice(hex::decode(test_vector.qx).unwrap().as_slice()),
++                    &Array::from_slice(hex::decode(test_vector.qy).unwrap().as_slice()),
+@@ -33,2 +33,2 @@
+-                GenericArray::clone_from_slice(hex::decode(test_vector.r).unwrap().as_slice()),
+-                GenericArray::clone_from_slice(hex::decode(test_vector.s).unwrap().as_slice()),
++                Array::clone_from_slice(hex::decode(test_vector.r).unwrap().as_slice()),
++                Array::clone_from_slice(hex::decode(test_vector.s).unwrap().as_slice()),
+@@ -38 +38 @@
+-            sig = sig.normalize_s().unwrap_or(sig);
++            sig = sig.normalize_s();
+@@ -209 +209 @@
+-                    Ok(s) => s.normalize_s().unwrap_or(s),
++                    Ok(s) => s.normalize_s(),
+@@ -219 +219 @@
+-                sig = sig.normalize_s().unwrap_or(sig);
++                sig = sig.normalize_s();

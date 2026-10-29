@@ -91,6 +91,12 @@ jobs:
         # the router and an adapter was broken, which is the part most worth checking.
         run: cargo test --workspace
 
+      - name: Patched native host cryptographic vectors
+        run: |
+          cargo test --manifest-path vendor/soroban-env-host/Cargo.toml --locked \
+            --features testutils --test secp256r1_sig_ver --test ed25519_edge_cases \
+            --test hyperion_crypto_compatibility
+
       - name: Restore the pinned stellar-cli
         id: stellar-cli-cache
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0

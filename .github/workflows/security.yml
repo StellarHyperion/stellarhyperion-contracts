@@ -56,8 +56,9 @@ jobs:
         # vulnerabilities fail this step; warnings are printed and show up in the summary for a
         # human to read.
         run: |
-          set -o pipefail
+          set -euo pipefail
           cargo audit --file soroban/Cargo.lock | tee cargo-audit.txt
+          cargo audit --file soroban/vendor/soroban-env-host/Cargo.lock | tee -a cargo-audit.txt
 
       - name: Summarise
         if: always()

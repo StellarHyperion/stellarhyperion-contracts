@@ -40,7 +40,7 @@ rustup show
 
 `soroban/rust-toolchain.toml` pins the channel, the `wasm32v1-none` target and the `rustfmt` and
 `clippy` components, so running any cargo command inside `soroban/` installs what is needed. You
-do not have to add the target by hand. `rust-version = "1.85"` in `Cargo.toml` is the minimum the
+do not have to add the target by hand. `rust-version = "1.87"` in `Cargo.toml` is the minimum the
 crates compile on, not the channel they are built with.
 
 ### The Stellar CLI

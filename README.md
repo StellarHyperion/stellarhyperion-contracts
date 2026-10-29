@@ -233,7 +233,11 @@ machine is a build that only works on one machine.
 
 ## Verification status
 
-As of October 29, 2026, the published implementation passed Soroban, EVM, ABI parity and Anvil transfer checks in CI. Dependency security checks remain enforced and currently fail for the transitive `crypto-bigint` 0.5.5 timing advisory [RUSTSEC-2026-0387](https://github.com/RustCrypto/crypto-bigint/pull/1365), plus Vite and Vitest development-tool advisories. These findings have not been suppressed or resolved by the website deployment. See the [CI reports](https://github.com/StellarHyperion/stellarhyperion-contracts/actions/workflows/ci.yml) for details. The deployed contracts remain the separately verified testnet artifacts recorded above.
+As of October 29, 2026, local verification passes all 419 Soroban tests, clippy, protocol tests/build/ABI parity and the patched host cryptographic suites. Protocol and Solidity tooling `npm audit` checks report zero known vulnerabilities. Both Rust lockfile audits report zero vulnerabilities, with the existing unmaintained `paste` warning still visible.
+
+The native Soroban host uses a narrowly scoped RustCrypto compatibility patch to resolve [RUSTSEC-2026-0387](https://rustsec.org/advisories/RUSTSEC-2026-0387.html), selecting `crypto-bigint` 0.7.10. Its complete upstream source, license, provenance, source diff and NIST/Wycheproof/Ed25519 plus recovery/malleability regression tests are retained in [soroban/vendor](soroban/vendor/README.md). Native builds require Rust 1.87 or later. The host is absent from the normal contract WASM graph; all four rebuilt WASM artifacts are byte-identical to the saved baseline, including the deployed router and CCTP adapter. The dependency fix requires no on-chain upgrade.
+
+Security gates remain enforced without advisory suppression. See the [CI reports](https://github.com/StellarHyperion/stellarhyperion-contracts/actions/workflows/ci.yml) for hosted results. These checks are dependency and regression validation, not a formal security audit. The deployed contracts remain the separately verified testnet artifacts recorded above.
 
 ## Contributing
 
