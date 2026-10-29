@@ -190,7 +190,7 @@ The current testnet treasury is `GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZ
 
 Inbound funds that cannot be paid to their recorded recipient are retained as a numbered claim. `get_claim` reads the record and `settle_claim` retries payment to that same recipient. Anyone may fund settlement, and an already settled claim cannot pay twice. Successful transfers and ordinary outbound bridge delays do not create Stellar recovery claims.
 
-The frontend and backend deploy separately on Vercel. The backend needs persistent PostgreSQL and a continuously running indexer; see the linked repositories for hosting configuration. Contract deployment is independent of website deployment. This documentation update and Git push do not redeploy or upgrade the already verified on-chain contracts.
+The frontend and backend deploy separately on Vercel. The backend needs persistent PostgreSQL and regular indexer execution; see the linked repositories for hosting configuration. Contract deployment is independent of website deployment. This documentation update and Git push do not redeploy or upgrade the already verified on-chain contracts.
 
 ## Contract sizes
 
