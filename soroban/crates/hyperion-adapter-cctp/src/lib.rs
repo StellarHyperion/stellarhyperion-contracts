@@ -187,6 +187,72 @@ impl CctpAdapter {
     // Inbound
     // ---------------------------------------------------------------------------------------
 
+    /// Pay Circle's destination forwarding fee from USDC and request automatic minting.
+    /// The caller supplies a live fee budget, in Stellar token base units. No persistent
+    /// allowance or operator fee policy can widen the amount the user authorized.
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_from(
+        env: Env,
+        caller: Address,
+        sender: Address,
+        token: Address,
+        amount: i128,
+        destination_chain: String,
+        destination: BytesN<32>,
+        nonce: u64,
+        gas_amount: i128,
+    ) -> Result<(), HyperionError> {
+        caller.require_auth();
+        sender.require_auth();
+        let cfg = storage::config(&env)?;
+        if caller != cfg.router {
+            return Err(HyperionError::Unauthorized);
+        }
+        if amount <= 0 || gas_amount <= 0 || gas_amount >= amount {
+            return Err(HyperionError::InvalidAmount);
+        }
+        let domain =
+            storage::domain_of(&env, &destination_chain).ok_or(HyperionError::UnknownChain)?;
+        if destination == BytesN::from_array(&env, &[0u8; 32]) {
+            return Err(HyperionError::InvalidDestination);
+        }
+        let destination_caller = storage::destination_caller(&env, domain);
+        if destination_caller != BytesN::from_array(&env, &[0u8; 32]) {
+            return Err(HyperionError::InvalidDestination);
+        }
+        let this = env.current_contract_address();
+        let asset = token::Client::new(&env, &token);
+        asset.transfer(&sender, &this, &amount);
+        let ledger = env.ledger().sequence();
+        asset.approve(&this, &cfg.token_messenger, &amount, &ledger);
+        // Circle's version-zero forwarding hook: 24-byte magic, version 0, payload length 0.
+        let mut hook = [0u8; 32];
+        hook[..12].copy_from_slice(b"cctp-forward");
+        TokenMessengerClient::new(&env, &cfg.token_messenger).deposit_for_burn_with_hook(
+            &this,
+            &amount,
+            &domain,
+            &destination,
+            &token,
+            &destination_caller,
+            &gas_amount,
+            &cfg.min_finality_threshold,
+            &Bytes::from_array(&env, &hook),
+        );
+        asset.approve(&this, &cfg.token_messenger, &0i128, &ledger);
+        events::Dispatched {
+            token,
+            destination_domain: domain,
+            amount,
+            mint_recipient: destination,
+            max_fee: gas_amount,
+            min_finality_threshold: cfg.min_finality_threshold,
+            router_nonce: nonce,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
     /// Take an attested CCTP message, have Circle mint against it, and pass the funds on.
     ///
     /// Permissionless, because everything that matters is checked either here or by Circle. The

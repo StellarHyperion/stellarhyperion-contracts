@@ -47,6 +47,7 @@ pub struct BurnRecord {
 #[contracttype]
 #[derive(Clone)]
 enum MessengerKey {
+    Hook,
     /// Stroops the messenger leaves behind, standing in for Circle's dust stripping.
     Dust,
     /// Floor on the fee for a fast transfer, in absolute units.
@@ -110,8 +111,11 @@ impl MockMessenger {
         destination_caller: BytesN<32>,
         max_fee: i128,
         min_finality_threshold: u32,
-        _hook_data: Bytes,
+        hook_data: Bytes,
     ) -> Result<(), CircleError> {
+        env.storage()
+            .instance()
+            .set(&MessengerKey::Hook, &hook_data);
         Self::burn(
             &env,
             caller,
@@ -138,6 +142,13 @@ impl MockMessenger {
             .instance()
             .get(&MessengerKey::Count)
             .unwrap_or(0)
+    }
+
+    pub fn last_hook(env: Env) -> Bytes {
+        env.storage()
+            .instance()
+            .get(&MessengerKey::Hook)
+            .unwrap_or(Bytes::new(&env))
     }
 
     #[allow(clippy::too_many_arguments)]

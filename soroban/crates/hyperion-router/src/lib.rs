@@ -112,13 +112,17 @@ impl HyperionRouter {
         request: OutboundRequest,
         gas_amount: i128,
     ) -> Result<u64, HyperionError> {
-        if request.route != RouteKind::AxelarIts {
+        if request.route != RouteKind::AxelarIts && request.route != RouteKind::Cctp {
             return Err(HyperionError::UnsupportedRoute);
         }
         if gas_amount <= 0 {
             return Err(HyperionError::InvalidAmount);
         }
         bridge_out_inner(env, sender, request, Some(gas_amount))
+    }
+
+    pub fn supports_paid_route(_env: Env, route: RouteKind) -> bool {
+        route == RouteKind::AxelarIts || route == RouteKind::Cctp
     }
 
     pub fn bridge_in(
@@ -661,7 +665,19 @@ fn bridge_out_inner(
     if net <= 0 {
         return Err(HyperionError::AmountNotRepresentable);
     }
-    let destination_amount = convert_decimals_exact(net, token_cfg.decimals, destination_decimals)?;
+    // Circle's forwarding fee is paid from the burned USDC. Protect the user's minimum
+    // after that entire fee budget, rather than comparing against the pre-fee burn.
+    let minimum_net = match (route, gas_amount) {
+        (RouteKind::Cctp, Some(max_fee)) => {
+            if max_fee <= 0 || max_fee >= net {
+                return Err(HyperionError::InvalidAmount);
+            }
+            net - max_fee
+        }
+        _ => net,
+    };
+    let destination_amount =
+        convert_decimals_exact(minimum_net, token_cfg.decimals, destination_decimals)?;
     if destination_amount < min_destination_amount {
         return Err(HyperionError::SlippageExceeded);
     }

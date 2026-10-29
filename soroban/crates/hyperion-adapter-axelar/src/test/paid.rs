@@ -137,7 +137,7 @@ fn gas_cannot_be_zero_or_negative_and_route_must_match() {
         );
     }
     let mut req = request(&w);
-    req.route = RouteKind::Cctp;
+    req.route = RouteKind::Allbridge;
     assert_eq!(
         w.router().try_bridge_out_with_gas(&w.user, &req, &1000),
         Err(Ok(HyperionError::UnsupportedRoute))
