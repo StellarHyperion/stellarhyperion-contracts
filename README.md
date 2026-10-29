@@ -1,5 +1,7 @@
 # Hyperion contracts
 
+[Use Hyperion on Testnet](https://stellarhyperion.vercel.app/) | [Frontend](https://github.com/StellarHyperion/stellarhyperion-frontend) | [Backend](https://github.com/StellarHyperion/stellarhyperion-backend)
+
 The on-chain half of Hyperion: a router on Stellar, a router on the EVM side, and one adapter per
 rail they route over.
 
@@ -179,6 +181,16 @@ characters returns wasm hashes and a tarball checksum and nothing else.
 ITS route 1 delivers the seven-decimal Stellar USDC representation to Ethereum Sepolia. CCTP route 0 delivers six-decimal native Circle USDC to Ethereum Sepolia, Base Sepolia and Arc Testnet using paid automatic forwarding. Both routes are active, and real source/destination acceptance is recorded under `deployments/evidence/`. A fresh XLM-only wallet also completed actual conversion into USDC followed by an ITS payout. Details and receipt-verification requirements are in [the activation runbook](docs/TESTNET_ACTIVATION.md).
 
 The older October 1 deployment is archived under `deployments/archive/`. It is not the current app router. Records are validated with the protocol package's `parseDeploymentSet`; activation also reads deployed methods and code hashes rather than treating a JSON address as proof of availability.
+
+## Active fee routing and recovery
+
+The active Stellar router charges 30 basis points (0.3%) on outbound USDC and transfers the protocol fee to its configured treasury atomically with dispatch. Bridge forwarding, relay and Stellar network fees are separate provider/network costs. Other liquid Stellar assets are converted into canonical USDC by a separate frontend-signed transaction before bridging.
+
+The current testnet treasury is `GDXRQQETEZHGRJTE3U7DYGIWGGYGMM6EAS5NWGPGN2WXFXZYZ6QZIANA`, also the deployment admin and guardian. Treasury and fee changes use the existing one-hour admin timelock. Testnet balances have no cash value.
+
+Inbound funds that cannot be paid to their recorded recipient are retained as a numbered claim. `get_claim` reads the record and `settle_claim` retries payment to that same recipient. Anyone may fund settlement, and an already settled claim cannot pay twice. Successful transfers and ordinary outbound bridge delays do not create Stellar recovery claims.
+
+The frontend and backend deploy separately on Vercel. The backend needs persistent PostgreSQL and a continuously running indexer; see the linked repositories for hosting configuration. Contract deployment is independent of website deployment. This documentation update and Git push do not redeploy or upgrade the already verified on-chain contracts.
 
 ## Contract sizes
 
