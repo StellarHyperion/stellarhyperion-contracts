@@ -42,7 +42,7 @@ jobs:
         # workspace does not touch either, so pulling them would cost a minute for nothing.
         # persist-credentials is off because no step after this one needs to talk to the remote,
         # and a token left in .git/config is a token a later step can read.
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: false
           persist-credentials: false
@@ -59,7 +59,7 @@ jobs:
           rustc --version
 
       - name: Restore the cargo cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # Named explicitly rather than inferred, because the workspace is not at the repository
           # root and the action looks there by default. Getting this wrong produces a job that
@@ -99,7 +99,7 @@ jobs:
 
       - name: Restore the pinned stellar-cli
         id: stellar-cli-cache
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.local/bin/stellar
           # Keyed on the version alone, which is correct: the binary for a given release never
@@ -185,7 +185,7 @@ jobs:
         # Useful for two things: diffing a size regression against the previous run, and handing
         # a reviewer the exact bytes a pull request produces without asking them to build it.
         if: success()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: soroban-wasm-${{ github.sha }}
           path: soroban/target/wasm32v1-none/release/hyperion_*.wasm
