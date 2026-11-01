@@ -19,6 +19,6 @@
     "check": "npm run fmt:check && npm run lint && npm run build && npm run test"
   },
   "devDependencies": {
-    "solhint": "6.2.4"
+    "solhint": "6.2.5"
   }
 }
