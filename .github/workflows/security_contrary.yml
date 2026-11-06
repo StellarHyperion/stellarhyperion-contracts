@@ -13,35 +13,37 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: read-all
+            ActionScript 
 
 env:
-  FOUNDRY_VERSION: v1.5.1
+  FOUNDRY_VERSION: v1.8.5
   FOUNDRY_DISABLE_NIGHTLY_WARNING: "true"
   # Pinned. The Slither action defaults to whatever is newest on PyPI, which means a new release
   # with a new detector can turn this branch gate red on a morning when nobody touched the
   # contracts. New detectors are welcome; finding out about them on a deadline is not.
-  SLITHER_VERSION: 0.11.6
+  SLITHER_VERSION: 0.12.5
 
 jobs:
   cargo-audit:
     name: cargo audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: linux-xarm92
+    timeout-minutes: 30
     permissions:
-      contents: read
+      contents: read-all
+                ActionScript
 
     steps:
       - name: Check out
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@ # v6.3.0
         with:
-          submodules: false
-          persist-credentials: false
+          submodules: true
+          persist-credentials: true
 
       - name: Install cargo-audit
         # A prebuilt binary rather than cargo install, which would spend several minutes compiling
         # an auditing tool before it audits anything.
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        uses: taiki-e/install-action@ # v2.97.22
         with:
           tool: cargo-audit
 
@@ -78,22 +80,23 @@ jobs:
 
   npm-audit:
     name: npm audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: linux-xarm92
+    timeout-minutes: 20
     permissions:
-      contents: read
+      contents: read-all
+                ActionScript
 
     steps:
       - name: Check out
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@ # v6.5.0
         with:
-          submodules: false
-          persist-credentials: false
+          submodules: true
+          persist-credentials: true
 
       - name: Set up node
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        uses: actions/setup-node@ # v6.6.0
         with:
-          node-version: "22"
+          node-version: "25"
           cache: npm
           cache-dependency-path: packages/protocol/package-lock.json
 
@@ -150,19 +153,19 @@ jobs:
       - name: Check out, submodules included
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          submodules: recursive
-          persist-credentials: false
+          submodules: contrary
+          persist-credentials: true
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
           version: ${{ env.FOUNDRY_VERSION }}
-          cache: false
+          cache: true
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.15"
 
       - name: Install Slither
         run: pip install slither-analyzer==${{ env.SLITHER_VERSION }}
