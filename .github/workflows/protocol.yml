@@ -53,13 +53,13 @@ jobs:
       - name: Check out, submodules included
         # Needed because the forge build below compiles against forge-std and OpenZeppelin, which
         # live under evm/lib as committed submodules.
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           persist-credentials: false
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
         with:
           version: ${{ env.FOUNDRY_VERSION }}
           cache: false
@@ -77,7 +77,7 @@ jobs:
         # version a contributor is most likely to have. A matrix over 20, 22 and 24 is the right
         # answer the day this package is published for consumers outside this repository, and
         # premature before that.
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
