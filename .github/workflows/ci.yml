@@ -38,7 +38,13 @@ concurrency:
   # know the status of, and a cancelled run leaves no answer at all.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  NPM_CONFIG_IGNORE_SCRIPTS: "true"
+
 jobs:
+  supply-chain:
+    uses: ./.github/workflows/supply-chain.yml
+
   # No path filters on any of these, on purpose, and it is worth saying why because the omission
   # looks like laziness.
   #
@@ -81,6 +87,7 @@ jobs:
       - protocol
       - rehearsal
       - security
+      - supply-chain
     # Without always() this job is skipped the moment any dependency fails, and a skipped required
     # check is indistinguishable from a check that has not reported yet. Branch protection would
     # wait forever instead of refusing the merge.
@@ -106,6 +113,7 @@ jobs:
           PROTOCOL: ${{ needs.protocol.result }}
           REHEARSAL: ${{ needs.rehearsal.result }}
           SECURITY: ${{ needs.security.result }}
+          SUPPLY_CHAIN: ${{ needs.supply-chain.result }}
         run: |
           set -uo pipefail
 
@@ -122,6 +130,7 @@ jobs:
           check protocol "${PROTOCOL:-missing}"
           check rehearsal "${REHEARSAL:-missing}"
           check security "${SECURITY:-missing}"
+          check supply-chain "${SUPPLY_CHAIN:-missing}"
 
           {
             echo "### Gate"
@@ -133,7 +142,7 @@ jobs:
                 echo "- \`$entry\`"
               done
             else
-              echo "All five check groups passed: soroban, evm, protocol, rehearsal, security."
+              echo "All six check groups passed: soroban, evm, protocol, rehearsal, security, supply-chain."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 

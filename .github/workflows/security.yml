@@ -32,6 +32,28 @@ jobs:
       contents: read
 
     steps:
+      - name: Restrict build network access
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # verified upstream v2 snapshot
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          disable-telemetry: true
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            raw.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            registry.npmjs.org:443
+            nodejs.org:443
+            index.crates.io:443
+            static.crates.io:443
+            static.rust-lang.org:443
+            binaries.soliditylang.org:443
+            solc-bin.ethereum.org:443
+            pypi.org:443
+            files.pythonhosted.org:443
+
       - name: Check out
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -84,6 +106,28 @@ jobs:
       contents: read
 
     steps:
+      - name: Restrict build network access
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # verified upstream v2 snapshot
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          disable-telemetry: true
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            raw.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            registry.npmjs.org:443
+            nodejs.org:443
+            index.crates.io:443
+            static.crates.io:443
+            static.rust-lang.org:443
+            binaries.soliditylang.org:443
+            solc-bin.ethereum.org:443
+            pypi.org:443
+            files.pythonhosted.org:443
+
       - name: Check out
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -94,8 +138,6 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: packages/protocol/package-lock.json
 
       - name: Audit the protocol package
         # Run from inside the package so npm picks up packages/protocol/.npmrc. That file sets
@@ -147,6 +189,28 @@ jobs:
       contents: read
 
     steps:
+      - name: Restrict build network access
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # verified upstream v2 snapshot
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          disable-telemetry: true
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            raw.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            registry.npmjs.org:443
+            nodejs.org:443
+            index.crates.io:443
+            static.crates.io:443
+            static.rust-lang.org:443
+            binaries.soliditylang.org:443
+            solc-bin.ethereum.org:443
+            pypi.org:443
+            files.pythonhosted.org:443
+
       - name: Check out, submodules included
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -160,7 +224,7 @@ jobs:
           cache: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
