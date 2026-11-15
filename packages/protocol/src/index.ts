@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Executable security assumption checks across Soroban and EVM surfaces.
+export * from "./securityAssumptions.js";
