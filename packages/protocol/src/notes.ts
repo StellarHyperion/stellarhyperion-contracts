@@ -17,6 +17,10 @@
  */
 import {
   AddressKind,
+  STRKEY_LEN_MUXED,
+  STRKEY_LEN_PLAIN,
+  TAGGED_LEN_MUXED,
+  TAGGED_LEN_PLAIN,
   parseStellarAddress,
   strkeyDestination,
   taggedDestination,
@@ -32,7 +36,25 @@ export const NOTE_VERSION = 1;
 export const OUTBOUND_NOTE_LEN = 29;
 
 /** The shortest an inbound note can be: version, kind, length, a strkey, a nonce. */
-const INBOUND_NOTE_MIN = 1 + 3 + 8;
+export const INBOUND_NOTE_MIN = 1 + 3 + 8;
+
+/** Exact byte length of an inbound note naming a plain G or C strkey. */
+export const INBOUND_NOTE_PLAIN_LEN = 1 + 2 + STRKEY_LEN_PLAIN + 8;
+
+/** Exact byte length of an inbound note naming a muxed M strkey. */
+export const INBOUND_NOTE_MUXED_LEN = 1 + 2 + STRKEY_LEN_MUXED + 8;
+
+/** Maximum valid byte length for an inbound note. */
+export const INBOUND_NOTE_MAX_LEN = INBOUND_NOTE_MUXED_LEN;
+
+/** Exact byte length of a CCTP hook naming a plain G or C destination. */
+export const HOOK_LEN_PLAIN = 1 + TAGGED_LEN_PLAIN;
+
+/** Exact byte length of a CCTP hook naming a muxed M destination. */
+export const HOOK_LEN_MUXED = 1 + TAGGED_LEN_MUXED;
+
+/** Maximum valid byte length for a CCTP hook. */
+export const HOOK_MAX_LEN = HOOK_LEN_MUXED;
 
 /** Axelar's own envelope version for "there is a payload and it is for a contract". */
 export const METADATA_CONTRACT_CALL = 0;
@@ -104,6 +126,9 @@ export function decodeInboundNote(payload: Uint8Array | Hex): InboundNote {
   const len = bytes[2] ?? 0;
   if (bytes.length !== 3 + len + 8)
     fail("MalformedMessage", "the length byte and the note disagree");
+  if (len !== STRKEY_LEN_PLAIN && len !== STRKEY_LEN_MUXED) {
+    fail("InvalidDestination", `${String(len)} characters is not a strkey length`);
+  }
 
   const strkey = bytesToAscii(bytes.slice(3, 3 + len));
   // The far side will parse this and check its checksum. Doing it here too means a note built by
@@ -136,7 +161,7 @@ export function decodeCctpHook(payload: Uint8Array | Hex): {
   muxedId: bigint;
 } {
   const bytes = typeof payload === "string" ? fromHex(payload) : payload;
-  if (bytes.length !== 34 && bytes.length !== 42) {
+  if (bytes.length !== HOOK_LEN_PLAIN && bytes.length !== HOOK_LEN_MUXED) {
     fail(
       "MalformedMessage",
       `a hook is thirty four or forty two bytes, got ${String(bytes.length)}`,
@@ -148,7 +173,7 @@ export function decodeCctpHook(payload: Uint8Array | Hex): {
   if (tag > AddressKind.MuxedAccount) fail("MalformedMessage", `address kind ${String(tag)}`);
   const kind = tag as AddressKind;
   const wantsMuxed = kind === AddressKind.MuxedAccount;
-  if (wantsMuxed !== (bytes.length === 42)) {
+  if (wantsMuxed !== (bytes.length === HOOK_LEN_MUXED)) {
     fail("MalformedMessage", "the kind tag and the hook length disagree");
   }
 

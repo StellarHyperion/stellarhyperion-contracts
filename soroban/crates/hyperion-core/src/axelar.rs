@@ -20,7 +20,7 @@
 use soroban_sdk::{Bytes, BytesN, Env};
 
 use crate::error::HyperionError;
-use crate::strkey::StrkeyDestination;
+use crate::strkey::{StrkeyDestination, STRKEY_WIRE_LEN_MUXED, STRKEY_WIRE_LEN_PLAIN};
 
 /// Version byte leading every Hyperion note on these rails.
 ///
@@ -32,10 +32,19 @@ pub const NOTE_VERSION: u8 = 1;
 pub const OUTBOUND_NOTE_LEN: u32 = 29;
 
 /// The shortest an inbound note can be: version, kind, length, a strkey, a nonce.
-const INBOUND_NOTE_MIN: u32 = 1 + 3 + 8;
+pub const INBOUND_NOTE_MIN: u32 = 1 + 3 + 8;
 
 /// Eight bytes of big-endian nonce sitting at the end of a note.
 const NONCE_LEN: u32 = 8;
+
+/// Exact byte length of an inbound note carrying a plain G or C strkey (`1 + 58 + 8`).
+pub const INBOUND_NOTE_PLAIN_LEN: u32 = 1 + STRKEY_WIRE_LEN_PLAIN + NONCE_LEN;
+
+/// Exact byte length of an inbound note carrying a muxed M strkey (`1 + 71 + 8`).
+pub const INBOUND_NOTE_MUXED_LEN: u32 = 1 + STRKEY_WIRE_LEN_MUXED + NONCE_LEN;
+
+/// Maximum valid byte length for any inbound note accepted by this version of the protocol.
+pub const INBOUND_NOTE_MAX_LEN: u32 = INBOUND_NOTE_MUXED_LEN;
 
 /// What Hyperion says to its own contract on the far side when a transfer leaves Stellar.
 ///
@@ -133,6 +142,9 @@ impl InboundNote {
         }
         if raw.get(0).ok_or(HyperionError::MalformedMessage)? != NOTE_VERSION {
             return Err(HyperionError::UnsupportedHookVersion);
+        }
+        if raw.len() != INBOUND_NOTE_PLAIN_LEN && raw.len() != INBOUND_NOTE_MUXED_LEN {
+            return Err(HyperionError::InvalidDestination);
         }
         let nonce = read_nonce(raw, raw.len() - NONCE_LEN)?;
         let destination = StrkeyDestination::decode(env, &raw.slice(1..raw.len() - NONCE_LEN))?;

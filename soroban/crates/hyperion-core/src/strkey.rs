@@ -8,6 +8,10 @@ use crate::error::HyperionError;
 pub const STRKEY_LEN_PLAIN: u32 = 56;
 /// Character count of an M strkey. Same as above with an extra eight byte muxed id folded in.
 pub const STRKEY_LEN_MUXED: u32 = 69;
+/// Framed wire byte count (`[kind][len][ascii]`) for a plain G or C strkey.
+pub const STRKEY_WIRE_LEN_PLAIN: u32 = STRKEY_LEN_PLAIN + 2;
+/// Framed wire byte count (`[kind][len][ascii]`) for a muxed M strkey.
+pub const STRKEY_WIRE_LEN_MUXED: u32 = STRKEY_LEN_MUXED + 2;
 
 /// A Stellar destination as it travels inside a rail's arbitrary payload field.
 ///

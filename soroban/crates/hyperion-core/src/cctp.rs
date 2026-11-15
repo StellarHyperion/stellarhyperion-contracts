@@ -11,7 +11,7 @@
 
 use soroban_sdk::{Bytes, BytesN, Env};
 
-use crate::address::{AddressKind, StellarDestination};
+use crate::address::{AddressKind, StellarDestination, TAGGED_LEN_MUXED, TAGGED_LEN_PLAIN};
 use crate::error::HyperionError;
 
 /// Circle's domain number for Stellar.
@@ -221,6 +221,15 @@ impl BurnMessage {
 /// Version byte on Hyperion's own hook payload.
 pub const HOOK_VERSION: u8 = 1;
 
+/// Exact byte length of a CCTP hook naming a plain G or C destination (`1 + 33`).
+pub const HOOK_LEN_PLAIN: u32 = 1 + TAGGED_LEN_PLAIN;
+
+/// Exact byte length of a CCTP hook naming a muxed M destination (`1 + 41`).
+pub const HOOK_LEN_MUXED: u32 = 1 + TAGGED_LEN_MUXED;
+
+/// Maximum valid byte length for a Hyperion CCTP hook payload.
+pub const HOOK_MAX_LEN: u32 = HOOK_LEN_MUXED;
+
 /// What Hyperion's EVM side writes into a CCTP hook so the Stellar side knows where to pay.
 ///
 /// A CCTP mint recipient is thirty two bytes and nothing else, which is exactly one key with no
@@ -257,6 +266,9 @@ impl HyperionHook {
         let version = raw.get(0).ok_or(HyperionError::InvalidDestination)?;
         if version != HOOK_VERSION {
             return Err(HyperionError::UnsupportedHookVersion);
+        }
+        if raw.len() != HOOK_LEN_PLAIN && raw.len() != HOOK_LEN_MUXED {
+            return Err(HyperionError::InvalidDestination);
         }
         let body = raw.slice(1..raw.len());
         let destination = StellarDestination::decode(env, &body)?;

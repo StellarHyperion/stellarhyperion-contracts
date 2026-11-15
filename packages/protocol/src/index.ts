@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Cross-stack parser byte ceilings and stress comparison metadata.
+export * from "./parserLimits.js";
