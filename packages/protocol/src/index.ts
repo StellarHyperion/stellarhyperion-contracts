@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Deterministic seed-driven provider fault scheduling for local rehearsals.
+export * from "./faultScheduling.js";
