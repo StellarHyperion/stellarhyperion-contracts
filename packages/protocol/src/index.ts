@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Contract-interface capability snapshots and upgrade compatibility checks.
+export * from "./capabilitySnapshots.js";

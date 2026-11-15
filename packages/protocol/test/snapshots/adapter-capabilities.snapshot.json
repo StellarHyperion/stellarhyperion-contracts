@@ -1,0 +1,608 @@
+{
+  "schemaVersion": 1,
+  "surfaceKind": "adapter",
+  "contracts": [
+    {
+      "contractName": "CctpAdapter",
+      "surfaceKind": "adapter",
+      "stack": "soroban",
+      "sourceRef": "soroban/crates/hyperion-adapter-cctp/src/lib.rs",
+      "deploymentStatus": "active-testnet-outbound",
+      "supportedRoutes": ["Cctp"],
+      "paidRoutes": ["Cctp"],
+      "methods": [
+        {
+          "name": "asset_for",
+          "signature": "asset_for(u32, BytesN<32>) -> Result<Address, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "dispatch",
+          "signature": "dispatch(Address, Address, i128, String, BytesN<32>, u64) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "dispatch_from",
+          "signature": "dispatch_from(Address, Address, Address, i128, String, BytesN<32>, u64, i128) -> Result<(), HyperionError>",
+          "paid": true
+        },
+        {
+          "name": "domain_for",
+          "signature": "domain_for(String) -> Result<u32, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_config",
+          "signature": "get_config() -> Result<Config, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_link",
+          "signature": "get_link(u32) -> Result<DomainLink, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "initialize",
+          "signature": "initialize(Address, Address, Address, Address) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "keep_alive",
+          "signature": "keep_alive(u32) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "link_domain",
+          "signature": "link_domain(String, u32, BytesN<32>) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "map_asset",
+          "signature": "map_asset(u32, BytesN<32>, Address) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "quote_max_fee",
+          "signature": "quote_max_fee(i128) -> Result<i128, HyperionError>",
+          "paid": true
+        },
+        {
+          "name": "receive",
+          "signature": "receive(Address, Bytes, Bytes) -> Result<u64, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "set_admin",
+          "signature": "set_admin(Address) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "set_fee_policy",
+          "signature": "set_fee_policy(u32, u32) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "sweep",
+          "signature": "sweep(Address, Address) -> Result<i128, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "upgrade",
+          "signature": "upgrade(BytesN<32>) -> Result<(), HyperionError>",
+          "paid": false
+        }
+      ]
+    },
+    {
+      "contractName": "AxelarAdapter",
+      "surfaceKind": "adapter",
+      "stack": "soroban",
+      "sourceRef": "soroban/crates/hyperion-adapter-axelar/src/lib.rs",
+      "deploymentStatus": "active-testnet-outbound",
+      "supportedRoutes": ["AxelarIts", "AxelarGmp"],
+      "paidRoutes": ["AxelarIts"],
+      "methods": [
+        {
+          "name": "chain_for",
+          "signature": "chain_for(String) -> Result<String, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "dispatch",
+          "signature": "dispatch(Address, Address, i128, String, BytesN<32>, u64) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "dispatch_from",
+          "signature": "dispatch_from(Address, Address, Address, i128, String, BytesN<32>, u64, i128) -> Result<(), HyperionError>",
+          "paid": true
+        },
+        {
+          "name": "execute_with_interchain_token",
+          "signature": "execute_with_interchain_token(String, String, Bytes, Bytes, BytesN<32>, Address, i128) -> Result<u64, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "gas_token",
+          "signature": "gas_token() -> Result<Address, HyperionError>",
+          "paid": true
+        },
+        {
+          "name": "get_config",
+          "signature": "get_config() -> Result<Config, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_link",
+          "signature": "get_link(String) -> Result<ChainLink, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "initialize",
+          "signature": "initialize(Address, Address, Address, RouteKind) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "keep_alive",
+          "signature": "keep_alive(String) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "link_chain",
+          "signature": "link_chain(String, String, BytesN<20>) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "manager_type_for",
+          "signature": "manager_type_for(Address) -> Result<TokenManagerType, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "map_token",
+          "signature": "map_token(Address, BytesN<32>) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "rail_flow_limit",
+          "signature": "rail_flow_limit(Address) -> Result<Option<i128>, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "set_admin",
+          "signature": "set_admin(Address) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "sweep",
+          "signature": "sweep(Address, Address) -> Result<i128, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "token_for",
+          "signature": "token_for(BytesN<32>) -> Result<Address, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "token_id_for",
+          "signature": "token_id_for(Address) -> Result<BytesN<32>, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "upgrade",
+          "signature": "upgrade(BytesN<32>) -> Result<(), HyperionError>",
+          "paid": false
+        }
+      ]
+    },
+    {
+      "contractName": "AllbridgeAdapter",
+      "surfaceKind": "adapter",
+      "stack": "soroban",
+      "sourceRef": "soroban/crates/hyperion-adapter-allbridge/src/lib.rs",
+      "deploymentStatus": "gated",
+      "supportedRoutes": ["Allbridge"],
+      "paidRoutes": [],
+      "methods": [
+        {
+          "name": "bridge_in",
+          "signature": "bridge_in(Address, Address, i128, Address, u32, U256, BytesN<64>) -> Result<u64, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "chain_for",
+          "signature": "chain_for(u32) -> Result<String, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "dispatch",
+          "signature": "dispatch(Address, Address, i128, String, BytesN<32>, u64) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "fund_gas",
+          "signature": "fund_gas(Address, i128) -> Result<i128, HyperionError>",
+          "paid": true
+        },
+        {
+          "name": "gas_balance",
+          "signature": "gas_balance() -> Result<i128, HyperionError>",
+          "paid": true
+        },
+        {
+          "name": "get_asset",
+          "signature": "get_asset(Address, String) -> Result<AssetLink, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_config",
+          "signature": "get_config() -> Result<Config, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_lane",
+          "signature": "get_lane(String) -> Result<ChainLane, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_validator",
+          "signature": "get_validator() -> Result<BytesN<32>, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "initialize",
+          "signature": "initialize(Address, Address, Address, Address) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "is_processed",
+          "signature": "is_processed(BytesN<32>) -> Result<bool, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "keep_alive",
+          "signature": "keep_alive(String) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "link_asset",
+          "signature": "link_asset(Address, String, BytesN<32>) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "link_chain",
+          "signature": "link_chain(String, u32) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "pool_for",
+          "signature": "pool_for(Address) -> Result<Address, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "quote_gas",
+          "signature": "quote_gas(String) -> Result<u128, HyperionError>",
+          "paid": true
+        },
+        {
+          "name": "rail_open",
+          "signature": "rail_open() -> Result<bool, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "receive",
+          "signature": "receive(Address, Address, i128, Address, u32, U256, BytesN<64>) -> Result<u64, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "route",
+          "signature": "route() -> Result<RouteKind, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "set_admin",
+          "signature": "set_admin(Address) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "set_validator",
+          "signature": "set_validator(BytesN<32>) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "sweep",
+          "signature": "sweep(Address, Address) -> Result<i128, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "upgrade",
+          "signature": "upgrade(BytesN<32>) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "withdraw_gas",
+          "signature": "withdraw_gas(Address, i128) -> Result<i128, HyperionError>",
+          "paid": false
+        }
+      ]
+    },
+    {
+      "contractName": "CctpAdapter",
+      "surfaceKind": "adapter",
+      "stack": "evm",
+      "sourceRef": "packages/protocol/src/abi/cctpAdapter.ts",
+      "deploymentStatus": "gated",
+      "supportedRoutes": ["Cctp"],
+      "paidRoutes": ["Cctp"],
+      "methods": [
+        {
+          "name": "acceptOwnership",
+          "signature": "acceptOwnership()->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "dispatch",
+          "signature": "dispatch(address,uint256,(string,string),uint64)->(bytes32) [payable]",
+          "paid": true,
+          "mutability": "payable"
+        },
+        {
+          "name": "FINALITY_THRESHOLD_FINALIZED",
+          "signature": "FINALITY_THRESHOLD_FINALIZED()->(uint32) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "laneOf",
+          "signature": "laneOf(string)->((uint32,bytes32,bool,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "owner",
+          "signature": "owner()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "pendingOwner",
+          "signature": "pendingOwner()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "quoteFee",
+          "signature": "quoteFee(string,uint256)->(uint256) [pure]",
+          "paid": true,
+          "mutability": "pure"
+        },
+        {
+          "name": "renounceOwnership",
+          "signature": "renounceOwnership()->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "route",
+          "signature": "route()->(uint8) [pure]",
+          "paid": false,
+          "mutability": "pure"
+        },
+        {
+          "name": "ROUTER",
+          "signature": "ROUTER()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "setLane",
+          "signature": "setLane(string,uint32,bytes32)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "setLaneEnabled",
+          "signature": "setLaneEnabled(string,bool)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "supportsChain",
+          "signature": "supportsChain(string)->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "TOKEN_MESSENGER",
+          "signature": "TOKEN_MESSENGER()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "transferOwnership",
+          "signature": "transferOwnership(address)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "USDC",
+          "signature": "USDC()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        }
+      ]
+    },
+    {
+      "contractName": "AxelarItsAdapter",
+      "surfaceKind": "adapter",
+      "stack": "evm",
+      "sourceRef": "packages/protocol/src/abi/axelarItsAdapter.ts",
+      "deploymentStatus": "gated",
+      "supportedRoutes": ["AxelarIts"],
+      "paidRoutes": ["AxelarIts"],
+      "methods": [
+        {
+          "name": "acceptOwnership",
+          "signature": "acceptOwnership()->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "chainForAxelarName",
+          "signature": "chainForAxelarName(string)->(string) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "dispatch",
+          "signature": "dispatch(address,uint256,(string,string),uint64)->(bytes32) [payable]",
+          "paid": true,
+          "mutability": "payable"
+        },
+        {
+          "name": "EXECUTE_SUCCESS",
+          "signature": "EXECUTE_SUCCESS()->(bytes32) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "executeWithInterchainToken",
+          "signature": "executeWithInterchainToken(bytes32,string,bytes,bytes,bytes32,address,uint256)->(bytes32) [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "GAS_SERVICE",
+          "signature": "GAS_SERVICE()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "ITS",
+          "signature": "ITS()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "linkToken",
+          "signature": "linkToken(address,bytes32)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "owner",
+          "signature": "owner()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "peerOf",
+          "signature": "peerOf(string)->((string,bytes,bool,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "pendingOwner",
+          "signature": "pendingOwner()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "quoteFee",
+          "signature": "quoteFee(string,uint256)->(uint256) [pure]",
+          "paid": true,
+          "mutability": "pure"
+        },
+        {
+          "name": "renounceOwnership",
+          "signature": "renounceOwnership()->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "route",
+          "signature": "route()->(uint8) [pure]",
+          "paid": false,
+          "mutability": "pure"
+        },
+        {
+          "name": "ROUTER",
+          "signature": "ROUTER()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "setPeer",
+          "signature": "setPeer(string,string,bytes)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "setPeerEnabled",
+          "signature": "setPeerEnabled(string,bool)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "supportsChain",
+          "signature": "supportsChain(string)->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "tokenIdOf",
+          "signature": "tokenIdOf(address)->(bytes32) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "topUpGas",
+          "signature": "topUpGas(bytes32,uint256,address)->() [payable]",
+          "paid": true,
+          "mutability": "payable"
+        },
+        {
+          "name": "transferOwnership",
+          "signature": "transferOwnership(address)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        }
+      ]
+    },
+    {
+      "contractName": "IRailAdapter",
+      "surfaceKind": "adapter",
+      "stack": "evm",
+      "sourceRef": "packages/protocol/src/abi/railAdapter.ts",
+      "deploymentStatus": "gated",
+      "supportedRoutes": ["Cctp", "AxelarIts", "AxelarGmp", "Allbridge"],
+      "paidRoutes": ["Cctp", "AxelarIts", "AxelarGmp", "Allbridge"],
+      "methods": [
+        {
+          "name": "dispatch",
+          "signature": "dispatch(address,uint256,(string,string),uint64)->(bytes32) [payable]",
+          "paid": true,
+          "mutability": "payable"
+        },
+        {
+          "name": "quoteFee",
+          "signature": "quoteFee(string,uint256)->(uint256) [view]",
+          "paid": true,
+          "mutability": "view"
+        },
+        {
+          "name": "route",
+          "signature": "route()->(uint8) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "supportsChain",
+          "signature": "supportsChain(string)->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        }
+      ]
+    }
+  ]
+}

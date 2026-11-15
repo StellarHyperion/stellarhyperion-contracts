@@ -1,0 +1,560 @@
+{
+  "schemaVersion": 1,
+  "surfaceKind": "router",
+  "contracts": [
+    {
+      "contractName": "HyperionRouter",
+      "surfaceKind": "router",
+      "stack": "soroban",
+      "sourceRef": "soroban/crates/hyperion-router/src/lib.rs",
+      "deploymentStatus": "active-testnet-outbound",
+      "supportedRoutes": ["Cctp", "AxelarIts", "AxelarGmp", "Allbridge"],
+      "paidRoutes": ["Cctp", "AxelarIts"],
+      "methods": [
+        {
+          "name": "bridge_in",
+          "signature": "bridge_in(Address, RouteKind, Address, i128, Recipient, Origin) -> Result<u64, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "bridge_out",
+          "signature": "bridge_out(Address, OutboundRequest) -> Result<u64, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "bridge_out_with_gas",
+          "signature": "bridge_out_with_gas(Address, OutboundRequest, i128) -> Result<u64, HyperionError>",
+          "paid": true
+        },
+        {
+          "name": "cancel_action",
+          "signature": "cancel_action(Address, u64) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "claim_count",
+          "signature": "claim_count() -> u64",
+          "paid": false
+        },
+        {
+          "name": "disable_route",
+          "signature": "disable_route(Address, RouteKind) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "disable_token",
+          "signature": "disable_token(Address, Address) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "execute_action",
+          "signature": "execute_action(Address, u64) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "flow_available",
+          "signature": "flow_available(Address, RouteKind) -> Result<i128, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_adapter",
+          "signature": "get_adapter(RouteKind) -> Result<Address, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_claim",
+          "signature": "get_claim(u64) -> Result<PendingClaim, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_config",
+          "signature": "get_config() -> Result<Config, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_queued",
+          "signature": "get_queued(u64) -> Result<QueuedAction, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_rail_receiver",
+          "signature": "get_rail_receiver(RouteKind) -> Result<Address, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_route_config",
+          "signature": "get_route_config(RouteKind) -> Option<RouteConfig>",
+          "paid": false
+        },
+        {
+          "name": "get_token",
+          "signature": "get_token(Address) -> Result<TokenConfig, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "get_transfer",
+          "signature": "get_transfer(u64) -> Result<TransferRecord, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "initialize",
+          "signature": "initialize(Address, Address, Address, u32, u32, u64) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "is_route_enabled",
+          "signature": "is_route_enabled(RouteKind) -> bool",
+          "paid": false
+        },
+        {
+          "name": "keep_alive",
+          "signature": "keep_alive(Vec<Address>, Vec<RouteKind>, Vec<u64>, Vec<u64>) -> ()",
+          "paid": false
+        },
+        {
+          "name": "last_out_nonce",
+          "signature": "last_out_nonce() -> u64",
+          "paid": false
+        },
+        {
+          "name": "lower_token_flow_limit",
+          "signature": "lower_token_flow_limit(Address, Address, i128) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "pause",
+          "signature": "pause(Address) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "queue_action",
+          "signature": "queue_action(Address, AdminAction) -> Result<u64, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "queue_count",
+          "signature": "queue_count() -> u64",
+          "paid": false
+        },
+        {
+          "name": "quote_routes",
+          "signature": "quote_routes(Address, i128, u32) -> Vec<RouteQuote>",
+          "paid": false
+        },
+        {
+          "name": "settle_claim",
+          "signature": "settle_claim(Address, u64) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "supports_paid_route",
+          "signature": "supports_paid_route(RouteKind) -> bool",
+          "paid": true
+        },
+        {
+          "name": "treasury",
+          "signature": "treasury() -> Result<Address, HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "unpause",
+          "signature": "unpause(Address) -> Result<(), HyperionError>",
+          "paid": false
+        },
+        {
+          "name": "was_processed",
+          "signature": "was_processed(RouteKind, BytesN<32>) -> bool",
+          "paid": false
+        }
+      ]
+    },
+    {
+      "contractName": "HyperionRouter",
+      "surfaceKind": "router",
+      "stack": "evm",
+      "sourceRef": "packages/protocol/src/abi/router.ts",
+      "deploymentStatus": "gated",
+      "supportedRoutes": ["Cctp", "AxelarIts", "AxelarGmp", "Allbridge"],
+      "paidRoutes": ["Cctp", "AxelarIts", "AxelarGmp", "Allbridge"],
+      "methods": [
+        {
+          "name": "actionCount",
+          "signature": "actionCount()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "adapter",
+          "signature": "adapter(uint8)->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "bridgeIn",
+          "signature": "bridgeIn(uint8,address,uint256,address,(string,uint64,bytes32,bytes32))->(uint64) [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "bridgeOut",
+          "signature": "bridgeOut((address,uint256,uint8,(string,string),uint8,uint256))->(uint64) [payable]",
+          "paid": true,
+          "mutability": "payable"
+        },
+        {
+          "name": "cancelAction",
+          "signature": "cancelAction(uint64)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "checkDestination",
+          "signature": "checkDestination(string)->(uint8,bytes32,uint64) [pure]",
+          "paid": false,
+          "mutability": "pure"
+        },
+        {
+          "name": "claimCount",
+          "signature": "claimCount()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "DEFAULT_ADMIN_ROLE",
+          "signature": "DEFAULT_ADMIN_ROLE()->(bytes32) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "executeAction",
+          "signature": "executeAction(uint64)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "feeBps",
+          "signature": "feeBps()->(uint16) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "flowAvailable",
+          "signature": "flowAvailable(address,uint8)->(uint256) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "flowWindow",
+          "signature": "flowWindow()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "getRoleAdmin",
+          "signature": "getRoleAdmin(bytes32)->(bytes32) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "GRACE_PERIOD",
+          "signature": "GRACE_PERIOD()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "grantRole",
+          "signature": "grantRole(bytes32,address)->() [pure]",
+          "paid": false,
+          "mutability": "pure"
+        },
+        {
+          "name": "GUARDIAN_ROLE",
+          "signature": "GUARDIAN_ROLE()->(bytes32) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "hasRole",
+          "signature": "hasRole(bytes32,address)->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "lowerTokenFlowLimit",
+          "signature": "lowerTokenFlowLimit(address,uint256)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "MAX_FLOW_WINDOW",
+          "signature": "MAX_FLOW_WINDOW()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "MAX_TIMELOCK_DELAY",
+          "signature": "MAX_TIMELOCK_DELAY()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "MIN_FLOW_WINDOW",
+          "signature": "MIN_FLOW_WINDOW()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "MIN_TIMELOCK_DELAY",
+          "signature": "MIN_TIMELOCK_DELAY()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "outboundNonce",
+          "signature": "outboundNonce()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "pause",
+          "signature": "pause()->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "paused",
+          "signature": "paused()->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "pauseRoute",
+          "signature": "pauseRoute(uint8)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "pendingClaim",
+          "signature": "pendingClaim(uint64)->((uint64,address,address,uint256,uint8,string,uint64,uint64,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "processed",
+          "signature": "processed(bytes32)->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "queueAction",
+          "signature": "queueAction((uint8,uint8,address,uint256,uint8))->(uint64) [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "queuedAction",
+          "signature": "queuedAction(uint64)->((uint64,(uint8,uint8,address,uint256,uint8),uint64,uint64,uint64,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "quote",
+          "signature": "quote(uint8,address,uint256,(string,string),uint8)->((uint8,bool,uint8,uint256,uint256,uint256,uint256,uint256,bool,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "quoteAll",
+          "signature": "quoteAll(address,uint256,(string,string),uint8)->((uint8,bool,uint8,uint256,uint256,uint256,uint256,uint256,bool,bool)[]) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "railReceiver",
+          "signature": "railReceiver(uint8)->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "renounceRole",
+          "signature": "renounceRole(bytes32,address)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "revokeRole",
+          "signature": "revokeRole(bytes32,address)->() [pure]",
+          "paid": false,
+          "mutability": "pure"
+        },
+        {
+          "name": "routeEnabled",
+          "signature": "routeEnabled(uint8)->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "routePaused",
+          "signature": "routePaused(uint8)->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "settleClaim",
+          "signature": "settleClaim(uint64)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "supportsInterface",
+          "signature": "supportsInterface(bytes4)->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "timelockDelay",
+          "signature": "timelockDelay()->(uint64) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "tokenConfig",
+          "signature": "tokenConfig(address)->((bool,uint8,uint256,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "treasury",
+          "signature": "treasury()->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "unpause",
+          "signature": "unpause()->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "unpauseRoute",
+          "signature": "unpauseRoute(uint8)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        }
+      ]
+    },
+    {
+      "contractName": "IHyperionRouter",
+      "surfaceKind": "router",
+      "stack": "evm",
+      "sourceRef": "packages/protocol/src/abi/routerInterface.ts",
+      "deploymentStatus": "gated",
+      "supportedRoutes": ["Cctp", "AxelarIts", "AxelarGmp", "Allbridge"],
+      "paidRoutes": ["Cctp", "AxelarIts", "AxelarGmp", "Allbridge"],
+      "methods": [
+        {
+          "name": "adapter",
+          "signature": "adapter(uint8)->(address) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "bridgeIn",
+          "signature": "bridgeIn(uint8,address,uint256,address,(string,uint64,bytes32,bytes32))->(uint64) [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "bridgeOut",
+          "signature": "bridgeOut((address,uint256,uint8,(string,string),uint8,uint256))->(uint64) [payable]",
+          "paid": true,
+          "mutability": "payable"
+        },
+        {
+          "name": "cancelAction",
+          "signature": "cancelAction(uint64)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "executeAction",
+          "signature": "executeAction(uint64)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "flowAvailable",
+          "signature": "flowAvailable(address,uint8)->(uint256) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "lowerTokenFlowLimit",
+          "signature": "lowerTokenFlowLimit(address,uint256)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "pauseRoute",
+          "signature": "pauseRoute(uint8)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "pendingClaim",
+          "signature": "pendingClaim(uint64)->((uint64,address,address,uint256,uint8,string,uint64,uint64,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "queueAction",
+          "signature": "queueAction((uint8,uint8,address,uint256,uint8))->(uint64) [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "queuedAction",
+          "signature": "queuedAction(uint64)->((uint64,(uint8,uint8,address,uint256,uint8),uint64,uint64,uint64,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "quote",
+          "signature": "quote(uint8,address,uint256,(string,string),uint8)->((uint8,bool,uint8,uint256,uint256,uint256,uint256,uint256,bool,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "quoteAll",
+          "signature": "quoteAll(address,uint256,(string,string),uint8)->((uint8,bool,uint8,uint256,uint256,uint256,uint256,uint256,bool,bool)[]) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "routePaused",
+          "signature": "routePaused(uint8)->(bool) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "settleClaim",
+          "signature": "settleClaim(uint64)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        },
+        {
+          "name": "tokenConfig",
+          "signature": "tokenConfig(address)->((bool,uint8,uint256,bool)) [view]",
+          "paid": false,
+          "mutability": "view"
+        },
+        {
+          "name": "unpauseRoute",
+          "signature": "unpauseRoute(uint8)->() [nonpayable]",
+          "paid": false,
+          "mutability": "nonpayable"
+        }
+      ]
+    }
+  ]
+}
