@@ -29,7 +29,7 @@ against itself.
 | `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
 | `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
 | `deployments` | Deployment records, and a loader that checks them instead of casting them              |
-| `registry`    | Assets and rail contracts per chain, with provenance attached                          |
+| `registry`    | Route-specific asset identities and rail contracts per chain, with provenance          |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
 
 ```ts
@@ -107,3 +107,20 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Route-specific asset identity resolution
+
+`ROUTE_ASSET_IDENTITIES`, `resolveAssetIdentity`, `listMatchingAssetIdentities`, and
+`resolveRouteAssetPair` replace ambiguous symbol-only lookups in new APIs with explicit
+`(chain, representation, issuer/address)` identities:
+
+- Circle native ERC-20 USDC (`representation: "native_erc20"`, 6 decimals on `cctp`) and Axelar ITS
+  representations (`representation: "axelar_its"` on `axelar-its`) carry distinct `identityKey`
+  records rather than sharing one collapsed EVM entry.
+- Whenever a selector matches multiple records on a chain (for example, querying
+  `{ chain: "sepolia", symbol: "USDC" }` without `representation`, `route`, or `address`, or
+  querying duplicate Stellar symbols across two issuers), `resolveAssetIdentity` throws
+  `AssetIdentityAmbiguityError` instead of returning the first array match.
+- Legacy symbol-only helpers (`assetOn`, `pairExists`, `routesForPair`) remain unchanged over
+  `ASSETS` for backward compatibility and explicitly document their first-match symbol-only
+  ambiguity behavior.
