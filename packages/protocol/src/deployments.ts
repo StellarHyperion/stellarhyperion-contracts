@@ -377,3 +377,5 @@ export function tokenFor(
 export function deployedChains(set: DeploymentSet): readonly ChainKey[] {
   return Object.keys(set.networks).filter(isChainKey);
 }
+
+export * from "./deployments/rehearsal.js";

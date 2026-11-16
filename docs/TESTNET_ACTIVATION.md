@@ -64,3 +64,18 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Local Stellar activation rehearsal
+
+Rehearse the full two-phase Stellar deployment and delayed-administration flow (deploy, queue, early execution rejection, delayed execute, repeated phase-two resume, outbound peer linking, and schema/config verification) in an isolated local fixture environment before signing any public transactions:
+
+```bash
+node script/stellar/rehearse-local.mjs
+```
+
+Compatibility and migration notes:
+
+- Rehearsals enforce the Soroban router's 3600-second minimum timelock floor with zero bootstrap exemptions (`TimelockNotReady` / `Error(Contract, #23)` before `eta`).
+- Repeated phase-two passes and interrupted execution resumes skip already-applied actions cleanly and preserve exact integer `flowLimit` values and final admin handover.
+- Every rehearsal report carries `evidenceKind: "local-fixture-rehearsal"` and `signedTestnetAcceptance: false`. Local rehearsal artifacts never satisfy public testnet delivery acceptance and never overwrite `deployments/stellar-testnet-phase1.json`; EVM inbound rails remain gated.
+
