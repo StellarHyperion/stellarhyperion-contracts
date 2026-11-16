@@ -48,6 +48,9 @@ export * from "./cctp.js";
 // Chains, their rpc endpoints, their explorers and their CCTP domains.
 export * from "./chains.js";
 
+// Canonical collision-free route identifiers and executable lane keys.
+export * from "./lanes.js";
+
 // Pricing a route locally so an app can render four of them while somebody types.
 export * from "./quotes.js";
 

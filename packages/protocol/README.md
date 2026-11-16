@@ -27,6 +27,7 @@ against itself.
 | `flow`        | Sliding flow windows, the same arithmetic both routers run                             |
 | `cctp`        | Reading CCTP V2 messages, which is all this side ever does with them                   |
 | `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
+| `lanes`       | Canonical collision-free route identifiers and executable lane keys                    |
 | `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
 | `deployments` | Deployment records, and a loader that checks them instead of casting them              |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
@@ -97,6 +98,22 @@ and dies before writing a single file. Every dependency here is a dev dependency
 with none at runtime, and `package-lock.json` is committed, so what CI installs is what was tested.
 The flag lives in the repository rather than in somebody's shell history because an install flag
 that only exists on one machine is a build that only works on one machine.
+
+## Canonical lane keys and compatibility
+
+`createExecutableLaneRecord`, `formatLaneKey`, `parseLaneKey`, and `tryParseLaneKey` encode network
+mode, rail slug, and full source/destination asset descriptors (`family`, `chain`, `representation`,
+Stellar `code`/`issuer`/`sacId` or lowercased EVM `address`, and `decimals`) into deterministic
+`hyperion-lane:v1|...` identifiers:
+
+- **Collision avoidance**: Native Circle 6-decimal USDC on Sepolia (`native_erc20`) and a 7-decimal
+  Axelar ITS Stellar-USDC representation (`axelar_its`), as well as classic Stellar assets under
+  different issuers, produce distinct lane keys.
+- **Invalid pair rejection**: Unsupported chain/provider pairs (such as `arc` mainnet on `axelar-its`
+  where `axelarName` is `null`, `local` on `cctp` where `cctpDomain` is `null`, mixed
+  mainnet/testnet hops, or EVM-to-EVM hops without a Stellar leg) throw `LaneValidationError` rather
+  than forming executable lane records. Existing registry and quote helpers remain unchanged; active
+  live deployment remains Stellar Testnet outbound ITS/CCTP with EVM origin lanes gated.
 
 ## Provenance
 
