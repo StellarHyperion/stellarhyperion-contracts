@@ -20,7 +20,7 @@ against itself.
 | ------------- | -------------------------------------------------------------------------------------- |
 | `bytes`       | Hex, big endian integers, ascii, slicing that refuses a short read instead of clamping |
 | `routes`      | The four rails, their tag values, and what is true about each one                      |
-| `errors`      | Both chains' error vocabularies with a sentence of help per error                      |
+| `errors`      | Both chains' error vocabularies, user help, and recovery classification                |
 | `addresses`   | Stellar strkeys: parse, encode, and the two wire forms the rails want                  |
 | `notes`       | The notes Hyperion writes into a rail's payload so a delivery knows who it is for      |
 | `amounts`     | Fees, decimal conversion, and formatting that never touches a float                    |
@@ -107,3 +107,22 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Error recovery classification
+
+`ERROR_RECOVERY`, `classifyProtocolError`, `classifySorobanError`, and `classifySubmissionOutcome`
+extend `ERROR_HELP` with four recovery categories (`transient`, `user_correctable`,
+`operator_action`, and `unknown_outcome`):
+
+- Every declared error across `SOROBAN_ERROR_NAMES` and `EVM_ERROR_NAMES` maps to a deterministic
+  recovery category and action while preserving existing `ERROR_HELP` fields for backward
+  compatibility.
+- Submission uncertainty (`rpc_timeout`, `network_disconnect`, `mempool_pending`, `missing_receipt`,
+  `ambiguous_gateway_error`, or `submissionCertainty: "uncertain_submission"`) always resolves to
+  `category: "unknown_outcome"` with `autoRetryRecommended: false` and `requiresOnChainCheck: true`
+  so an unconfirmed broadcast never triggers a duplicate transfer.
+- Unrecognized future error names or Soroban tags fall back conservatively to `unknown_outcome` with
+  `autoRetryRecommended: false`.
+- Active validated deployment remains Stellar Testnet outbound ITS/CCTP; EVM error classifications
+  support local revert decoding and gated integration testing without implying live EVM router
+  activation.

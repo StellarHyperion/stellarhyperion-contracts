@@ -142,17 +142,82 @@ export type ErrorFault =
   | "timing" // right request, wrong moment
   | "internal"; // should not happen, and if it does somebody wants to know
 
+/**
+ * Operational recovery category used by wallets, keepers, and support tooling.
+ *
+ * - `transient`: temporary throttle, liquidity, or pause state that can clear over time without
+ *   altering request parameters, provided the prior attempt is known not to be in flight.
+ * - `user_correctable`: caller can resolve by fixing destination, amount, slippage, route choice,
+ *   account authorization, or recipient trustline prerequisites.
+ * - `operator_action`: requires admin/guardian/keeper intervention or marks a terminal protocol
+ *   invariant/replay state that callers must not retry.
+ * - `unknown_outcome`: submission outcome is uncertain or the error originates from a newer
+ *   contract deployment this SDK does not recognize; callers must inspect chain state first and
+ *   never auto-retry blindly.
+ */
+export type ErrorRecoveryCategory =
+  "transient" | "user_correctable" | "operator_action" | "unknown_outcome";
+
+export const ERROR_RECOVERY_CATEGORIES: readonly ErrorRecoveryCategory[] = Object.freeze([
+  "transient",
+  "user_correctable",
+  "operator_action",
+  "unknown_outcome",
+]);
+
+/** Concrete action recommended to an automated caller or wallet UI. */
+export type RecoveryAction =
+  "wait_and_retry" | "correct_user_input" | "await_operator_or_halt" | "reconcile_chain_state";
+
+/** Whether a failure was observed before broadcast, from a confirmed revert, or after an uncertain broadcast. */
+export type SubmissionCertainty =
+  "pre_broadcast_simulation" | "confirmed_revert" | "uncertain_submission";
+
 export interface ErrorHelp {
   /** One sentence, written for the person who hit it rather than the person who wrote it. */
   readonly summary: string;
   readonly fault: ErrorFault;
   /** Whether the identical request could work later with nothing changed. */
   readonly retryable: boolean;
+  /** Operational recovery bucket for automated retry and UX routing decisions. */
+  readonly recoveryCategory: ErrorRecoveryCategory;
   /** The Soroban tag, when Stellar has this error at all. */
   readonly sorobanCode: number | null;
 }
 
-const HELP: Record<HyperionErrorName, Omit<ErrorHelp, "sorobanCode">> = {
+export interface ErrorRecoveryDecision {
+  readonly errorName: string;
+  readonly knownError: boolean;
+  readonly category: ErrorRecoveryCategory;
+  readonly action: RecoveryAction;
+  /** True only when the failure is transient AND prior submission is known not to have landed. */
+  readonly autoRetryRecommended: boolean;
+  /** True when caller must check ledger/block state for an existing nonce or tx before retrying. */
+  readonly requiresOnChainCheck: boolean;
+  readonly sorobanCode: number | null;
+  readonly summary: string;
+}
+
+export interface ClassifyErrorOptions {
+  readonly submissionCertainty?: SubmissionCertainty;
+}
+
+export type SubmissionTransportStatus =
+  | "simulated_revert"
+  | "confirmed_revert"
+  | "rpc_timeout"
+  | "network_disconnect"
+  | "mempool_pending"
+  | "missing_receipt"
+  | "ambiguous_gateway_error";
+
+export interface SubmissionOutcomeInput {
+  readonly transportStatus: SubmissionTransportStatus;
+  readonly errorName?: string;
+  readonly sorobanCode?: number;
+}
+
+const HELP: Record<HyperionErrorName, Omit<ErrorHelp, "sorobanCode" | "recoveryCategory">> = {
   AlreadyInitialized: {
     summary: "This contract was already set up once, and setup only happens once.",
     fault: "config",
@@ -441,16 +506,94 @@ const HELP: Record<HyperionErrorName, Omit<ErrorHelp, "sorobanCode">> = {
   },
 };
 
+const RECOVERY_CATEGORY_BY_NAME: Record<
+  HyperionErrorName,
+  Exclude<ErrorRecoveryCategory, "unknown_outcome">
+> = {
+  AlreadyInitialized: "operator_action",
+  NotInitialized: "operator_action",
+  Unauthorized: "user_correctable",
+  NotRailReceiver: "operator_action",
+  Paused: "transient",
+  RouteDisabled: "operator_action",
+  RouteIsPaused: "transient",
+  AdapterNotSet: "operator_action",
+  FlowLimitExceeded: "transient",
+  InvalidAmount: "user_correctable",
+  AmountNotRepresentable: "user_correctable",
+  DecimalOverflow: "user_correctable",
+  InvalidDecimals: "operator_action",
+  SlippageExceeded: "user_correctable",
+  FeeTooHigh: "operator_action",
+  InvalidDestination: "user_correctable",
+  ZeroAddressKey: "user_correctable",
+  MuxedNotSupported: "user_correctable",
+  NotEvmAddress: "user_correctable",
+  UnknownChain: "user_correctable",
+  ReplayedMessage: "operator_action",
+  UnknownNonce: "user_correctable",
+  TimelockNotQueued: "operator_action",
+  TimelockNotReady: "transient",
+  TimelockExpired: "operator_action",
+  TimelockDelayOutOfRange: "operator_action",
+  ClaimNotFound: "user_correctable",
+  ClaimAlreadySettled: "operator_action",
+  RecipientNotReady: "user_correctable",
+  InvalidLimit: "operator_action",
+  InvalidWindow: "operator_action",
+  TokenNotRegistered: "operator_action",
+  MalformedMessage: "operator_action",
+  UnsupportedHookVersion: "operator_action",
+  RailNotConfigured: "operator_action",
+  WrongDomain: "operator_action",
+  NotMintRecipient: "operator_action",
+  UnexpectedRailContract: "operator_action",
+  NothingMinted: "operator_action",
+  TokenNotMapped: "operator_action",
+  AlreadyConfigured: "operator_action",
+  InsufficientLiquidity: "transient",
+  UnsupportedMessageVersion: "operator_action",
+  NotTheRail: "operator_action",
+  UnsupportedRoute: "user_correctable",
+  GasFloatTooLow: "operator_action",
+  ProtectedAsset: "operator_action",
+  AmountBelowMinimum: "user_correctable",
+  LimitNotRaised: "operator_action",
+  TimelockAlreadyExecuted: "operator_action",
+  ActionFieldNotEmpty: "operator_action",
+  TokenDisabled: "operator_action",
+  ZeroAddress: "user_correctable",
+  RefundFailed: "user_correctable",
+  ExceedsRouteLimit: "user_correctable",
+};
+
+function actionForCategory(category: ErrorRecoveryCategory): RecoveryAction {
+  switch (category) {
+    case "transient":
+      return "wait_and_retry";
+    case "user_correctable":
+      return "correct_user_input";
+    case "operator_action":
+      return "await_operator_or_halt";
+    case "unknown_outcome":
+      return "reconcile_chain_state";
+  }
+}
+
 const SOROBAN_CODE_BY_NAME: ReadonlyMap<string, number> = new Map(
   SOROBAN_ERROR_NAMES.map((name, index) => [name, index + 1]),
 );
 
-/** Every error name with its Soroban tag filled in where Stellar has one. */
+/** Every error name with its Soroban tag and recovery category filled in. */
 export const ERROR_HELP: Readonly<Record<HyperionErrorName, ErrorHelp>> = Object.freeze(
   Object.fromEntries(
     Object.entries(HELP).map(([name, help]) => [
       name,
-      { ...help, sorobanCode: SOROBAN_CODE_BY_NAME.get(name) ?? null },
+      {
+        ...help,
+        recoveryCategory: RECOVERY_CATEGORY_BY_NAME[name as HyperionErrorName],
+        sorobanCode: SOROBAN_CODE_BY_NAME.get(name) ?? null,
+      },
     ]),
   ) as Record<HyperionErrorName, ErrorHelp>,
 );
@@ -458,6 +601,30 @@ export const ERROR_HELP: Readonly<Record<HyperionErrorName, ErrorHelp>> = Object
 export const HYPERION_ERROR_NAMES: readonly HyperionErrorName[] = Object.keys(
   HELP,
 ) as HyperionErrorName[];
+
+/** Precomputed baseline recovery decisions for confirmed or simulated reverts of known errors. */
+export const ERROR_RECOVERY: Readonly<Record<HyperionErrorName, ErrorRecoveryDecision>> =
+  Object.freeze(
+    Object.fromEntries(
+      HYPERION_ERROR_NAMES.map((name) => {
+        const help = ERROR_HELP[name];
+        const category = help.recoveryCategory;
+        return [
+          name,
+          Object.freeze({
+            errorName: name,
+            knownError: true,
+            category,
+            action: actionForCategory(category),
+            autoRetryRecommended: category === "transient",
+            requiresOnChainCheck: false,
+            sorobanCode: help.sorobanCode,
+            summary: help.summary,
+          }),
+        ];
+      }),
+    ) as Record<HyperionErrorName, ErrorRecoveryDecision>,
+  );
 
 export function isHyperionErrorName(value: string): value is HyperionErrorName {
   return Object.prototype.hasOwnProperty.call(HELP, value);
@@ -481,8 +648,111 @@ export function describeError(name: string): ErrorHelp {
     summary: `The contract returned ${name}, which this version of the app does not have a translation for.`,
     fault: "internal",
     retryable: false,
+    recoveryCategory: "unknown_outcome",
     sorobanCode: null,
   };
+}
+
+/**
+ * Classify a protocol error name for automated recovery and UI guidance.
+ *
+ * When `submissionCertainty === "uncertain_submission"`, even otherwise transient errors return
+ * `category: "unknown_outcome"` with `autoRetryRecommended: false` so a dropped RPC connection or
+ * ambiguous mempool state never triggers a duplicate transfer broadcast. Unknown future error
+ * names likewise fall back conservatively to `unknown_outcome`.
+ */
+export function classifyProtocolError(
+  name: string,
+  options?: ClassifyErrorOptions,
+): ErrorRecoveryDecision {
+  const certainty: SubmissionCertainty = options?.submissionCertainty ?? "confirmed_revert";
+  const normalizedName = name.trim();
+
+  if (certainty === "uncertain_submission") {
+    const known = isHyperionErrorName(normalizedName);
+    const sorobanCode = known ? ERROR_HELP[normalizedName].sorobanCode : null;
+    return {
+      errorName: normalizedName.length > 0 ? normalizedName : "UnknownSubmissionError",
+      knownError: known,
+      category: "unknown_outcome",
+      action: "reconcile_chain_state",
+      autoRetryRecommended: false,
+      requiresOnChainCheck: true,
+      sorobanCode,
+      summary:
+        "Submission outcome is uncertain on the network; inspect ledger or block state before retrying to avoid duplicate execution.",
+    };
+  }
+
+  if (isHyperionErrorName(normalizedName)) {
+    return ERROR_RECOVERY[normalizedName];
+  }
+
+  const label = normalizedName.length > 0 ? normalizedName : "UnrecognizedError";
+  return {
+    errorName: label,
+    knownError: false,
+    category: "unknown_outcome",
+    action: "reconcile_chain_state",
+    autoRetryRecommended: false,
+    requiresOnChainCheck: true,
+    sorobanCode: null,
+    summary: describeError(label).summary,
+  };
+}
+
+/** Classify a numeric Soroban contract error code with conservative fallback on unknown codes. */
+export function classifySorobanError(
+  code: number,
+  options?: ClassifyErrorOptions,
+): ErrorRecoveryDecision {
+  const resolved = sorobanErrorName(code);
+  if (resolved !== null) {
+    return classifyProtocolError(resolved, options);
+  }
+  return {
+    errorName: `UnknownSorobanError(${String(code)})`,
+    knownError: false,
+    category: "unknown_outcome",
+    action: "reconcile_chain_state",
+    autoRetryRecommended: false,
+    requiresOnChainCheck: true,
+    sorobanCode: null,
+    summary: `The Soroban contract returned unrecognized error tag ${String(code)}; inspect on-chain state before taking further action.`,
+  };
+}
+
+/**
+ * Evaluate a transaction submission outcome across transport status and decoded revert metadata.
+ *
+ * Any transport uncertainty (`rpc_timeout`, `network_disconnect`, `mempool_pending`,
+ * `missing_receipt`, `ambiguous_gateway_error`) forces `category: "unknown_outcome"` and
+ * `autoRetryRecommended: false`, regardless of any accompanying error hint.
+ */
+export function classifySubmissionOutcome(input: SubmissionOutcomeInput): ErrorRecoveryDecision {
+  const isCertainRevert =
+    input.transportStatus === "simulated_revert" || input.transportStatus === "confirmed_revert";
+
+  if (!isCertainRevert) {
+    const hint =
+      input.errorName ??
+      (input.sorobanCode !== undefined
+        ? (sorobanErrorName(input.sorobanCode) ??
+          `UnknownSorobanError(${String(input.sorobanCode)})`)
+        : `UncertainSubmission(${input.transportStatus})`);
+    return classifyProtocolError(hint, { submissionCertainty: "uncertain_submission" });
+  }
+
+  const certainty: SubmissionCertainty =
+    input.transportStatus === "simulated_revert" ? "pre_broadcast_simulation" : "confirmed_revert";
+
+  if (input.sorobanCode !== undefined) {
+    return classifySorobanError(input.sorobanCode, { submissionCertainty: certainty });
+  }
+  if (input.errorName !== undefined) {
+    return classifyProtocolError(input.errorName, { submissionCertainty: certainty });
+  }
+  return classifyProtocolError("", { submissionCertainty: "uncertain_submission" });
 }
 
 /**
