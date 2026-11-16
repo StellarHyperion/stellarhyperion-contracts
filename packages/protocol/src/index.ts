@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Stateful cross-chain router reference model, sequence generator and trace shrinker.
+export * from "./routerReferenceModel.js";
