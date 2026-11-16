@@ -98,6 +98,20 @@ with none at runtime, and `package-lock.json` is committed, so what CI installs 
 The flag lives in the repository rather than in somebody's shell history because an install flag
 that only exists on one machine is a build that only works on one machine.
 
+## Bounded quote search and compatibility
+
+`searchBoundedQuotes` performs deterministic, network-free `bigint` binary search over caller spend
+bounds (`minSourceAmount`..`maxSourceAmount`), `minDestinationAmount`, `maxFeeAmount`, and explicit
+per-route capability gates (`routeCapabilities` / `strictCapabilities`):
+
+- **Pure and bounded**: Never invokes RPC endpoints or mutates the supplied `RouterSnapshot`, and
+  terminates in logarithmic steps (`evaluationCount`) even across full `uint128` / `uint256` ranges.
+- **Structured exclusions**: Every excluded rail reports a machine-readable `RouteExclusionCode`
+  (`capability_disabled`, `paid_dispatch_unsupported`, `router_blocked`, `exceeds_flow_headroom`,
+  `below_minimum_destination`, `fee_exceeds_budget`, etc.). Passing `strictCapabilities: true` keeps
+  unvalidated rails (`axelar-gmp`, `allbridge`, or EVM origin lanes) gated until independently
+  validated, while preserving exact compatibility with existing `planQuote` and `planQuotes` callers.
+
 ## Provenance
 
 Addresses in `registry/contracts.ts` and `registry/assets.ts` carry a `source` and a `confirmed`
