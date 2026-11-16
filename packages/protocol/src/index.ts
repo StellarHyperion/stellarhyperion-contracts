@@ -54,5 +54,8 @@ export * from "./quotes.js";
 // Deployment records, and a loader that checks them instead of casting them.
 export * from "./deployments.js";
 
+// Read-only upgrade rollback compatibility and governance feasibility reports.
+export * from "./rollback-report.js";
+
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";

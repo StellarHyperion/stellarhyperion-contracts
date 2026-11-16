@@ -64,3 +64,21 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Read-only upgrade rollback feasibility reports
+
+Before queueing any downgrade or emergency code revert, generate a strictly read-only rollback feasibility report comparing the active deployment manifest with the candidate historical manifest, evidence file, or migration specification:
+
+```bash
+node script/stellar/rollback-report.mjs \
+  --current deployments/stellar-testnet-phase1.json \
+  --previous deployments/evidence/2026-10-28-paid-its.json \
+  --chain stellar-testnet
+```
+
+Key compatibility and migration rules enforced by `evaluateRollbackFeasibility` and `rollback-report.mjs`:
+
+1. **Read-only guarantee**: Reports always carry `readOnly: true` and `executionPermitted: false`. Execution and signing flags (`--execute`, `--broadcast`, `--identity`, `--secret-key`) are rejected immediately, and secret seed material cannot enter specifications.
+2. **Storage migrations and live invariants**: Soroban `update_current_contract` replaces WASM code in place while preserving instance and persistent storage. Any irreversible storage migration (`reversible: false`), unverified schema version downgrade, dropped `DataKey` entry, or regression in exact-integer amounts, authenticated rail dispatch, replay protection (`Processed`), or recipient-bound claims (`Claim`) marks rollback `unsupported` with an explicit blocker reason.
+3. **Active rail and instance matching**: Rolling the `2026-10-29` router (`281d946ea78b194c0ef44ad9488ed02b2aa6912fb4f6fbab523ad38f1e0803f1`) back to `2026-10-28` (`072629035ad4e4113d6f7fa0ae3c9c2c0d4d9c44e32eb73e1661526469a2f971`) while CCTP route `0` remains enabled is blocked unless CCTP is disabled first, and archived manifests targeting older router instances (`deployments/archive/stellar-testnet-2026-10-01.json`) fail with `contract-address-mismatch`.
+4. **Governance authorities and gated rails**: Reports distinguish timelocked `router-admin` authority (`queue_action(Upgrade(hash))` followed by the full >= 3600s timelock and `execute_action`) from `adapter-admin` authority (`upgrade(hash)`), without assuming treasury and admin share the same address. EVM chains and unvalidated rails remain explicitly gated (`gated-unvalidated`).

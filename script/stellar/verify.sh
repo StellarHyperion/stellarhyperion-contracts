@@ -100,6 +100,16 @@ else
   check "token flow limit" "$(tfield flow_limit)" "$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const t=d.networks[process.argv[2]].tokens;process.stdout.write(t[Object.keys(t)[0]].flowLimit)' "$RECORD" "$CHAIN_KEY")"
 fi
 
+if [ -n "${HYPERION_ROLLBACK_TARGET:-}" ]; then
+  note "rollback feasibility (read-only)"
+  if ! node "$SCRIPT_DIR/rollback-report.mjs" \
+    --current "$RECORD" \
+    --previous "$HYPERION_ROLLBACK_TARGET" \
+    --chain "$CHAIN_KEY"; then
+    problems=$((problems + 1))
+  fi
+fi
+
 printf '\n'
 if [ "$problems" -eq 0 ]; then
   printf '\033[32mEverything on chain matches the record.\033[0m\n'
