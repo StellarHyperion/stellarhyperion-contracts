@@ -23,6 +23,30 @@
 #   HYPERION_PEER_CHAIN=arc-testnet script/stellar/deploy.sh
 source "$(dirname "$0")/lib.sh"
 require_tools
+
+CHAIN_KEY_FOR_ADMISSION="stellar-testnet"
+if [ "$NETWORK" = "mainnet" ] || [ "$NETWORK" = "public" ]; then
+  CHAIN_KEY_FOR_ADMISSION="stellar"
+fi
+PREVIOUS_RECORD="${HYPERION_PREVIOUS_RECORD:-$RECORD_DIR/stellar-$NETWORK-phase1.json}"
+
+note "pre-signing artifact size and resource admission"
+ADMISSION_ARGS=(--wasm-dir "$WASM_DIR" --chain "$CHAIN_KEY_FOR_ADMISSION")
+if [ -f "$PREVIOUS_RECORD" ]; then
+  ADMISSION_ARGS+=(--previous "$PREVIOUS_RECORD")
+fi
+if [ -n "${HYPERION_ADMISSION_SIMULATION:-}" ]; then
+  ADMISSION_ARGS+=(--simulation "$HYPERION_ADMISSION_SIMULATION")
+fi
+if [ -n "${HYPERION_ADMISSION_ASSUMPTIONS:-}" ]; then
+  ADMISSION_ARGS+=(--assumptions "$HYPERION_ADMISSION_ASSUMPTIONS")
+fi
+if [ -n "${HYPERION_ADMISSION_OUT:-}" ]; then
+  ADMISSION_ARGS+=(--out "$HYPERION_ADMISSION_OUT")
+fi
+node "$SCRIPT_DIR/admission-report.mjs" "${ADMISSION_ARGS[@]}" \
+  || die "artifact resource admission failed before signing; aborting deployment"
+
 require_identity
 
 DEPLOYER=$(deployer_address)

@@ -38,4 +38,14 @@ for wasm in "$WASM_DIR"/hyperion_*.wasm; do
 done
 
 [ "$problems" -eq 0 ] || die "$problems contract(s) exceed the 64KB ledger limit"
+if [ -f "$CONTRACTS_ROOT/packages/protocol/dist/index.js" ]; then
+  PREV_REC="$RECORD_DIR/stellar-$NETWORK-phase1.json"
+  if [ -f "$PREV_REC" ]; then
+    note "admission diagnostics against recorded build"
+    node "$SCRIPT_DIR/admission-report.mjs" --wasm-dir "$WASM_DIR" --previous "$PREV_REC"
+  else
+    note "admission diagnostics"
+    node "$SCRIPT_DIR/admission-report.mjs" --wasm-dir "$WASM_DIR"
+  fi
+fi
 printf '\n\033[32mAll contracts fit.\033[0m\n'

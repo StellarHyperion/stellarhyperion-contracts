@@ -54,5 +54,8 @@ export * from "./quotes.js";
 // Deployment records, and a loader that checks them instead of casting them.
 export * from "./deployments.js";
 
+// Pre-signing WASM size, headroom, and simulated resource admission diagnostics.
+export * from "./resource-admission.js";
+
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";

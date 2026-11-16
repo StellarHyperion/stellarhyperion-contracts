@@ -64,3 +64,20 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Pre-signing WASM size and resource admission reports
+
+Before accessing any `stellar keys` identity or uploading a contract WASM, `script/stellar/deploy.sh` and `script/stellar/build.sh` evaluate per-contract binary size, ledger ceiling headroom, previous-build code hash/size deltas, and simulated resource budgets:
+
+```bash
+node script/stellar/admission-report.mjs \
+  --wasm-dir soroban/target/wasm32v1-none/release \
+  --previous deployments/stellar-testnet-phase1.json \
+  --chain stellar-testnet
+```
+
+Admission rules and compatibility notes:
+
+1. **Fail before signing**: Any empty binary, invalid WebAssembly v1 header, WASM artifact larger than `maxContractSizeBytes` (`65,536` bytes by default), or simulated footprint exceeding CPU instructions (`100,000,000`), linear memory (`40 MiB`), read/write ledger entries (`100` / `50`), read/write ledger bytes (`200 KiB` / `128 KiB`), or XDR transaction size (`128 KiB`) exits non-zero before `require_identity` or signing is reached (`signingPermitted: false`). Artifacts above two-thirds of the WASM ceiling (`43,690` bytes) emit headroom warnings.
+2. **Comparison with previous recorded build**: Each candidate (`router`, `adapter-cctp`, `adapter-axelar`) is compared against `deployments/stellar-testnet-phase1.json` (or `--previous`), reporting `unchanged`, `modified`, or `new-artifact` status along with previous/current SHA-256 hashes and byte deltas when historical sizes are recorded.
+3. **Explicit ledger protocol assumptions and rail gating**: Every admission report records `protocolAssumptions` (`protocolVersion`, `networkPassphrase`, `source`, and all ledger resource limits) explicitly. EVM networks and unvalidated rails remain gated (`validationGate: "gated-unvalidated"`, `signingPermitted: false`).
