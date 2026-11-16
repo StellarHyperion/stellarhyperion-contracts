@@ -122,6 +122,7 @@ export const EVM_ERROR_NAMES = [
   "ProtectedAsset",
   "ZeroAddress",
   "RefundFailed",
+  "InboundBalanceMismatch",
 ] as const;
 
 export type EvmErrorName = (typeof EVM_ERROR_NAMES)[number];
@@ -437,6 +438,12 @@ const HELP: Record<HyperionErrorName, Omit<ErrorHelp, "sorobanCode">> = {
   ExceedsRouteLimit: {
     summary: "That transfer exceeds the maximum single transfer limit configured for this route.",
     fault: "limit",
+    retryable: false,
+  },
+  InboundBalanceMismatch: {
+    summary:
+      "The token balance delivered into custody did not match the nominal transfer amount, so the inbound operation was rolled back.",
+    fault: "rail",
     retryable: false,
   },
 };

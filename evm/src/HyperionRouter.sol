@@ -14,6 +14,7 @@ import {
     ClaimAlreadySettled,
     ClaimNotFound,
     FeeTooHigh,
+    InboundBalanceMismatch,
     InvalidAmount,
     InvalidDecimals,
     InvalidLimit,
@@ -43,6 +44,7 @@ import {
     AddressKind,
     AdminAction,
     Destination,
+    InboundCustody,
     Origin,
     OutboundRequest,
     PendingClaim,
@@ -154,6 +156,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     }
 
     mapping(uint64 claimId => PendingClaim claim) private _claims;
+    mapping(address token => uint256 liabilities) private _parkedLiabilities;
     mapping(uint64 actionId => QueuedAction queued) private _actions;
 
     /// @param admin Holds every privileged power, all of them behind the timelock.
@@ -325,10 +328,10 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         if (processed[replayKey]) revert ReplayedMessage();
         processed[replayKey] = true;
 
-        // Pull rather than trust. The receiver approves this transfer before calling in, so if
-        // the funds are not actually here the delivery reverts now instead of writing down a
-        // claim against money nobody holds.
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        // Pull rather than trust, and verify the actual custody delta rather than assuming a
+        // successful call moved the nominal amount. Deflationary or short-transfer tokens revert
+        // here instead of creating an underfunded claim or borrowing from parked balances.
+        _pullExactInbound(token, msg.sender, amount);
 
         if (_tryPay(token, recipient, amount)) {
             emit BridgeIn(route, recipient, token, amount, origin.chain, origin.nonce, origin.messageId);
@@ -336,6 +339,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         }
 
         claimId = ++_claimCount;
+        _parkedLiabilities[token] += amount;
         _claims[claimId] = PendingClaim({
             id: claimId,
             recipient: recipient,
@@ -358,6 +362,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         if (claim.settled) revert ClaimAlreadySettled();
 
         claim.settled = true;
+        _parkedLiabilities[claim.token] -= claim.amount;
         if (!_tryPay(claim.token, claim.recipient, claim.amount)) revert RecipientNotReady();
         emit ClaimSettled(claimId, claim.recipient, claim.token, claim.amount, msg.sender);
     }
@@ -659,9 +664,29 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         return _actionCount;
     }
 
+    /// @inheritdoc IHyperionRouter
+    function inboundCustody(address token) external view override returns (InboundCustody memory custody) {
+        uint256 routerBalance = IERC20(token).balanceOf(address(this));
+        uint256 liabilities = _parkedLiabilities[token];
+        custody = InboundCustody({
+            token: token,
+            routerBalance: routerBalance,
+            parkedLiabilities: liabilities,
+            solvent: routerBalance >= liabilities
+        });
+    }
+
     // -------------------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------------------
+
+    function _pullExactInbound(address token, address from, uint256 amount) private {
+        uint256 balanceBefore = IERC20(token).balanceOf(address(this));
+        IERC20(token).safeTransferFrom(from, address(this), amount);
+        uint256 balanceAfter = IERC20(token).balanceOf(address(this));
+        uint256 received = balanceAfter >= balanceBefore ? balanceAfter - balanceBefore : 0;
+        if (received != amount) revert InboundBalanceMismatch(amount, received);
+    }
 
     function _flowKey(address token, RouteKind route) private pure returns (bytes32) {
         return keccak256(abi.encode(token, route));
@@ -690,11 +715,39 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     /// model here, but a merely badly behaved one is: this tolerates the ones that return nothing
     /// at all as well as the ones that return a bool.
     function _tryPay(address token, address to, uint256 amount) private returns (bool) {
+        uint256 routerBefore = IERC20(token).balanceOf(address(this));
+        uint256 recipientBefore = IERC20(token).balanceOf(to);
         (bool ok, bytes memory ret) = token.call(abi.encodeCall(IERC20.transfer, (to, amount)));
         if (!ok) return false;
-        if (ret.length == 0) return true;
-        if (ret.length < 32) return false;
-        return abi.decode(ret, (bool));
+        bool transferred;
+        if (ret.length == 0) {
+            transferred = true;
+        } else if (ret.length >= 32) {
+            transferred = abi.decode(ret, (bool));
+        }
+        if (!transferred) {
+            uint256 routerUnchanged = IERC20(token).balanceOf(address(this));
+            if (routerUnchanged != routerBefore) {
+                uint256 drift = routerBefore > routerUnchanged
+                    ? routerBefore - routerUnchanged
+                    : routerUnchanged - routerBefore;
+                revert InboundBalanceMismatch(0, drift);
+            }
+            return false;
+        }
+        if (to == address(this)) {
+            if (IERC20(token).balanceOf(address(this)) != routerBefore) {
+                revert InboundBalanceMismatch(amount, 0);
+            }
+            return true;
+        }
+        uint256 routerAfter = IERC20(token).balanceOf(address(this));
+        uint256 recipientAfter = IERC20(token).balanceOf(to);
+        uint256 routerSpent = routerBefore >= routerAfter ? routerBefore - routerAfter : 0;
+        if (routerSpent != amount) revert InboundBalanceMismatch(amount, routerSpent);
+        uint256 recipientReceived = recipientAfter >= recipientBefore ? recipientAfter - recipientBefore : 0;
+        if (recipientReceived != amount) revert InboundBalanceMismatch(amount, recipientReceived);
+        return true;
     }
 
     function _blocked(RouteQuote memory q, QuoteBlocker reason) private pure returns (RouteQuote memory) {

@@ -8,6 +8,7 @@ import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 
 import {
     AlreadyConfigured,
+    InboundBalanceMismatch,
     InvalidAmount,
     RailNotConfigured,
     RefundFailed,
@@ -217,6 +218,9 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
 
         (address recipient, uint64 sourceNonce) = HyperionNotes.decodeOutboundNote(data);
 
+        uint256 balanceBefore = IERC20(token).balanceOf(address(this));
+        if (balanceBefore < amount) revert InboundBalanceMismatch(amount, balanceBefore);
+
         IERC20(token).forceApprove(ROUTER, amount);
         IHyperionRouter(ROUTER)
             .bridgeIn(
@@ -236,6 +240,10 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
             );
         // An approval that outlives the call it was for is an approval somebody eventually finds.
         IERC20(token).forceApprove(ROUTER, 0);
+
+        uint256 balanceAfter = IERC20(token).balanceOf(address(this));
+        uint256 forwarded = balanceBefore >= balanceAfter ? balanceBefore - balanceAfter : 0;
+        if (forwarded != amount) revert InboundBalanceMismatch(amount, forwarded);
 
         emit DeliveryAccepted(chain, commandId, recipient, amount, sourceNonce);
         return EXECUTE_SUCCESS;

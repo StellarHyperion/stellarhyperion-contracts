@@ -641,6 +641,22 @@ export const axelarItsAdapterAbi = [
   },
   {
     "type": "error",
+    "name": "InboundBalanceMismatch",
+    "inputs": [
+      {
+        "name": "expected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "actual",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidAmount",
     "inputs": []
   },

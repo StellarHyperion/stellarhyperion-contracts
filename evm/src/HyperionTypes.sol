@@ -188,3 +188,11 @@ enum QuoteBlocker {
     InvalidDestination,
     ChainNotSupported
 }
+
+/// @dev Custody solvency snapshot comparing actual token balance against active parked claims.
+struct InboundCustody {
+    address token;
+    uint256 routerBalance;
+    uint256 parkedLiabilities;
+    bool solvent;
+}

@@ -201,6 +201,47 @@ export const hyperionRouterInterfaceAbi = [
   },
   {
     "type": "function",
+    "name": "inboundCustody",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "custody",
+        "type": "tuple",
+        "internalType": "struct InboundCustody",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "routerBalance",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "parkedLiabilities",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "solvent",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lowerTokenFlowLimit",
     "inputs": [
       {

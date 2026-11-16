@@ -60,6 +60,7 @@ export const GENERATED_EVM_ERROR_NAMES = [
   "ProtectedAsset",
   "ZeroAddress",
   "RefundFailed",
+  "InboundBalanceMismatch",
 ] as const;
 
 /** Four byte selector to error, for every error the compiled contracts can actually revert with. */
@@ -89,6 +90,7 @@ export const EVM_ERROR_SELECTORS = {
   "0x7f356a63": { name: "RailNotConfigured", signature: "RailNotConfigured()" },
   "0x828d5663": { name: "TokenNotMapped", signature: "TokenNotMapped()" },
   "0x82b42900": { name: "Unauthorized", signature: "Unauthorized()" },
+  "0x852d7df7": { name: "InboundBalanceMismatch", signature: "InboundBalanceMismatch(uint256,uint256)" },
   "0x87afb842": { name: "MuxedNotSupported", signature: "MuxedNotSupported()" },
   "0x88bb59d2": { name: "UnsupportedHookVersion", signature: "UnsupportedHookVersion()" },
   "0x8dfc202b": { name: "ExpectedPause", signature: "ExpectedPause()" },

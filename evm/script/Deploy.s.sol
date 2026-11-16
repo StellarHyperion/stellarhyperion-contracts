@@ -215,6 +215,7 @@ contract Deploy is DeployConfig {
         vm.serializeAddress(key, "token", token.token);
         vm.serializeUint(key, "tokenDecimals", token.decimals);
         vm.serializeUint(key, "tokenFlowLimit", token.flowLimit);
+        vm.serializeBool(key, "inboundBalanceReconciliation", true);
 
         uint256[] memory ids = new uint256[](queued.length);
         string[] memory whats = new string[](queued.length);

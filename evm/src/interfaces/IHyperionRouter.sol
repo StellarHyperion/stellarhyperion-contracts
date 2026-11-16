@@ -5,6 +5,7 @@ import {
     ActionKind,
     AdminAction,
     Destination,
+    InboundCustody,
     Origin,
     OutboundRequest,
     PendingClaim,
@@ -297,4 +298,9 @@ interface IHyperionRouter {
     /// @param route The rail to check.
     /// @return True if the rail is paused.
     function routePaused(RouteKind route) external view returns (bool);
+
+    /// @notice Read actual router custody balance alongside active parked claim liabilities.
+    /// @param token The ERC20 asset to inspect.
+    /// @return custody Current router token balance, unpaid claim liabilities, and solvency flag.
+    function inboundCustody(address token) external view returns (InboundCustody memory custody);
 }

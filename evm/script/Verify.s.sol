@@ -69,6 +69,7 @@ contract Verify is DeployConfig {
         _expectUint(
             "token flow limit", router.tokenConfig(token).flowLimit, record.readUint(".tokenFlowLimit")
         );
+        _expectTrue("token custody solvent", router.inboundCustody(token).solvent);
 
         _expectFalse("router paused", router.paused());
 

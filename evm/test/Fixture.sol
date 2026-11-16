@@ -4,7 +4,14 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 
 import {HyperionRouter} from "../src/HyperionRouter.sol";
-import {ActionKind, AdminAction, Destination, OutboundRequest, RouteKind} from "../src/HyperionTypes.sol";
+import {
+    ActionKind,
+    AdminAction,
+    Destination,
+    Origin,
+    OutboundRequest,
+    RouteKind
+} from "../src/HyperionTypes.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockRailAdapter} from "./mocks/MockRailAdapter.sol";
 
@@ -222,5 +229,10 @@ contract Fixture is Test {
     function _usdcRequest(uint256 amount) internal view returns (OutboundRequest memory request) {
         request = _request(amount, RouteKind.Cctp);
         request.token = address(usdc);
+    }
+
+    /// @dev Build a Stellar inbound `Origin` descriptor with a unique rail `messageId`.
+    function _inboundOrigin(uint64 sourceNonce, bytes32 messageId) internal pure returns (Origin memory) {
+        return Origin({chain: STELLAR, nonce: sourceNonce, messageId: messageId, sender: C_KEY});
     }
 }
