@@ -72,7 +72,12 @@ use soroban_sdk::{
 };
 
 use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
-use types::{AssetLink, ChainLane, Config};
+use types::{AssetLink, ChainLane, Config, LegacyMigrationPolicy};
+
+/// Maximum duration (in ledgers, ~24 hours at 5s/ledger) for a legacy v1 migration window.
+pub const MAX_LEGACY_MIGRATION_LEDGERS: u32 = 17_280;
+/// Maximum number of legacy v1 deliveries allowed in a single migration window.
+pub const MAX_LEGACY_DELIVERIES: u32 = 64;
 
 #[contract]
 pub struct AllbridgeAdapter;
@@ -238,7 +243,7 @@ impl AllbridgeAdapter {
     // Inbound
     // ---------------------------------------------------------------------------------------
 
-    /// Verify an inbound message from Allbridge Core and deliver it via the router.
+    /// Verify a v2 domain-separated inbound message from Allbridge Core and deliver via router.
     pub fn bridge_in(
         env: Env,
         caller: Address,
@@ -251,34 +256,20 @@ impl AllbridgeAdapter {
     ) -> Result<u64, HyperionError> {
         caller.require_auth();
         let cfg = storage::config(&env)?;
-        if amount <= 0 {
-            return Err(HyperionError::InvalidAmount);
-        }
-        let validator = storage::validator(&env).ok_or(HyperionError::RailNotConfigured)?;
-        let source_chain =
-            storage::chain_of(&env, source_chain_id).ok_or(HyperionError::UnknownChain)?;
-        let _link =
-            storage::asset(&env, &token, source_chain_id).ok_or(HyperionError::TokenNotMapped)?;
-
-        let (kind, recipient_key) = codec::address_key(&env, &recipient)?;
-        assert_route_supports(RouteKind::Allbridge, kind)?;
-
-        let amount_u128 = u128::try_from(amount).map_err(|_| HyperionError::InvalidAmount)?;
-        let recipient_bytes = BytesN::from_array(&env, &recipient_key);
-        let token_key = codec::contract_key(&env, &token)?;
-        let receive_token = BytesN::from_array(&env, &token_key);
-
-        let message_id = rail::hash_message(
+        let prepared = prepare_inbound(
             &env,
-            amount_u128,
-            &recipient_bytes,
+            &cfg,
+            &token,
+            amount,
+            &recipient,
             source_chain_id,
-            STELLAR_CHAIN_ID,
-            &receive_token,
             &nonce,
-        );
+        )?;
+        let validator = storage::validator(&env).ok_or(HyperionError::RailNotConfigured)?;
 
-        if storage::is_processed(&env, &message_id) {
+        if storage::is_processed(&env, &prepared.message_id)
+            || storage::is_processed(&env, &prepared.envelope_v2)
+        {
             return Err(HyperionError::ReplayedMessage);
         }
 
@@ -287,73 +278,113 @@ impl AllbridgeAdapter {
         }
 
         env.crypto()
-            .ed25519_verify(&validator, &message_id.clone().into(), &signature);
+            .ed25519_verify(&validator, &prepared.envelope_v2.clone().into(), &signature);
 
-        storage::mark_processed(&env, &message_id);
-
-        let this = env.current_contract_address();
-        let asset = token::Client::new(&env, &token);
-        let balance = asset.balance(&this);
-        if balance < amount {
-            let needed = amount
-                .checked_sub(balance)
-                .ok_or(HyperionError::DecimalOverflow)?;
-            asset.transfer(&caller, &this, &needed);
-        }
-
-        if asset.balance(&this) < amount {
-            return Err(HyperionError::NothingMinted);
-        }
-
-        env.authorize_as_current_contract(vec![
+        deliver_inbound(
             &env,
-            InvokerContractAuthEntry::Contract(SubContractInvocation {
-                context: ContractContext {
-                    contract: token.clone(),
-                    fn_name: Symbol::new(&env, "transfer"),
-                    args: (this.clone(), cfg.router.clone(), amount).into_val(&env),
-                },
-                sub_invocations: vec![&env],
-            }),
-        ]);
-
-        let mut nonce_bytes = [0u8; 32];
-        nonce.to_be_bytes().copy_into_slice(&mut nonce_bytes);
-        let mut tail = [0u8; 8];
-        tail.copy_from_slice(&nonce_bytes[24..32]);
-        let display_nonce = u64::from_be_bytes(tail);
-
-        let claim_id = RouterClient::new(&env, &cfg.router).bridge_in(
-            &this,
-            &RouteKind::Allbridge,
+            &cfg,
+            &caller,
             &token,
-            &amount,
-            &Recipient {
-                address: recipient.clone(),
-                kind,
-                raw: Bytes::from_array(&env, &recipient_key),
-            },
-            &Origin {
-                chain: source_chain.clone(),
-                nonce: display_nonce,
-                message_id: message_id.clone(),
-                sender: BytesN::from_array(&env, &[0u8; 32]),
-            },
-        );
-
-        events::Received {
-            token,
-            source_chain,
             amount,
-            recipient,
+            &recipient,
             source_chain_id,
             nonce,
-            message_id,
-            claim_id,
+            prepared,
+        )
+    }
+
+    /// Deliver an un-enveloped v1 inbound message only while an explicit, bounded migration
+    /// window is active and has remaining delivery quota.
+    pub fn bridge_in_legacy_v1(
+        env: Env,
+        caller: Address,
+        token: Address,
+        amount: i128,
+        recipient: Address,
+        source_chain_id: u32,
+        nonce: U256,
+        signature: BytesN<64>,
+    ) -> Result<u64, HyperionError> {
+        caller.require_auth();
+        let cfg = storage::config(&env)?;
+        let mut policy = storage::legacy_migration(&env);
+        if !policy.enabled
+            || env.ledger().sequence() > policy.max_ledger
+            || policy.remaining_deliveries == 0
+        {
+            return Err(HyperionError::UnsupportedMessageVersion);
+        }
+
+        let prepared = prepare_inbound(
+            &env,
+            &cfg,
+            &token,
+            amount,
+            &recipient,
+            source_chain_id,
+            &nonce,
+        )?;
+        let validator = storage::validator(&env).ok_or(HyperionError::RailNotConfigured)?;
+
+        if storage::is_processed(&env, &prepared.message_id)
+            || storage::is_processed(&env, &prepared.envelope_v2)
+        {
+            return Err(HyperionError::ReplayedMessage);
+        }
+
+        if signature == BytesN::from_array(&env, &[0u8; 64]) {
+            return Err(HyperionError::Unauthorized);
+        }
+
+        env.crypto()
+            .ed25519_verify(&validator, &prepared.message_id.clone().into(), &signature);
+
+        policy.remaining_deliveries -= 1;
+        if policy.remaining_deliveries == 0 {
+            policy.enabled = false;
+        }
+        storage::set_legacy_migration(&env, &policy);
+        events::LegacyMigrationUpdated {
+            enabled: policy.enabled,
+            max_ledger: policy.max_ledger,
+            remaining_deliveries: policy.remaining_deliveries,
         }
         .publish(&env);
 
-        Ok(claim_id)
+        deliver_inbound(
+            &env,
+            &cfg,
+            &caller,
+            &token,
+            amount,
+            &recipient,
+            source_chain_id,
+            nonce,
+            prepared,
+        )
+    }
+
+    /// Compute the domain-separated v2 signing digest expected by `bridge_in` for this adapter
+    /// and network without mutating contract state.
+    pub fn inbound_signing_digest(
+        env: Env,
+        token: Address,
+        amount: i128,
+        recipient: Address,
+        source_chain_id: u32,
+        nonce: U256,
+    ) -> Result<BytesN<32>, HyperionError> {
+        let cfg = storage::config(&env)?;
+        let prepared = prepare_inbound(
+            &env,
+            &cfg,
+            &token,
+            amount,
+            &recipient,
+            source_chain_id,
+            &nonce,
+        )?;
+        Ok(prepared.envelope_v2)
     }
 
     /// Alias for `bridge_in` matching the arrival interface.
@@ -591,6 +622,56 @@ impl AllbridgeAdapter {
         Ok(())
     }
 
+    /// Open or update a bounded migration window allowing up to `max_deliveries` legacy v1
+    /// inbound messages until `max_ledger` (inclusive). Admin only.
+    pub fn configure_legacy_v1_window(
+        env: Env,
+        max_ledger: u32,
+        max_deliveries: u32,
+    ) -> Result<LegacyMigrationPolicy, HyperionError> {
+        let _ = require_admin(&env)?;
+        let now_ledger = env.ledger().sequence();
+        if max_ledger <= now_ledger
+            || max_ledger.saturating_sub(now_ledger) > MAX_LEGACY_MIGRATION_LEDGERS
+        {
+            return Err(HyperionError::InvalidWindow);
+        }
+        if max_deliveries == 0 || max_deliveries > MAX_LEGACY_DELIVERIES {
+            return Err(HyperionError::InvalidLimit);
+        }
+        let policy = LegacyMigrationPolicy {
+            enabled: true,
+            max_ledger,
+            remaining_deliveries: max_deliveries,
+        };
+        storage::set_legacy_migration(&env, &policy);
+        events::LegacyMigrationUpdated {
+            enabled: policy.enabled,
+            max_ledger: policy.max_ledger,
+            remaining_deliveries: policy.remaining_deliveries,
+        }
+        .publish(&env);
+        Ok(policy)
+    }
+
+    /// Immediately close any active legacy v1 inbound migration window. Admin only.
+    pub fn disable_legacy_v1_window(env: Env) -> Result<(), HyperionError> {
+        let _ = require_admin(&env)?;
+        let policy = LegacyMigrationPolicy {
+            enabled: false,
+            max_ledger: 0,
+            remaining_deliveries: 0,
+        };
+        storage::set_legacy_migration(&env, &policy);
+        events::LegacyMigrationUpdated {
+            enabled: false,
+            max_ledger: 0,
+            remaining_deliveries: 0,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
     /// Hand the admin role to somebody else.
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), HyperionError> {
         let mut cfg = require_admin(&env)?;
@@ -676,6 +757,162 @@ impl AllbridgeAdapter {
         let _ = storage::config(&env)?;
         Ok(storage::is_processed(&env, &message_id))
     }
+
+    /// Read the current legacy v1 inbound migration policy.
+    pub fn legacy_migration_policy(env: Env) -> Result<LegacyMigrationPolicy, HyperionError> {
+        let _ = storage::config(&env)?;
+        Ok(storage::legacy_migration(&env))
+    }
+}
+
+struct PreparedInbound {
+    source_chain: String,
+    kind: hyperion_core::AddressKind,
+    recipient_key: [u8; 32],
+    message_id: BytesN<32>,
+    envelope_v2: BytesN<32>,
+}
+
+fn prepare_inbound(
+    env: &Env,
+    cfg: &Config,
+    token: &Address,
+    amount: i128,
+    recipient: &Address,
+    source_chain_id: u32,
+    nonce: &U256,
+) -> Result<PreparedInbound, HyperionError> {
+    if amount <= 0 {
+        return Err(HyperionError::InvalidAmount);
+    }
+    let source_chain =
+        storage::chain_of(env, source_chain_id).ok_or(HyperionError::UnknownChain)?;
+    let link = storage::asset(env, token, source_chain_id).ok_or(HyperionError::TokenNotMapped)?;
+
+    let (kind, recipient_key) = codec::address_key(env, recipient)?;
+    assert_route_supports(RouteKind::Allbridge, kind)?;
+
+    let amount_u128 = u128::try_from(amount).map_err(|_| HyperionError::InvalidAmount)?;
+    let recipient_bytes = BytesN::from_array(env, &recipient_key);
+    let token_key = codec::contract_key(env, token)?;
+    let receive_token = BytesN::from_array(env, &token_key);
+
+    let message_id = rail::hash_message(
+        env,
+        amount_u128,
+        &recipient_bytes,
+        source_chain_id,
+        STELLAR_CHAIN_ID,
+        &receive_token,
+        nonce,
+    );
+
+    let adapter_key = codec::contract_key(env, &env.current_contract_address())?;
+    let router_key = codec::contract_key(env, &cfg.router)?;
+    let network_id = env.ledger().network_id();
+    let envelope_v2 = rail::hash_inbound_envelope_v2(
+        env,
+        &network_id,
+        &adapter_key,
+        &router_key,
+        RouteKind::Allbridge,
+        &token_key,
+        &link.receive_token,
+        amount_u128,
+        kind,
+        &recipient_key,
+        source_chain_id,
+        STELLAR_CHAIN_ID,
+        nonce,
+        &message_id,
+    );
+
+    Ok(PreparedInbound {
+        source_chain,
+        kind,
+        recipient_key,
+        message_id,
+        envelope_v2,
+    })
+}
+
+fn deliver_inbound(
+    env: &Env,
+    cfg: &Config,
+    caller: &Address,
+    token: &Address,
+    amount: i128,
+    recipient: &Address,
+    source_chain_id: u32,
+    nonce: U256,
+    prepared: PreparedInbound,
+) -> Result<u64, HyperionError> {
+    storage::mark_processed(env, &prepared.message_id);
+    storage::mark_processed(env, &prepared.envelope_v2);
+
+    let this = env.current_contract_address();
+    let asset = token::Client::new(env, token);
+    let balance = asset.balance(&this);
+    if balance < amount {
+        let needed = amount
+            .checked_sub(balance)
+            .ok_or(HyperionError::DecimalOverflow)?;
+        asset.transfer(caller, &this, &needed);
+    }
+
+    if asset.balance(&this) < amount {
+        return Err(HyperionError::NothingMinted);
+    }
+
+    env.authorize_as_current_contract(vec![
+        env,
+        InvokerContractAuthEntry::Contract(SubContractInvocation {
+            context: ContractContext {
+                contract: token.clone(),
+                fn_name: Symbol::new(env, "transfer"),
+                args: (this.clone(), cfg.router.clone(), amount).into_val(env),
+            },
+            sub_invocations: vec![env],
+        }),
+    ]);
+
+    let mut nonce_bytes = [0u8; 32];
+    nonce.to_be_bytes().copy_into_slice(&mut nonce_bytes);
+    let mut tail = [0u8; 8];
+    tail.copy_from_slice(&nonce_bytes[24..32]);
+    let display_nonce = u64::from_be_bytes(tail);
+
+    let claim_id = RouterClient::new(env, &cfg.router).bridge_in(
+        &this,
+        &RouteKind::Allbridge,
+        token,
+        &amount,
+        &Recipient {
+            address: recipient.clone(),
+            kind: prepared.kind,
+            raw: Bytes::from_array(env, &prepared.recipient_key),
+        },
+        &Origin {
+            chain: prepared.source_chain.clone(),
+            nonce: display_nonce,
+            message_id: prepared.message_id.clone(),
+            sender: BytesN::from_array(env, &[0u8; 32]),
+        },
+    );
+
+    events::Received {
+        token: token.clone(),
+        source_chain: prepared.source_chain,
+        amount,
+        recipient: recipient.clone(),
+        source_chain_id,
+        nonce,
+        message_id: prepared.message_id,
+        claim_id,
+    }
+    .publish(env);
+
+    Ok(claim_id)
 }
 
 /// Read the config and insist the admin signed for whatever is about to happen.

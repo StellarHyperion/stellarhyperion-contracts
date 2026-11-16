@@ -14,7 +14,12 @@
 // the real contract.
 #![allow(clippy::too_many_arguments)]
 
+use hyperion_core::{AddressKind, RouteKind};
 use soroban_sdk::{contractclient, Address, BytesN, Env, Map, U256};
+
+/// Explicit domain separator for v2 Allbridge inbound validator signatures.
+pub const INBOUND_ENVELOPE_DOMAIN_V2: &[u8] = b"HYPERION_ALLBRIDGE_INBOUND_V2";
+pub const INBOUND_ENVELOPE_VERSION_V2: u8 = 2;
 
 /// Allbridge's own numeric id for the Stellar network.
 ///
@@ -119,4 +124,42 @@ pub fn hash_message(
     out[0] = source_chain_id as u8;
     out[1] = destination_chain_id as u8;
     BytesN::from_array(env, &out)
+}
+
+/// Domain-separated v2 inbound signing digest binding network, adapter, router, route,
+/// local and remote tokens, exact integer amount, qualified recipient kind + key, chain IDs,
+/// full 256-bit nonce, and canonical 32-byte Allbridge `message_id`.
+pub fn hash_inbound_envelope_v2(
+    env: &Env,
+    network_id: &BytesN<32>,
+    adapter_key: &[u8; 32],
+    router_key: &[u8; 32],
+    route: RouteKind,
+    token_key: &[u8; 32],
+    remote_receive_token: &BytesN<32>,
+    amount: u128,
+    recipient_kind: AddressKind,
+    recipient_key: &[u8; 32],
+    source_chain_id: u32,
+    destination_chain_id: u32,
+    nonce: &U256,
+    message_id: &BytesN<32>,
+) -> BytesN<32> {
+    let mut buf = soroban_sdk::Bytes::new(env);
+    buf.extend_from_slice(INBOUND_ENVELOPE_DOMAIN_V2);
+    buf.push_back(INBOUND_ENVELOPE_VERSION_V2);
+    buf.extend_from_array(&network_id.to_array());
+    buf.extend_from_array(adapter_key);
+    buf.extend_from_array(router_key);
+    buf.extend_from_slice(&(route as u32).to_be_bytes());
+    buf.extend_from_array(token_key);
+    buf.extend_from_array(&remote_receive_token.to_array());
+    buf.extend_from_slice(&amount.to_be_bytes());
+    buf.push_back(recipient_kind.tag());
+    buf.extend_from_array(recipient_key);
+    buf.extend_from_slice(&source_chain_id.to_be_bytes());
+    buf.extend_from_slice(&destination_chain_id.to_be_bytes());
+    buf.append(&nonce.to_be_bytes());
+    buf.extend_from_array(&message_id.to_array());
+    env.crypto().keccak256(&buf).into()
 }

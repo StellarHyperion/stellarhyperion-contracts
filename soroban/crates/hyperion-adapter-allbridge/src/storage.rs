@@ -3,7 +3,7 @@
 use hyperion_core::HyperionError;
 use soroban_sdk::{contracttype, Address, BytesN, Env, String};
 
-use crate::types::{AssetLink, ChainLane, Config};
+use crate::types::{AssetLink, ChainLane, Config, LegacyMigrationPolicy};
 
 /// Extend when there is less than a day of life left, and extend to thirty days.
 pub const BUMP_THRESHOLD: u32 = 17_280;
@@ -23,6 +23,8 @@ pub enum DataKey {
     Validator,
     /// Inbound message digests that have already been delivered to prevent replays.
     Processed(BytesN<32>),
+    /// Bounded migration policy constraining legacy v1 inbound signature acceptance.
+    LegacyMigration,
 }
 
 pub fn config(env: &Env) -> Result<Config, HyperionError> {
@@ -127,4 +129,22 @@ pub fn mark_processed(env: &Env, message_id: &BytesN<32>) {
     env.storage()
         .persistent()
         .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn legacy_migration(env: &Env) -> LegacyMigrationPolicy {
+    env.storage()
+        .instance()
+        .get(&DataKey::LegacyMigration)
+        .unwrap_or(LegacyMigrationPolicy {
+            enabled: false,
+            max_ledger: 0,
+            remaining_deliveries: 0,
+        })
+}
+
+pub fn set_legacy_migration(env: &Env, policy: &LegacyMigrationPolicy) {
+    env.storage()
+        .instance()
+        .set(&DataKey::LegacyMigration, policy);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
 }

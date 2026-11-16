@@ -100,3 +100,11 @@ pub struct Received {
 pub struct ValidatorSet {
     pub validator: BytesN<32>,
 }
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LegacyMigrationUpdated {
+    pub enabled: bool,
+    pub max_ledger: u32,
+    pub remaining_deliveries: u32,
+}

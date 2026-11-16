@@ -47,7 +47,7 @@ impl InboundSetup {
         nonce: &U256,
     ) -> (BytesN<32>, BytesN<64>) {
         let env = &self.world.env;
-        let (_, key) = codec::address_key(env, recipient).unwrap();
+        let (kind, key) = codec::address_key(env, recipient).unwrap();
         let recipient_bytes = BytesN::from_array(env, &key);
 
         let message_id = rail::hash_message(
@@ -60,7 +60,27 @@ impl InboundSetup {
             nonce,
         );
 
-        let sig = self.signing_key.sign(&message_id.to_array());
+        let adapter_key = codec::contract_key(env, &self.world.adapter_id).unwrap();
+        let router_key = codec::contract_key(env, &self.world.router_id).unwrap();
+        let remote_receive_token = self.world.receive_token();
+        let envelope_v2 = rail::hash_inbound_envelope_v2(
+            env,
+            &env.ledger().network_id(),
+            &adapter_key,
+            &router_key,
+            RouteKind::Allbridge,
+            &receive_token.to_array(),
+            &remote_receive_token,
+            amount,
+            kind,
+            &key,
+            source_chain_id,
+            STELLAR_CHAIN_ID,
+            nonce,
+            &message_id,
+        );
+
+        let sig = self.signing_key.sign(&envelope_v2.to_array());
         let signature = BytesN::from_array(env, &sig.to_bytes());
         (message_id, signature)
     }
@@ -335,22 +355,17 @@ fn a_signature_from_a_different_validator_reverts() {
     let s = InboundSetup::new();
     let amount = HUNDRED;
     let nonce = U256::from_u32(&s.world.env, 303);
-    let token_key = s.token_key();
 
-    // Sign with an impostor key.
+    // Sign the v2 envelope with an impostor key.
     let impostor_key = SigningKey::from_bytes(&[99u8; 32]);
-    let (_, key) = codec::address_key(&s.world.env, &s.recipient).unwrap();
-    let recipient_bytes = BytesN::from_array(&s.world.env, &key);
-    let message_id = rail::hash_message(
-        &s.world.env,
-        amount as u128,
-        &recipient_bytes,
-        ETH_CHAIN_ID,
-        STELLAR_CHAIN_ID,
-        &token_key,
+    let envelope = s.world.adapter().inbound_signing_digest(
+        &s.world.token_id,
+        &amount,
+        &s.recipient,
+        &ETH_CHAIN_ID,
         &nonce,
     );
-    let sig = impostor_key.sign(&message_id.to_array());
+    let sig = impostor_key.sign(&envelope.to_array());
     let bad_signature = BytesN::from_array(&s.world.env, &sig.to_bytes());
 
     s.world.fund_user(amount);

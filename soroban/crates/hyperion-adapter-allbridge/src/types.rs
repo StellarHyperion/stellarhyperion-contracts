@@ -36,3 +36,14 @@ pub struct AssetLink {
     /// The destination token's address, left padded to thirty two bytes.
     pub receive_token: BytesN<32>,
 }
+
+/// Explicitly bounded migration policy for legacy v1 un-enveloped inbound signatures.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LegacyMigrationPolicy {
+    pub enabled: bool,
+    /// Inclusive ledger ceiling after which legacy v1 signatures are rejected.
+    pub max_ledger: u32,
+    /// Remaining legacy v1 deliveries permitted inside the active window.
+    pub remaining_deliveries: u32,
+}
