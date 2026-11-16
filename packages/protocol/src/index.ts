@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Semantic ABI compatibility policy, diffing and artifact provenance checks.
+export * from "./abiCompatibility.js";

@@ -33,6 +33,7 @@
   },
   "scripts": {
     "gen": "node scripts/gen-artifacts.mjs",
+    "abi:gate": "node scripts/check-abi-compat.mjs",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
