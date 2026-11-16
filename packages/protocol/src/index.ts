@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Pinned EVM gas budgets and regression delta reporting for governance and recovery paths.
+export * from "./evmGasBudgets.js";
