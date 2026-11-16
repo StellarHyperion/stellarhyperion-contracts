@@ -30,6 +30,7 @@ against itself.
 | `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
 | `deployments` | Deployment records, and a loader that checks them instead of casting them              |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
+| `events`      | Version-aware raw router event and provider status inspectors without database deps    |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
 
 ```ts
@@ -107,3 +108,20 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Event inspection and payout proof
+
+`inspectRouterEvent`, `inspectProviderStatusNotice`, and `inspectTransferEvidence` decode raw
+Soroban and EVM router event envelopes (`schemaVersion: 1`) without database dependencies while
+preserving full-width `uint64` nonces/claim IDs and `i128` / `uint256` token amounts as `bigint`.
+
+- Unsupported `schemaVersion` values, unsafe JavaScript numbers, malformed addresses, and broken
+  outbound conservation (`grossAmount !== netAmount + fee`) fail with `RouterEventFormatError` at
+  the exact field path.
+- Only settled destination router deliveries (`BridgeIn` with `delivered: true` and `ClaimSettled`)
+  carry `payoutProven: true`. `BridgeOut`, `ClaimParked`, governance/timelock notices, and all
+  upstream rail observations (`ProviderStatus` such as `attested`, `relayed`, or
+  `executed_at_gateway`) carry `payoutProven: false`.
+- Active validated deployment remains Stellar Testnet outbound ITS/CCTP; EVM and unvalidated rail
+  event inspection helpers support offline verification and evidence review without implying live
+  contract activation.
