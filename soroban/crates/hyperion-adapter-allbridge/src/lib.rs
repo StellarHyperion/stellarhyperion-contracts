@@ -72,7 +72,16 @@ use soroban_sdk::{
 };
 
 use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
-use types::{AssetLink, ChainLane, Config};
+use types::{AssetLink, ChainLane, Config, PendingValidatorRotation, ValidatorState};
+
+/// Minimum reviewed delay (1 hour) required before a queued validator rotation can take effect.
+pub const MIN_TRUST_CHANGE_DELAY: u64 = 3_600;
+/// Maximum configurable delay (7 days) for a validator rotation.
+pub const MAX_TRUST_CHANGE_DELAY: u64 = 604_800;
+/// Default reviewed delay (24 hours) when no explicit delay has been configured.
+pub const DEFAULT_TRUST_CHANGE_DELAY: u64 = 86_400;
+/// Execution window (48 hours) after `eta` before an unexecuted rotation expires.
+pub const ROTATION_GRACE_PERIOD: u64 = 172_800;
 
 #[contract]
 pub struct AllbridgeAdapter;
@@ -238,7 +247,8 @@ impl AllbridgeAdapter {
     // Inbound
     // ---------------------------------------------------------------------------------------
 
-    /// Verify an inbound message from Allbridge Core and deliver it via the router.
+    /// Verify an inbound message from Allbridge Core under the active validator epoch and deliver
+    /// it via the router.
     pub fn bridge_in(
         env: Env,
         caller: Address,
@@ -249,12 +259,47 @@ impl AllbridgeAdapter {
         nonce: U256,
         signature: BytesN<64>,
     ) -> Result<u64, HyperionError> {
+        let active_epoch = storage::validator_state(&env).map(|s| s.epoch).unwrap_or(0);
+        Self::bridge_in_at_epoch(
+            env,
+            caller,
+            token,
+            amount,
+            recipient,
+            source_chain_id,
+            nonce,
+            active_epoch,
+            signature,
+        )
+    }
+
+    /// Verify an inbound message explicitly bound to `expected_epoch`.
+    ///
+    /// Refuses delivery immediately when the validator authority is emergency-disabled or when
+    /// `expected_epoch` does not match the active epoch.
+    pub fn bridge_in_at_epoch(
+        env: Env,
+        caller: Address,
+        token: Address,
+        amount: i128,
+        recipient: Address,
+        source_chain_id: u32,
+        nonce: U256,
+        expected_epoch: u64,
+        signature: BytesN<64>,
+    ) -> Result<u64, HyperionError> {
         caller.require_auth();
         let cfg = storage::config(&env)?;
         if amount <= 0 {
             return Err(HyperionError::InvalidAmount);
         }
-        let validator = storage::validator(&env).ok_or(HyperionError::RailNotConfigured)?;
+        let state = storage::validator_state(&env).ok_or(HyperionError::RailNotConfigured)?;
+        if state.emergency_disabled {
+            return Err(HyperionError::RouteDisabled);
+        }
+        if expected_epoch != state.epoch {
+            return Err(HyperionError::UnsupportedMessageVersion);
+        }
         let source_chain =
             storage::chain_of(&env, source_chain_id).ok_or(HyperionError::UnknownChain)?;
         let _link =
@@ -278,7 +323,11 @@ impl AllbridgeAdapter {
             &nonce,
         );
 
-        if storage::is_processed(&env, &message_id) {
+        let this = env.current_contract_address();
+        let adapter_key = codec::contract_key(&env, &this)?;
+        let epoch_digest = rail::hash_epoch_message(&env, &adapter_key, state.epoch, &message_id);
+
+        if storage::is_processed(&env, &message_id) || storage::is_processed(&env, &epoch_digest) {
             return Err(HyperionError::ReplayedMessage);
         }
 
@@ -287,11 +336,11 @@ impl AllbridgeAdapter {
         }
 
         env.crypto()
-            .ed25519_verify(&validator, &message_id.clone().into(), &signature);
+            .ed25519_verify(&state.validator, &epoch_digest.clone().into(), &signature);
 
         storage::mark_processed(&env, &message_id);
+        storage::mark_processed(&env, &epoch_digest);
 
-        let this = env.current_contract_address();
         let asset = token::Client::new(&env, &token);
         let balance = asset.balance(&this);
         if balance < amount {
@@ -583,12 +632,145 @@ impl AllbridgeAdapter {
         Ok(())
     }
 
-    /// Register the Allbridge validator public key used to verify incoming messages. Admin only.
+    /// Bootstrap the initial Allbridge validator public key at epoch 1. Admin only.
+    ///
+    /// Once epoch 1 has been initialized, immediate replacement is refused with
+    /// `HyperionError::AlreadyConfigured`; every subsequent validator update or recovery after an
+    /// emergency disable must go through `queue_validator_rotation` and wait out the configured
+    /// trust-change delay.
     pub fn set_validator(env: Env, validator: BytesN<32>) -> Result<(), HyperionError> {
         let _ = require_admin(&env)?;
-        storage::set_validator(&env, &validator);
+        if validator == BytesN::from_array(&env, &[0u8; 32]) {
+            return Err(HyperionError::ZeroAddressKey);
+        }
+        if storage::validator_state(&env).is_some() {
+            return Err(HyperionError::AlreadyConfigured);
+        }
+        let state = ValidatorState {
+            validator: validator.clone(),
+            epoch: 1,
+            activated_at: env.ledger().timestamp(),
+            emergency_disabled: false,
+        };
+        storage::set_validator_state(&env, &state);
         events::ValidatorSet { validator }.publish(&env);
         Ok(())
+    }
+
+    /// Configure the trust-change delay (in seconds) required for queued validator rotations.
+    /// Admin only; refused while a rotation is already pending so an active countdown cannot be
+    /// shortened retroactively.
+    pub fn set_trust_change_delay(env: Env, delay_seconds: u64) -> Result<(), HyperionError> {
+        let _ = require_admin(&env)?;
+        if !(MIN_TRUST_CHANGE_DELAY..=MAX_TRUST_CHANGE_DELAY).contains(&delay_seconds) {
+            return Err(HyperionError::TimelockDelayOutOfRange);
+        }
+        if storage::pending_rotation(&env).is_some() {
+            return Err(HyperionError::AlreadyConfigured);
+        }
+        storage::set_trust_change_delay(&env, delay_seconds);
+        events::TrustChangeDelayUpdated { delay_seconds }.publish(&env);
+        Ok(())
+    }
+
+    /// Queue a reviewed validator rotation for `epoch + 1`, maturing after the configured
+    /// trust-change delay. Admin only.
+    pub fn queue_validator_rotation(
+        env: Env,
+        next_validator: BytesN<32>,
+    ) -> Result<PendingValidatorRotation, HyperionError> {
+        let _ = require_admin(&env)?;
+        if next_validator == BytesN::from_array(&env, &[0u8; 32]) {
+            return Err(HyperionError::ZeroAddressKey);
+        }
+        if storage::pending_rotation(&env).is_some() {
+            return Err(HyperionError::AlreadyConfigured);
+        }
+        let current_epoch = storage::validator_state(&env).map(|s| s.epoch).unwrap_or(0);
+        let next_epoch = current_epoch
+            .checked_add(1)
+            .ok_or(HyperionError::DecimalOverflow)?;
+        let delay = storage::trust_change_delay(&env, DEFAULT_TRUST_CHANGE_DELAY);
+        let queued_at = env.ledger().timestamp();
+        let eta = queued_at
+            .checked_add(delay)
+            .ok_or(HyperionError::DecimalOverflow)?;
+        let expires_at = eta
+            .checked_add(ROTATION_GRACE_PERIOD)
+            .ok_or(HyperionError::DecimalOverflow)?;
+
+        let pending = PendingValidatorRotation {
+            next_validator: next_validator.clone(),
+            next_epoch,
+            queued_at,
+            eta,
+            expires_at,
+        };
+        storage::set_pending_rotation(&env, &pending);
+        events::ValidatorRotationQueued {
+            next_validator,
+            next_epoch,
+            eta,
+            expires_at,
+        }
+        .publish(&env);
+        Ok(pending)
+    }
+
+    /// Cancel a pending validator rotation before execution. Admin only.
+    pub fn cancel_validator_rotation(env: Env) -> Result<(), HyperionError> {
+        let _ = require_admin(&env)?;
+        let pending = storage::pending_rotation(&env).ok_or(HyperionError::TimelockNotQueued)?;
+        storage::clear_pending_rotation(&env);
+        events::ValidatorRotationCancelled {
+            cancelled_epoch: pending.next_epoch,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Activate a matured validator rotation, advancing to `next_epoch` and clearing any prior
+    /// emergency-disable state. Admin only.
+    pub fn execute_validator_rotation(env: Env) -> Result<ValidatorState, HyperionError> {
+        let _ = require_admin(&env)?;
+        let pending = storage::pending_rotation(&env).ok_or(HyperionError::TimelockNotQueued)?;
+        let now = env.ledger().timestamp();
+        if now < pending.eta {
+            return Err(HyperionError::TimelockNotReady);
+        }
+        if now > pending.expires_at {
+            return Err(HyperionError::TimelockExpired);
+        }
+        storage::clear_pending_rotation(&env);
+        let state = ValidatorState {
+            validator: pending.next_validator.clone(),
+            epoch: pending.next_epoch,
+            activated_at: now,
+            emergency_disabled: false,
+        };
+        storage::set_validator_state(&env, &state);
+        events::ValidatorRotated {
+            validator: state.validator.clone(),
+            epoch: state.epoch,
+        }
+        .publish(&env);
+        Ok(state)
+    }
+
+    /// Immediately halt inbound validator signature acceptance without affecting parked router
+    /// claims. Also clears any unexecuted rotation so recovery requires a fresh delayed rotation.
+    pub fn emergency_disable_validator(env: Env) -> Result<ValidatorState, HyperionError> {
+        let _ = require_admin(&env)?;
+        let mut state = storage::validator_state(&env).ok_or(HyperionError::RailNotConfigured)?;
+        state.emergency_disabled = true;
+        storage::set_validator_state(&env, &state);
+        storage::clear_pending_rotation(&env);
+        events::ValidatorEmergencyDisabled {
+            validator: state.validator.clone(),
+            epoch: state.epoch,
+        }
+        .publish(&env);
+        Ok(state)
     }
 
     /// Hand the admin role to somebody else.
@@ -669,6 +851,51 @@ impl AllbridgeAdapter {
     /// Read the registered Allbridge validator public key.
     pub fn get_validator(env: Env) -> Result<BytesN<32>, HyperionError> {
         storage::validator(&env).ok_or(HyperionError::RailNotConfigured)
+    }
+
+    /// Read the active validator authority state including epoch and emergency status.
+    pub fn validator_state(env: Env) -> Result<ValidatorState, HyperionError> {
+        let _ = storage::config(&env)?;
+        storage::validator_state(&env).ok_or(HyperionError::RailNotConfigured)
+    }
+
+    /// Read the active validator epoch (0 when no validator has been bootstrapped yet).
+    pub fn validator_epoch(env: Env) -> Result<u64, HyperionError> {
+        let _ = storage::config(&env)?;
+        Ok(storage::validator_state(&env).map(|s| s.epoch).unwrap_or(0))
+    }
+
+    /// Read the currently queued validator rotation, if any.
+    pub fn pending_validator_rotation(
+        env: Env,
+    ) -> Result<Option<PendingValidatorRotation>, HyperionError> {
+        let _ = storage::config(&env)?;
+        Ok(storage::pending_rotation(&env))
+    }
+
+    /// Read the configured trust-change delay in seconds.
+    pub fn trust_change_delay(env: Env) -> Result<u64, HyperionError> {
+        let _ = storage::config(&env)?;
+        Ok(storage::trust_change_delay(
+            &env,
+            DEFAULT_TRUST_CHANGE_DELAY,
+        ))
+    }
+
+    /// Compute the epoch-bound signing digest for a canonical Allbridge `message_id` and `epoch`.
+    pub fn epoch_signing_digest(
+        env: Env,
+        message_id: BytesN<32>,
+        epoch: u64,
+    ) -> Result<BytesN<32>, HyperionError> {
+        let _ = storage::config(&env)?;
+        let adapter_key = codec::contract_key(&env, &env.current_contract_address())?;
+        Ok(rail::hash_epoch_message(
+            &env,
+            &adapter_key,
+            epoch,
+            &message_id,
+        ))
     }
 
     /// Check if an inbound message has already been processed.

@@ -59,8 +59,11 @@ impl InboundSetup {
             receive_token,
             nonce,
         );
+        let adapter_key = codec::contract_key(env, &self.world.adapter_id).unwrap();
+        let epoch = self.world.adapter().validator_epoch();
+        let epoch_digest = rail::hash_epoch_message(env, &adapter_key, epoch, &message_id);
 
-        let sig = self.signing_key.sign(&message_id.to_array());
+        let sig = self.signing_key.sign(&epoch_digest.to_array());
         let signature = BytesN::from_array(env, &sig.to_bytes());
         (message_id, signature)
     }
@@ -350,7 +353,11 @@ fn a_signature_from_a_different_validator_reverts() {
         &token_key,
         &nonce,
     );
-    let sig = impostor_key.sign(&message_id.to_array());
+    let epoch_digest = s
+        .world
+        .adapter()
+        .epoch_signing_digest(&message_id, &s.world.adapter().validator_epoch());
+    let sig = impostor_key.sign(&epoch_digest.to_array());
     let bad_signature = BytesN::from_array(&s.world.env, &sig.to_bytes());
 
     s.world.fund_user(amount);

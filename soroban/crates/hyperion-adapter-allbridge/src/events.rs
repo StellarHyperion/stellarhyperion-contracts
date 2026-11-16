@@ -100,3 +100,38 @@ pub struct Received {
 pub struct ValidatorSet {
     pub validator: BytesN<32>,
 }
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorRotationQueued {
+    pub next_validator: BytesN<32>,
+    pub next_epoch: u64,
+    pub eta: u64,
+    pub expires_at: u64,
+}
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorRotated {
+    pub validator: BytesN<32>,
+    pub epoch: u64,
+}
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorRotationCancelled {
+    pub cancelled_epoch: u64,
+}
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorEmergencyDisabled {
+    pub validator: BytesN<32>,
+    pub epoch: u64,
+}
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrustChangeDelayUpdated {
+    pub delay_seconds: u64,
+}

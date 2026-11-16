@@ -36,3 +36,24 @@ pub struct AssetLink {
     /// The destination token's address, left padded to thirty two bytes.
     pub receive_token: BytesN<32>,
 }
+
+/// Active validator key, monotonic epoch, and emergency circuit-breaker flag.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorState {
+    pub validator: BytesN<32>,
+    pub epoch: u64,
+    pub activated_at: u64,
+    pub emergency_disabled: bool,
+}
+
+/// Reviewed validator rotation waiting out the configured trust-change delay.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingValidatorRotation {
+    pub next_validator: BytesN<32>,
+    pub next_epoch: u64,
+    pub queued_at: u64,
+    pub eta: u64,
+    pub expires_at: u64,
+}

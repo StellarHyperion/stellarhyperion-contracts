@@ -3,7 +3,7 @@
 use hyperion_core::HyperionError;
 use soroban_sdk::{contracttype, Address, BytesN, Env, String};
 
-use crate::types::{AssetLink, ChainLane, Config};
+use crate::types::{AssetLink, ChainLane, Config, PendingValidatorRotation, ValidatorState};
 
 /// Extend when there is less than a day of life left, and extend to thirty days.
 pub const BUMP_THRESHOLD: u32 = 17_280;
@@ -21,6 +21,12 @@ pub enum DataKey {
     Asset(Address, u32),
     /// The validator public key that signs incoming messages from Allbridge Core.
     Validator,
+    /// Epoch-tracked validator authority state.
+    ValidatorState,
+    /// Queued validator rotation awaiting trust-change delay maturity.
+    PendingRotation,
+    /// Delay in seconds that a queued validator rotation must wait before execution.
+    TrustChangeDelay,
     /// Inbound message digests that have already been delivered to prevent replays.
     Processed(BytesN<32>),
 }
@@ -105,8 +111,46 @@ pub fn validator(env: &Env) -> Option<BytesN<32>> {
     env.storage().instance().get(&DataKey::Validator)
 }
 
-pub fn set_validator(env: &Env, val: &BytesN<32>) {
-    env.storage().instance().set(&DataKey::Validator, val);
+pub fn validator_state(env: &Env) -> Option<ValidatorState> {
+    env.storage().instance().get(&DataKey::ValidatorState)
+}
+
+pub fn set_validator_state(env: &Env, state: &ValidatorState) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ValidatorState, state);
+    env.storage()
+        .instance()
+        .set(&DataKey::Validator, &state.validator);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn pending_rotation(env: &Env) -> Option<PendingValidatorRotation> {
+    env.storage().instance().get(&DataKey::PendingRotation)
+}
+
+pub fn set_pending_rotation(env: &Env, rotation: &PendingValidatorRotation) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingRotation, rotation);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn clear_pending_rotation(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingRotation);
+}
+
+pub fn trust_change_delay(env: &Env, default_delay: u64) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TrustChangeDelay)
+        .unwrap_or(default_delay)
+}
+
+pub fn set_trust_change_delay(env: &Env, delay: u64) {
+    env.storage()
+        .instance()
+        .set(&DataKey::TrustChangeDelay, &delay);
     env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
 }
 

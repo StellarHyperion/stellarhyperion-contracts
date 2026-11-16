@@ -16,6 +16,9 @@
 
 use soroban_sdk::{contractclient, Address, BytesN, Env, Map, U256};
 
+/// Explicit domain separator binding validator signatures to adapter identity and epoch.
+pub const EPOCH_SIGNING_DOMAIN: &[u8] = b"HYPERION_ALLBRIDGE_VALIDATOR_EPOCH_V1";
+
 /// Allbridge's own numeric id for the Stellar network.
 ///
 /// The bridge refuses a destination equal to its own id, so this is also the one chain id a
@@ -119,4 +122,21 @@ pub fn hash_message(
     out[0] = source_chain_id as u8;
     out[1] = destination_chain_id as u8;
     BytesN::from_array(env, &out)
+}
+
+/// Bind an Allbridge `message_id` to this adapter contract and an explicit validator epoch so a
+/// signature produced during an older authorization period cannot be reinterpreted under a later
+/// epoch, even if a previously active key is rotated back in.
+pub fn hash_epoch_message(
+    env: &Env,
+    adapter_key: &[u8; 32],
+    validator_epoch: u64,
+    message_id: &BytesN<32>,
+) -> BytesN<32> {
+    let mut buf = soroban_sdk::Bytes::new(env);
+    buf.extend_from_slice(EPOCH_SIGNING_DOMAIN);
+    buf.extend_from_array(adapter_key);
+    buf.extend_from_slice(&validator_epoch.to_be_bytes());
+    buf.extend_from_array(&message_id.to_array());
+    env.crypto().keccak256(&buf).into()
 }
