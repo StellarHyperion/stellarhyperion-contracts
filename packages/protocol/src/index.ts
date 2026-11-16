@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Validated route capabilities separate from static chain and provider registries.
+export * from "./capabilities.js";

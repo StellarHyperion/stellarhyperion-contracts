@@ -16,21 +16,22 @@ against itself.
 
 ## What is in here
 
-| Module        | What it is for                                                                         |
-| ------------- | -------------------------------------------------------------------------------------- |
-| `bytes`       | Hex, big endian integers, ascii, slicing that refuses a short read instead of clamping |
-| `routes`      | The four rails, their tag values, and what is true about each one                      |
-| `errors`      | Both chains' error vocabularies with a sentence of help per error                      |
-| `addresses`   | Stellar strkeys: parse, encode, and the two wire forms the rails want                  |
-| `notes`       | The notes Hyperion writes into a rail's payload so a delivery knows who it is for      |
-| `amounts`     | Fees, decimal conversion, and formatting that never touches a float                    |
-| `flow`        | Sliding flow windows, the same arithmetic both routers run                             |
-| `cctp`        | Reading CCTP V2 messages, which is all this side ever does with them                   |
-| `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
-| `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
-| `deployments` | Deployment records, and a loader that checks them instead of casting them              |
-| `registry`    | Assets and rail contracts per chain, with provenance attached                          |
-| `abi`         | Generated from the Foundry build, behind its own entry point                           |
+| Module         | What it is for                                                                         |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `bytes`        | Hex, big endian integers, ascii, slicing that refuses a short read instead of clamping |
+| `routes`       | The four rails, their tag values, and what is true about each one                      |
+| `errors`       | Both chains' error vocabularies with a sentence of help per error                      |
+| `addresses`    | Stellar strkeys: parse, encode, and the two wire forms the rails want                  |
+| `notes`        | The notes Hyperion writes into a rail's payload so a delivery knows who it is for      |
+| `amounts`      | Fees, decimal conversion, and formatting that never touches a float                    |
+| `flow`         | Sliding flow windows, the same arithmetic both routers run                             |
+| `cctp`         | Reading CCTP V2 messages, which is all this side ever does with them                   |
+| `chains`       | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
+| `quotes`       | Pricing a rail locally, so an app can render four of them while somebody types         |
+| `deployments`  | Deployment records, and a loader that checks them instead of casting them              |
+| `registry`     | Assets and rail contracts per chain, with provenance attached                          |
+| `capabilities` | Validated route capability records independent from static registry presence           |
+| `abi`          | Generated from the Foundry build, behind its own entry point                           |
 
 ```ts
 import { parseStellarAddress, planQuotes, formatUnits } from "@hyperion/protocol";
@@ -107,3 +108,20 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Route capability records vs registry presence
+
+`STELLAR_TESTNET_PHASE1_CAPABILITIES`, `parseRouteCapabilityManifest`, `resolveRouteCapability`,
+and `resolveRouteCapabilityConservative` separate validated live deployment capabilities from static
+`CHAINS`, `ASSETS`, and `RAIL_CONTRACTS` catalog entries:
+
+- Static registry presence (`registryPresent: true`, such as mainnet Ethereum/Base/Arc or inbound
+  EVM-to-Stellar pairs) resolves to `activated: false` (`activationStatus:
+"registry_only_not_activated"`) unless backed by an explicit validated capability entry with
+  `validationEvidence`.
+- Every capability record declares explicit `paidDispatch` (`supported`, `feeMechanism`) and
+  `recipientSupport` (`evmAddress`, `stellarKinds`) fields rather than inferring them from symbol
+  or provider tables.
+- Unknown `capabilityRevision` values fail strictly in `parseRouteCapabilityManifest` and fail
+  closed (`activated: false`, `activationStatus: "unsupported_revision"`) in
+  `resolveRouteCapabilityConservative`.
