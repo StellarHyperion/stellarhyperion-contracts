@@ -1,5 +1,7 @@
 use hyperion_core::RouteKind;
-use soroban_sdk::{contracttype, Address, BytesN, String};
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, String};
+
+use crate::rail::TokenManagerType;
 
 /// Who this adapter works for, and which of the two Axelar shapes it speaks.
 #[contracttype]
@@ -27,4 +29,25 @@ pub struct ChainLink {
     /// Hyperion's own contract over there. Only the GMP shape needs one, and on that shape it is
     /// the single address an inbound note is accepted from.
     pub peer: BytesN<20>,
+}
+
+/// Deterministic summary of every contract, spender/recipient, and exact amount a sender must
+/// authorize for a paid `AxelarIts` outbound transfer (`dispatch_from`).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaidDispatchAuthPlan {
+    pub router: Address,
+    pub adapter: Address,
+    pub its: Address,
+    pub gas_service: Address,
+    pub token: Address,
+    pub token_id: BytesN<32>,
+    pub token_manager_type: TokenManagerType,
+    /// `None` when `token_manager_type` burns directly from sender; `Some(manager)` on `LockUnlock`.
+    pub token_spender: Option<Address>,
+    pub native_gas_token: Address,
+    pub axelar_chain: String,
+    pub destination_address: Bytes,
+    pub net_amount: i128,
+    pub gas_amount: i128,
 }

@@ -69,7 +69,7 @@ use soroban_sdk::{
 };
 
 use rail::{InterchainTokenServiceClient, Token, TokenManagerType};
-use types::{ChainLink, Config};
+use types::{ChainLink, Config, PaidDispatchAuthPlan};
 
 #[contract]
 pub struct AxelarAdapter;
@@ -572,6 +572,52 @@ impl AxelarAdapter {
         let cfg = storage::config(&env)?;
         let token_id = storage::token_id(&env, &token).ok_or(HyperionError::TokenNotMapped)?;
         Ok(InterchainTokenServiceClient::new(&env, &cfg.its).flow_limit(&token_id))
+    }
+
+    /// Read-only authorization-plan builder for a paid `AxelarIts` transfer. Requires no private
+    /// key and mutates no state, allowing wallets and pre-signing inspectors to verify exact
+    /// spenders, gas recipient, and amounts against a simulated authorization tree.
+    pub fn expected_paid_auth_plan(
+        env: Env,
+        token: Address,
+        net_amount: i128,
+        destination_chain: String,
+        destination: BytesN<32>,
+        gas_amount: i128,
+    ) -> Result<PaidDispatchAuthPlan, HyperionError> {
+        let cfg = storage::config(&env)?;
+        if cfg.route != RouteKind::AxelarIts {
+            return Err(HyperionError::UnsupportedRoute);
+        }
+        if net_amount <= 0 || gas_amount <= 0 {
+            return Err(HyperionError::InvalidAmount);
+        }
+        let link = storage::link(&env, &destination_chain).ok_or(HyperionError::UnknownChain)?;
+        let token_id = storage::token_id(&env, &token).ok_or(HyperionError::TokenNotMapped)?;
+        let recipient = bytes32_to_evm(&env, &destination)?;
+        let its = InterchainTokenServiceClient::new(&env, &cfg.its);
+        let token_manager_type = its.token_manager_type(&token_id);
+        let token_spender = if token_manager_type.takes_by_burning() {
+            None
+        } else {
+            Some(its.deployed_token_manager(&token_id))
+        };
+
+        Ok(PaidDispatchAuthPlan {
+            router: cfg.router,
+            adapter: env.current_contract_address(),
+            its: cfg.its,
+            gas_service: its.gas_service(),
+            token,
+            token_id,
+            token_manager_type,
+            token_spender,
+            native_gas_token: its.native_token_address(),
+            axelar_chain: link.axelar_chain,
+            destination_address: Bytes::from_array(&env, &recipient.to_array()),
+            net_amount,
+            gas_amount,
+        })
     }
 }
 

@@ -58,6 +58,7 @@ enum ItsKey {
     Last,
     Count,
     Native,
+    GasService,
 }
 
 #[contract]
@@ -92,8 +93,14 @@ impl MockIts {
     pub fn native_token_address(env: Env) -> Address {
         env.storage().instance().get(&ItsKey::Native).unwrap()
     }
+    pub fn set_gas_service(env: Env, service: Address) {
+        env.storage().instance().set(&ItsKey::GasService, &service);
+    }
     pub fn gas_service(env: Env) -> Address {
-        env.current_contract_address()
+        env.storage()
+            .instance()
+            .get(&ItsKey::GasService)
+            .unwrap_or_else(|| env.current_contract_address())
     }
 
     pub fn set_trusted(env: Env, chain: String, trusted: bool) {
@@ -177,11 +184,27 @@ impl MockIts {
             return Err(ItsError::UntrustedChain);
         }
         if let Some(ref gas) = gas_token {
-            token::Client::new(&env, &gas.address).transfer(
-                &caller,
-                env.current_contract_address(),
-                &gas.amount,
-            );
+            if let Some(gs) = env
+                .storage()
+                .instance()
+                .get::<_, Address>(&ItsKey::GasService)
+            {
+                MockGasServiceClient::new(&env, &gs).pay_gas(
+                    &env.current_contract_address(),
+                    &destination_chain,
+                    &destination_address,
+                    &Bytes::new(&env),
+                    &caller,
+                    &gas.clone(),
+                    &caller,
+                );
+            } else {
+                token::Client::new(&env, &gas.address).transfer(
+                    &caller,
+                    env.current_contract_address(),
+                    &gas.amount,
+                );
+            }
         }
 
         env.storage().instance().set(
@@ -364,5 +387,34 @@ pub struct MockTokenManager;
 impl MockTokenManager {
     pub fn locked(env: Env, token: Address) -> i128 {
         token::Client::new(&env, &token).balance(&env.current_contract_address())
+    }
+}
+
+/// Stand-in for Axelar's `stellar_axelar_gas_service` contract, exercising the exact nested
+/// `sender -> its -> gas_service.pay_gas -> native_token.transfer(sender, gas_service, amount)`
+/// authorization sub-tree.
+#[contract]
+pub struct MockGasService;
+
+#[contractimpl]
+impl MockGasService {
+    #[allow(clippy::too_many_arguments)]
+    pub fn pay_gas(
+        env: Env,
+        sender: Address,
+        _destination_chain: String,
+        _destination_address: Bytes,
+        _payload: Bytes,
+        spender: Address,
+        token: Token,
+        _refund_address: Address,
+    ) {
+        sender.require_auth();
+        spender.require_auth();
+        token::Client::new(&env, &token.address).transfer(
+            &spender,
+            env.current_contract_address(),
+            &token.amount,
+        );
     }
 }

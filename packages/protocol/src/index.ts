@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Pre-signing Axelar paid-dispatch authorization-tree snapshot builder and inspector.
+export * from "./axelarAuthSnapshots.js";
