@@ -1,0 +1,1338 @@
+{
+  "corpusVersion": 1,
+  "corpusId": "hyperion-malformed-message-corpus-v1",
+  "cases": [
+    {
+      "id": "outbound-v1-legacy-basic",
+      "format": "outbound_note",
+      "category": "accepted_legacy",
+      "description": "Valid v1 outbound note with standard EVM recipient and nonce 1",
+      "hexBytes": "0x0100000000000000000000000000000000000beef10000000000000001",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "outbound_note",
+            "version": 1,
+            "recipient": "0x00000000000000000000000000000000000beef1",
+            "nonce": "1"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "outbound_note",
+            "version": 1,
+            "recipient": "0x00000000000000000000000000000000000beef1",
+            "nonce": "1"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "outbound_note",
+            "version": 1,
+            "recipient": "0x00000000000000000000000000000000000beef1",
+            "nonce": "1"
+          }
+        }
+      }
+    },
+    {
+      "id": "outbound-v1-wide-nonce-js-unsafe",
+      "format": "outbound_note",
+      "category": "wide_id",
+      "description": "Valid v1 outbound note carrying nonce 2^53 + 1 above IEEE-754 safe integer range",
+      "hexBytes": "0x0111111111111111111111111111111111111111110020000000000001",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "outbound_note",
+            "version": 1,
+            "recipient": "0x1111111111111111111111111111111111111111",
+            "nonce": "9007199254740993"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "outbound_note",
+            "version": 1,
+            "recipient": "0x1111111111111111111111111111111111111111",
+            "nonce": "9007199254740993"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "outbound_note",
+            "version": 1,
+            "recipient": "0x1111111111111111111111111111111111111111",
+            "nonce": "9007199254740993"
+          }
+        }
+      }
+    },
+    {
+      "id": "outbound-v1-wide-nonce-u64-max",
+      "format": "outbound_note",
+      "category": "wide_id",
+      "description": "Valid v1 outbound note carrying maximum 64-bit unsigned nonce",
+      "hexBytes": "0x012222222222222222222222222222222222222222ffffffffffffffff",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "outbound_note",
+            "version": 1,
+            "recipient": "0x2222222222222222222222222222222222222222",
+            "nonce": "18446744073709551615"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "outbound_note",
+            "version": 1,
+            "recipient": "0x2222222222222222222222222222222222222222",
+            "nonce": "18446744073709551615"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "outbound_note",
+            "version": 1,
+            "recipient": "0x2222222222222222222222222222222222222222",
+            "nonce": "18446744073709551615"
+          }
+        }
+      }
+    },
+    {
+      "id": "outbound-empty",
+      "format": "outbound_note",
+      "category": "truncation",
+      "description": "Empty outbound note payload",
+      "hexBytes": "0x",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      }
+    },
+    {
+      "id": "outbound-truncated-28b",
+      "format": "outbound_note",
+      "category": "truncation",
+      "description": "Outbound note truncated one byte before end of 8-byte nonce",
+      "hexBytes": "0x0100000000000000000000000000000000000beef100000000000000",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      }
+    },
+    {
+      "id": "outbound-trailing-30b",
+      "format": "outbound_note",
+      "category": "trailing_bytes",
+      "description": "Valid 29-byte outbound note with one trailing zero byte appended",
+      "hexBytes": "0x0100000000000000000000000000000000000beef1000000000000000100",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      }
+    },
+    {
+      "id": "outbound-unsupported-version-0",
+      "format": "outbound_note",
+      "category": "unsupported_version",
+      "description": "29-byte outbound note with version byte 0",
+      "hexBytes": "0x0000000000000000000000000000000000000beef10000000000000001",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        }
+      }
+    },
+    {
+      "id": "outbound-unsupported-version-2",
+      "format": "outbound_note",
+      "category": "unsupported_version",
+      "description": "29-byte outbound note with future version byte 2",
+      "hexBytes": "0x0200000000000000000000000000000000000beef10000000000000001",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        }
+      }
+    },
+    {
+      "id": "outbound-zero-recipient",
+      "format": "outbound_note",
+      "category": "semantic_edge",
+      "description": "29-byte v1 outbound note naming the zero EVM recipient",
+      "hexBytes": "0x0100000000000000000000000000000000000000000000000000000007",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "ZeroAddressKey"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "ZeroAddressKey"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "ZeroAddressKey"
+        }
+      }
+    },
+    {
+      "id": "inbound-v1-legacy-account",
+      "format": "inbound_note",
+      "category": "accepted_legacy",
+      "description": "Valid v1 inbound note targeting a classic G account",
+      "hexBytes": "0x010038474149524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434549524346364d000000000000002a",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 0,
+            "strkey": "GAIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCF6M",
+            "nonce": "42"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 0,
+            "strkey": "GAIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCF6M",
+            "nonce": "42"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 0,
+            "strkey": "GAIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCF6M",
+            "nonce": "42"
+          }
+        }
+      }
+    },
+    {
+      "id": "inbound-v1-legacy-contract",
+      "format": "inbound_note",
+      "category": "accepted_legacy",
+      "description": "Valid v1 inbound note targeting a Soroban C contract",
+      "hexBytes": "0x010138434152434549524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434556514f0000000000000063",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 1,
+            "strkey": "CARCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEVQO",
+            "nonce": "99"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 1,
+            "strkey": "CARCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEVQO",
+            "nonce": "99"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 1,
+            "strkey": "CARCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEVQO",
+            "nonce": "99"
+          }
+        }
+      }
+    },
+    {
+      "id": "inbound-v1-wide-muxed-js-unsafe",
+      "format": "inbound_note",
+      "category": "wide_id",
+      "description": "Valid v1 inbound note with muxed subaccount id and nonce at 2^53 + 1",
+      "hexBytes": "0x0102454d415743594c424d46515743594c424d46515743594c424d46515743594c424d46515743594c424d46515743594c424d465157435941424141414141414141414147424d590020000000000001",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 2,
+            "strkey": "MAWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYABAAAAAAAAAAGBMY",
+            "nonce": "9007199254740993"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 2,
+            "strkey": "MAWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYABAAAAAAAAAAGBMY",
+            "nonce": "9007199254740993"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 2,
+            "strkey": "MAWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYABAAAAAAAAAAGBMY",
+            "nonce": "9007199254740993"
+          }
+        }
+      }
+    },
+    {
+      "id": "inbound-v1-wide-muxed-u64-max",
+      "format": "inbound_note",
+      "category": "wide_id",
+      "description": "Valid v1 inbound note with muxed subaccount id and nonce at u64::MAX",
+      "hexBytes": "0x0102454d415743594c424d46515743594c424d46515743594c424d46515743594c424d46515743594c424d46515743594c424d465157435a37373737373737373737373736324249ffffffffffffffff",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 2,
+            "strkey": "MAWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCZ77777777777762BI",
+            "nonce": "18446744073709551615"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 2,
+            "strkey": "MAWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCZ77777777777762BI",
+            "nonce": "18446744073709551615"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 2,
+            "strkey": "MAWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCZ77777777777762BI",
+            "nonce": "18446744073709551615"
+          }
+        }
+      }
+    },
+    {
+      "id": "inbound-truncated-header-3b",
+      "format": "inbound_note",
+      "category": "truncation",
+      "description": "Inbound note shorter than the 12-byte minimum frame",
+      "hexBytes": "0x010038",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      }
+    },
+    {
+      "id": "inbound-truncated-body-short",
+      "format": "inbound_note",
+      "category": "truncation",
+      "description": "Inbound note truncated by 1 byte so declared strkey length disagrees with frame",
+      "hexBytes": "0x010038474149524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434549524346364d00000000000000",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      },
+      "acknowledgedDifferences": [
+        {
+          "implementation": "solidity",
+          "differenceKind": "error_code_mismatch",
+          "rationale": "Solidity HyperionNotes.decodeInboundNote checks 3 + len + 8 frame length as MalformedMessage; Rust delegates inner slice to StrkeyDestination::decode (InvalidDestination)."
+        },
+        {
+          "implementation": "typescript",
+          "differenceKind": "error_code_mismatch",
+          "rationale": "TypeScript decodeInboundNote checks 3 + len + 8 frame length as MalformedMessage before strkey validation."
+        }
+      ]
+    },
+    {
+      "id": "inbound-trailing-extra-byte",
+      "format": "inbound_note",
+      "category": "trailing_bytes",
+      "description": "Valid inbound note with one extra byte appended after the 8-byte nonce",
+      "hexBytes": "0x010038474149524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434549524346364d000000000000002aff",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      },
+      "acknowledgedDifferences": [
+        {
+          "implementation": "solidity",
+          "differenceKind": "error_code_mismatch",
+          "rationale": "Solidity rejects trailing bytes on frame length check with MalformedMessage while Rust rejects inner StrkeyDestination length mismatch with InvalidDestination."
+        },
+        {
+          "implementation": "typescript",
+          "differenceKind": "error_code_mismatch",
+          "rationale": "TypeScript rejects trailing bytes on frame length check with MalformedMessage while Rust returns InvalidDestination."
+        }
+      ]
+    },
+    {
+      "id": "inbound-unsupported-version-0",
+      "format": "inbound_note",
+      "category": "unsupported_version",
+      "description": "Inbound note carrying unsupported envelope version 0",
+      "hexBytes": "0x000038474149524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434549524346364d000000000000002a",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        }
+      }
+    },
+    {
+      "id": "inbound-unsupported-version-9",
+      "format": "inbound_note",
+      "category": "unsupported_version",
+      "description": "Inbound note carrying unsupported future envelope version 9",
+      "hexBytes": "0x090038474149524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434549524346364d000000000000002a",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        }
+      }
+    },
+    {
+      "id": "inbound-kind-prefix-mismatch",
+      "format": "inbound_note",
+      "category": "semantic_edge",
+      "description": "Inbound note tagging a classic G strkey with AddressKind.Contract (1)",
+      "hexBytes": "0x010138474149524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434549524346364d0000000000000001",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "inbound_note",
+            "version": 1,
+            "addressKind": 1,
+            "strkey": "GAIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCEIRCF6M",
+            "nonce": "1"
+          }
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      },
+      "acknowledgedDifferences": [
+        {
+          "implementation": "solidity",
+          "differenceKind": "verdict_mismatch",
+          "rationale": "EVM never consumes InboundNote on-chain; HyperionNotes.decodeInboundNote is a framing-only round-trip helper and relies on StellarAddress.parse on the outbound writer path."
+        },
+        {
+          "implementation": "typescript",
+          "differenceKind": "error_code_mismatch",
+          "rationale": "TypeScript decodeInboundNote classifies kind-vs-strkey disagreement as MalformedMessage while Rust StrkeyDestination::validate returns InvalidDestination."
+        }
+      ]
+    },
+    {
+      "id": "strkey-legacy-account",
+      "format": "stellar_strkey",
+      "category": "accepted_legacy",
+      "description": "Valid SEP-23 classic G account strkey",
+      "hexBytes": "0x474149524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434549524346364d",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "stellar_strkey",
+            "addressKind": 0,
+            "key": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "muxedId": "0"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "stellar_strkey",
+            "addressKind": 0,
+            "key": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "muxedId": "0"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "stellar_strkey",
+            "addressKind": 0,
+            "key": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "muxedId": "0"
+          }
+        }
+      }
+    },
+    {
+      "id": "strkey-legacy-contract",
+      "format": "stellar_strkey",
+      "category": "accepted_legacy",
+      "description": "Valid SEP-23 Soroban C contract strkey",
+      "hexBytes": "0x434152434549524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434556514f",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "stellar_strkey",
+            "addressKind": 1,
+            "key": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "muxedId": "0"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "stellar_strkey",
+            "addressKind": 1,
+            "key": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "muxedId": "0"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "stellar_strkey",
+            "addressKind": 1,
+            "key": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "muxedId": "0"
+          }
+        }
+      }
+    },
+    {
+      "id": "strkey-wide-muxed-u64-max",
+      "format": "stellar_strkey",
+      "category": "wide_id",
+      "description": "Valid SEP-23 M muxed strkey carrying u64::MAX subaccount id",
+      "hexBytes": "0x4d415743594c424d46515743594c424d46515743594c424d46515743594c424d46515743594c424d46515743594c424d465157435a37373737373737373737373736324249",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "stellar_strkey",
+            "addressKind": 2,
+            "key": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+            "muxedId": "18446744073709551615"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "stellar_strkey",
+            "addressKind": 2,
+            "key": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+            "muxedId": "18446744073709551615"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "stellar_strkey",
+            "addressKind": 2,
+            "key": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+            "muxedId": "18446744073709551615"
+          }
+        }
+      }
+    },
+    {
+      "id": "strkey-truncated-55c",
+      "format": "stellar_strkey",
+      "category": "truncation",
+      "description": "Account strkey truncated to 55 characters",
+      "hexBytes": "0x47414952434549524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434636",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        }
+      }
+    },
+    {
+      "id": "strkey-trailing-57c",
+      "format": "stellar_strkey",
+      "category": "trailing_bytes",
+      "description": "Valid 56-character G strkey with one trailing base32 character appended",
+      "hexBytes": "0x474149524345495243454952434549524345495243454952434549524345495243454952434549524345495243454952434549524346364d41",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        }
+      }
+    },
+    {
+      "id": "strkey-bad-crc16",
+      "format": "stellar_strkey",
+      "category": "semantic_edge",
+      "description": "56-character G strkey with corrupted CRC16 checksum",
+      "hexBytes": "0x4741495243454952434549524345495243454952434549524345495243454952434549524345495243454952434549524345495243463641",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        }
+      }
+    },
+    {
+      "id": "strkey-muxed-nonzero-spare-bit",
+      "format": "stellar_strkey",
+      "category": "semantic_edge",
+      "description": "69-character M strkey with non-zero trailing spare bit in final base32 char",
+      "hexBytes": "0x4d415743594c424d46515743594c424d46515743594c424d46515743594c424d46515743594c424d46515743594c424d465157435941424141414141414141414147424d5a",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        }
+      }
+    },
+    {
+      "id": "evm-word-legacy-clean",
+      "format": "evm_word",
+      "category": "accepted_legacy",
+      "description": "Clean left-padded 32-byte word containing a 20-byte EVM address",
+      "hexBytes": "0x00000000000000000000000000000000000000000000000000000000000beef1",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "evm_word",
+            "address": "0x00000000000000000000000000000000000beef1"
+          }
+        },
+        "solidity": {
+          "status": "accept",
+          "decoded": {
+            "format": "evm_word",
+            "address": "0x00000000000000000000000000000000000beef1"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "evm_word",
+            "address": "0x00000000000000000000000000000000000beef1"
+          }
+        }
+      }
+    },
+    {
+      "id": "evm-word-dirty-high-byte",
+      "format": "evm_word",
+      "category": "trailing_bytes",
+      "description": "32-byte EVM address word with non-zero bit in upper 12 padding bytes",
+      "hexBytes": "0x0000000000000000000000011111111111111111111111111111111111111111",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "NotEvmAddress"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "NotEvmAddress"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "NotEvmAddress"
+        }
+      }
+    },
+    {
+      "id": "evm-word-right-padded",
+      "format": "evm_word",
+      "category": "trailing_bytes",
+      "description": "20-byte EVM address placed in leading bytes instead of low 20 bytes",
+      "hexBytes": "0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd000000000000000000000000",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "NotEvmAddress"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "NotEvmAddress"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "NotEvmAddress"
+        }
+      }
+    },
+    {
+      "id": "evm-word-all-zero",
+      "format": "evm_word",
+      "category": "semantic_edge",
+      "description": "All-zero 32-byte word",
+      "hexBytes": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "ZeroAddressKey"
+        },
+        "solidity": {
+          "status": "reject",
+          "errorCode": "ZeroAddressKey"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "ZeroAddressKey"
+        }
+      }
+    },
+    {
+      "id": "cctp-hook-v1-legacy-account",
+      "format": "cctp_hook",
+      "category": "accepted_legacy",
+      "description": "Valid 34-byte v1 CCTP hook targeting a classic G account",
+      "hexBytes": "0x01001111111111111111111111111111111111111111111111111111111111111111",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_hook",
+            "version": 1,
+            "addressKind": 0,
+            "key": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "muxedId": "0"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_hook",
+            "version": 1,
+            "addressKind": 0,
+            "key": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "muxedId": "0"
+          }
+        }
+      }
+    },
+    {
+      "id": "cctp-hook-v1-legacy-contract",
+      "format": "cctp_hook",
+      "category": "accepted_legacy",
+      "description": "Valid 34-byte v1 CCTP hook targeting a Soroban C contract",
+      "hexBytes": "0x01012222222222222222222222222222222222222222222222222222222222222222",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_hook",
+            "version": 1,
+            "addressKind": 1,
+            "key": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "muxedId": "0"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_hook",
+            "version": 1,
+            "addressKind": 1,
+            "key": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "muxedId": "0"
+          }
+        }
+      }
+    },
+    {
+      "id": "cctp-hook-v1-wide-muxed-u64-max",
+      "format": "cctp_hook",
+      "category": "wide_id",
+      "description": "Valid 42-byte v1 CCTP hook carrying u64::MAX muxed subaccount id",
+      "hexBytes": "0x01022c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2cffffffffffffffff",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_hook",
+            "version": 1,
+            "addressKind": 2,
+            "key": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+            "muxedId": "18446744073709551615"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_hook",
+            "version": 1,
+            "addressKind": 2,
+            "key": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+            "muxedId": "18446744073709551615"
+          }
+        }
+      }
+    },
+    {
+      "id": "cctp-hook-truncated-33b",
+      "format": "cctp_hook",
+      "category": "truncation",
+      "description": "CCTP hook truncated to 33 bytes",
+      "hexBytes": "0x010011111111111111111111111111111111111111111111111111111111111111",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      },
+      "acknowledgedDifferences": [
+        {
+          "implementation": "typescript",
+          "differenceKind": "error_code_mismatch",
+          "rationale": "TypeScript decodeCctpHook rejects invalid hook byte counts with MalformedMessage while Rust StellarDestination::decode returns InvalidDestination."
+        }
+      ]
+    },
+    {
+      "id": "cctp-hook-trailing-35b",
+      "format": "cctp_hook",
+      "category": "trailing_bytes",
+      "description": "34-byte plain CCTP hook with one trailing byte appended",
+      "hexBytes": "0x0100111111111111111111111111111111111111111111111111111111111111111100",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      },
+      "acknowledgedDifferences": [
+        {
+          "implementation": "typescript",
+          "differenceKind": "error_code_mismatch",
+          "rationale": "TypeScript decodeCctpHook rejects 35-byte hooks with MalformedMessage while Rust StellarDestination::decode returns InvalidDestination."
+        }
+      ]
+    },
+    {
+      "id": "cctp-hook-unsupported-version-2",
+      "format": "cctp_hook",
+      "category": "unsupported_version",
+      "description": "34-byte CCTP hook with unsupported version byte 2",
+      "hexBytes": "0x02001111111111111111111111111111111111111111111111111111111111111111",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "UnsupportedHookVersion"
+        }
+      }
+    },
+    {
+      "id": "cctp-hook-zero-key",
+      "format": "cctp_hook",
+      "category": "semantic_edge",
+      "description": "34-byte v1 CCTP hook carrying an all-zero 32-byte key",
+      "hexBytes": "0x01000000000000000000000000000000000000000000000000000000000000000000",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "ZeroAddressKey"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "ZeroAddressKey"
+        }
+      }
+    },
+    {
+      "id": "cctp-envelope-legacy-empty-hook",
+      "format": "cctp_burn_envelope",
+      "category": "accepted_legacy",
+      "description": "Legacy/raw CCTP v2 finalized burn message with empty hook payload",
+      "hexBytes": "0x00000001000000000000001b0000000000000000000000000000000000000000000000000000000000001092e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000007d000000001b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a500000000000000000000000000000000000000000000000000000000000f42405e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_burn_envelope",
+            "messageVersion": 1,
+            "burnVersion": 1,
+            "sourceDomain": 0,
+            "destinationDomain": 27,
+            "displayNonce": "4242",
+            "isFinalized": true,
+            "amount": "1000000",
+            "maxFee": "0",
+            "feeExecuted": "0",
+            "expirationBlock": "0",
+            "hookPresent": false,
+            "hookKind": null,
+            "hookKey": null,
+            "hookMuxedId": null
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_burn_envelope",
+            "messageVersion": 1,
+            "burnVersion": 1,
+            "sourceDomain": 0,
+            "destinationDomain": 27,
+            "displayNonce": "4242",
+            "isFinalized": true,
+            "amount": "1000000",
+            "maxFee": "0",
+            "feeExecuted": "0",
+            "expirationBlock": "0",
+            "hookPresent": false,
+            "hookKind": null,
+            "hookKey": null,
+            "hookMuxedId": null
+          }
+        }
+      }
+    },
+    {
+      "id": "cctp-envelope-v1-with-account-hook",
+      "format": "cctp_burn_envelope",
+      "category": "accepted_legacy",
+      "description": "Fast-finality CCTP v2 burn message carrying a v1 Hyperion account hook",
+      "hexBytes": "0x00000001000000000000001b000000000000000000000000000000000000000000000000000000000000004de1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000003e800000001b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a500000000000000000000000000000000000000000000000000000000004c4b405e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e00000000000000000000000000000000000000000000000000000000000001f400000000000000000000000000000000000000000000000000000000000000fa000000000000000000000000000000000000000000000000000000000001e24001001111111111111111111111111111111111111111111111111111111111111111",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_burn_envelope",
+            "messageVersion": 1,
+            "burnVersion": 1,
+            "sourceDomain": 0,
+            "destinationDomain": 27,
+            "displayNonce": "77",
+            "isFinalized": false,
+            "amount": "5000000",
+            "maxFee": "500",
+            "feeExecuted": "250",
+            "expirationBlock": "123456",
+            "hookPresent": true,
+            "hookKind": 0,
+            "hookKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "hookMuxedId": "0"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_burn_envelope",
+            "messageVersion": 1,
+            "burnVersion": 1,
+            "sourceDomain": 0,
+            "destinationDomain": 27,
+            "displayNonce": "77",
+            "isFinalized": false,
+            "amount": "5000000",
+            "maxFee": "500",
+            "feeExecuted": "250",
+            "expirationBlock": "123456",
+            "hookPresent": true,
+            "hookKind": 0,
+            "hookKey": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "hookMuxedId": "0"
+          }
+        }
+      }
+    },
+    {
+      "id": "cctp-envelope-wide-nonce-and-i128-max",
+      "format": "cctp_burn_envelope",
+      "category": "wide_id",
+      "description": "CCTP v2 burn message at u64::MAX display nonce, i128::MAX amount and 2^53+1 muxed hook",
+      "hexBytes": "0x00000001000000000000001b000000000000000000000000000000000000000000000000ffffffffffffffffe1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000007d000000001b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5000000000000000000000000000000007fffffffffffffffffffffffffffffff5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e00000000000000000000000000000000000000000000000000200000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ffffffffffffffff01022c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c0020000000000001",
+      "legacyAccepted": true,
+      "expected": {
+        "rust": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_burn_envelope",
+            "messageVersion": 1,
+            "burnVersion": 1,
+            "sourceDomain": 0,
+            "destinationDomain": 27,
+            "displayNonce": "18446744073709551615",
+            "isFinalized": true,
+            "amount": "170141183460469231731687303715884105727",
+            "maxFee": "9007199254740993",
+            "feeExecuted": "0",
+            "expirationBlock": "18446744073709551615",
+            "hookPresent": true,
+            "hookKind": 2,
+            "hookKey": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+            "hookMuxedId": "9007199254740993"
+          }
+        },
+        "typescript": {
+          "status": "accept",
+          "decoded": {
+            "format": "cctp_burn_envelope",
+            "messageVersion": 1,
+            "burnVersion": 1,
+            "sourceDomain": 0,
+            "destinationDomain": 27,
+            "displayNonce": "18446744073709551615",
+            "isFinalized": true,
+            "amount": "170141183460469231731687303715884105727",
+            "maxFee": "9007199254740993",
+            "feeExecuted": "0",
+            "expirationBlock": "18446744073709551615",
+            "hookPresent": true,
+            "hookKind": 2,
+            "hookKey": "0x2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+            "hookMuxedId": "9007199254740993"
+          }
+        }
+      }
+    },
+    {
+      "id": "cctp-envelope-truncated-header-147b",
+      "format": "cctp_burn_envelope",
+      "category": "truncation",
+      "description": "CCTP message truncated at 147 bytes (one byte short of MSG_BODY)",
+      "hexBytes": "0x00000001000000000000001b0000000000000000000000000000000000000000000000000000000000001092e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000007",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      }
+    },
+    {
+      "id": "cctp-envelope-truncated-burn-body",
+      "format": "cctp_burn_envelope",
+      "category": "truncation",
+      "description": "CCTP message with valid 148-byte header and truncated 100-byte burn body",
+      "hexBytes": "0x00000001000000000000001b0000000000000000000000000000000000000000000000000000000000001092e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000007d000000001b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a500000000000000000000000000000000000000000000000000000000000f4240",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      }
+    },
+    {
+      "id": "cctp-envelope-trailing-hook-byte",
+      "format": "cctp_burn_envelope",
+      "category": "trailing_bytes",
+      "description": "CCTP burn message whose Hyperion hook carries an unexpected 35th trailing byte",
+      "hexBytes": "0x00000001000000000000001b0000000000000000000000000000000000000000000000000000000000001092e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000007d000000001b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a500000000000000000000000000000000000000000000000000000000000f42405e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001001111111111111111111111111111111111111111111111111111111111111111aa",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "InvalidDestination"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "MalformedMessage"
+        }
+      },
+      "acknowledgedDifferences": [
+        {
+          "implementation": "typescript",
+          "differenceKind": "error_code_mismatch",
+          "rationale": "TypeScript decodeCctpHook rejects 35-byte hooks with MalformedMessage while Rust HyperionHook::decode returns InvalidDestination."
+        }
+      ]
+    },
+    {
+      "id": "cctp-envelope-unsupported-header-version",
+      "format": "cctp_burn_envelope",
+      "category": "unsupported_version",
+      "description": "CCTP message header carrying unsupported version 2",
+      "hexBytes": "0x00000002000000000000001b0000000000000000000000000000000000000000000000000000000000001092e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000007d000000001b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a500000000000000000000000000000000000000000000000000000000000f42405e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "UnsupportedMessageVersion"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "UnsupportedMessageVersion"
+        }
+      }
+    },
+    {
+      "id": "cctp-envelope-unsupported-burn-version",
+      "format": "cctp_burn_envelope",
+      "category": "unsupported_version",
+      "description": "CCTP burn body carrying unsupported version 2",
+      "hexBytes": "0x00000001000000000000001b0000000000000000000000000000000000000000000000000000000000001092e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000007d000000002b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a500000000000000000000000000000000000000000000000000000000000f42405e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "UnsupportedMessageVersion"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "UnsupportedMessageVersion"
+        }
+      }
+    },
+    {
+      "id": "cctp-envelope-wide-amount-overflow-i128",
+      "format": "cctp_burn_envelope",
+      "category": "wide_id",
+      "description": "CCTP burn amount equal to 2^127 (one above Soroban i128::MAX)",
+      "hexBytes": "0x00000001000000000000001b0000000000000000000000000000000000000000000000000000000000001092e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000007d000000001b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a500000000000000000000000000000000800000000000000000000000000000005e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "DecimalOverflow"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "DecimalOverflow"
+        }
+      }
+    },
+    {
+      "id": "cctp-envelope-wide-max-fee-upper-word",
+      "format": "cctp_burn_envelope",
+      "category": "wide_id",
+      "description": "CCTP burn maxFee with non-zero upper 128 bits in uint256 slot",
+      "hexBytes": "0x00000001000000000000001b0000000000000000000000000000000000000000000000000000000000001092e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c10000000000000000000000000000000000000000000000000000000000000000000007d0000007d000000001b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a500000000000000000000000000000000000000000000000000000000000f42405e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "legacyAccepted": false,
+      "expected": {
+        "rust": {
+          "status": "reject",
+          "errorCode": "DecimalOverflow"
+        },
+        "typescript": {
+          "status": "reject",
+          "errorCode": "DecimalOverflow"
+        }
+      }
+    }
+  ]
+}

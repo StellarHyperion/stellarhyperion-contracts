@@ -17,6 +17,9 @@ pub mod inbound;
 pub mod route;
 pub mod strkey;
 
+#[cfg(test)]
+mod malformed_corpus_test;
+
 pub use address::{AddressKind, StellarDestination};
 pub use amount::{
     convert_decimals, convert_decimals_exact, floor_to_representable, scale_amount, Conversion,

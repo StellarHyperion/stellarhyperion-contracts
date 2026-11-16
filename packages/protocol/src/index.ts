@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Cross-language malformed-message corpus runner and differential comparator.
+export * from "./malformedCorpus.js";
