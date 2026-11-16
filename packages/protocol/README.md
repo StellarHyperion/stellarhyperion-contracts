@@ -28,7 +28,7 @@ against itself.
 | `cctp`        | Reading CCTP V2 messages, which is all this side ever does with them                   |
 | `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
 | `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
-| `deployments` | Deployment records, and a loader that checks them instead of casting them              |
+| `deployments` | Deployment records, validated loader, and deterministic manifest diffing               |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
 
@@ -97,6 +97,23 @@ and dies before writing a single file. Every dependency here is a dev dependency
 with none at runtime, and `package-lock.json` is committed, so what CI installs is what was tested.
 The flag lives in the repository rather than in somebody's shell history because an install flag
 that only exists on one machine is a build that only works on one machine.
+
+## Deployment-manifest comparison and compatibility
+
+`compareDeploymentSets` and `compareDeploymentManifests` compare two validated `DeploymentSet`
+records across networks, governance authorities, rail adapters, Soroban WASM hashes, token
+identities, and active route lanes:
+
+- **Impact separation**: Regenerating `generatedAt`, `deployedAt`, or `commit` produces
+  `metadataOnly: true` (`highestImpact: "metadata"`), while changing `feeBps`, `flowWindow`,
+  `flowLimit`, or enabled token routes classifies as `"activation"`, and changing `router`, `admin`,
+  `guardian`, `treasury`, `timelockDelay`, `adapters`, `wasmHashes`, or token contract/issuer
+  identities classifies as `"trust"`.
+- **Stable ordering and lane tracking**: Keys and route tags are normalized in deterministic ASCII
+  and `RouteKind` order so shuffled manifests yield identical diffs, and added, deleted, modified,
+  and symbol-renamed lanes (`previousSymbol` -> `currentSymbol` with matching token identity) are
+  reported explicitly in `laneDiffs`. Active live deployment remains Stellar Testnet outbound
+  ITS/CCTP; EVM origin routers and unvalidated rails stay gated.
 
 ## Provenance
 
