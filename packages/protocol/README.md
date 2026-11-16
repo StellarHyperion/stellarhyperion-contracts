@@ -27,7 +27,7 @@ against itself.
 | `flow`        | Sliding flow windows, the same arithmetic both routers run                             |
 | `cctp`        | Reading CCTP V2 messages, which is all this side ever does with them                   |
 | `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
-| `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
+| `quotes`      | Local rail pricing, fee ladders, and machine-readable explanation trees                |
 | `deployments` | Deployment records, and a loader that checks them instead of casting them              |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
@@ -107,3 +107,15 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Quote explanation trees
+
+`explainQuote` and `explainQuotes` expose deterministic, machine-readable derivation trees
+alongside `planQuote` and `planQuotes` without network calls:
+
+- `arithmetic` derives `fee`, `netBeforeFloor`, `precisionDust`, `netAmount`, `grossAmount`,
+  `retainedSenderDust`, `flowAvailable`, `flowRemainingAfter`, `flowShortfall`, and
+  `destinationAmount` matching `RouteQuote` outputs exactly.
+- Blocked quotes populate `blockerAttribution` with the `QuoteBlocker`, `BlockerOwner`, concrete
+  `owningPolicy` (`router.pause_switch`, `rail.payload_capability`, `router.sliding_flow_window`,
+  etc.), and `failedNodeId` inside `root`.
