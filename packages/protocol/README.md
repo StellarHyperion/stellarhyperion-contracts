@@ -30,6 +30,7 @@ against itself.
 | `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
 | `deployments` | Deployment records, and a loader that checks them instead of casting them              |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
+| `examples`    | Executable planning and evidence inspection workflows over caller-supplied clients     |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
 
 ```ts
@@ -107,3 +108,36 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Injected client integration boundaries
+
+`examples` provides executable reference workflows (`runStellarOutboundPlanningExample`,
+`runQuoteLadderPlanningExample` and `runEvidenceInspectionExample`) that take caller-supplied
+read-only adapters (`DeploymentManifestReader`, `RouterSnapshotReader`, `TransferEvidenceReader`)
+rather than embedding RPC URLs, API credentials or signing keys.
+
+Three operational boundaries apply to every caller integrating `@hyperion/protocol`:
+
+1. **Local planning versus signed execution.** Planning helpers run deterministic `bigint` fee,
+   decimal-flooring and flow-headroom checks against a caller-fetched `RouterSnapshot`. Every
+   planning output carries `stage: "local_planning_only"`, `requiresOnChainQuoteConfirmation: true`,
+   and `signedExecutionPerformed: false`. Callers must confirm quotes on chain immediately before
+   asking a user or keeper to sign a transaction.
+2. **Validated Stellar Testnet corridors versus gated work.** The active validated deployment is
+   Stellar Testnet outbound `USDC` via `axelar-its` (to `sepolia`) and `cctp` (to `sepolia`,
+   `base-sepolia` and `arc-testnet`). EVM origin routers and `axelar-gmp` or `allbridge` rails
+   remain explicitly gated (`executionPermitted: false`) until independently deployed and verified,
+   even when static chain or token metadata exists in `registry`.
+3. **Wire evidence versus payout proof.** Inspecting a CCTP V2 message, hook payload or Hyperion
+   note proves message formatting, replay key (`32` byte `nonce`) and recipient binding (including
+   full `64` bit muxed sub-account IDs), not destination payout (`payoutProven: false`). Payout is
+   proven only when a confirmed destination router receipt reports `delivered: true`; deliveries
+   with `delivered: false` and a positive `claimId` report `recipient_claim_parked` so missing
+   trustlines or frozen accounts are never mislabeled as paid.
+
+### Compatibility and migration notes
+
+Adding `examples` introduces zero runtime dependencies and does not alter existing wire layouts,
+enum discriminants or ABI exports. Integrators migrating custom planning scripts should inject
+their existing Soroban RPC, Horizon or EVM read clients via the reader interfaces and check
+`executionPermitted` alongside `payoutProven` before enabling user actions.

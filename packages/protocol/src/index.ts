@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Executable integration examples over caller-supplied read-only clients.
+export * from "./examples.js";
