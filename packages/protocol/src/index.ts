@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Reproducible Soroban CPU and memory budget baselines and delta comparator.
+export * from "./sorobanBenchmarks.js";
