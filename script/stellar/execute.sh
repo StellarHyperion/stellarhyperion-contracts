@@ -44,6 +44,8 @@ COUNT=$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"
 note "executing $COUNT queued actions"
 executed=0
 skipped=0
+EXEC_TX_HASHES=()
+LAST_EXEC_LEDGER=""
 
 for i in $(seq 0 $((COUNT - 1))); do
   id=$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(String(d.networks[process.argv[2]].queuedActionIds[Number(process.argv[3])]))' "$RECORD" "$CHAIN_KEY" "$i")
@@ -60,6 +62,10 @@ for i in $(seq 0 $((COUNT - 1))); do
   if out=$(invoke "$ROUTER" execute_action --caller "$CALLER" --id "$id" 2>&1); then
     say "executed      $id  $what"
     executed=$((executed + 1))
+    tx_hash=$(node -e 'const m=(process.argv[1]||"").match(/\b([0-9a-f]{64})\b/i);if(m)process.stdout.write(m[1].toLowerCase())' "$out")
+    [ -z "$tx_hash" ] || EXEC_TX_HASHES+=("$tx_hash")
+    exec_ledger=$(node -e 'const m=(process.argv[1]||"").match(/"ledger"\s*:\s*(\d+)|ledger(?:\s+sequence)?[:\s]+(\d+)|in ledger\s+(\d+)/i);if(m)process.stdout.write(m[1]||m[2]||m[3])' "$out")
+    [ -z "$exec_ledger" ] || LAST_EXEC_LEDGER="$exec_ledger"
   else
     printf '\n%s\n' "$out" | tail -8
     case "$out" in
@@ -72,6 +78,15 @@ for i in $(seq 0 $((COUNT - 1))); do
     esac
   fi
 done
+
+if [ "$executed" -gt 0 ]; then
+  note "recording network-bound activation position"
+  TX_JSON=$(printf '%s\n' "${EXEC_TX_HASHES[@]}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.stringify(s.trim().split("\n").filter(Boolean))))')
+  STELLAR_NETWORK="$NETWORK" \
+  ACTIVATION_LEDGER="$LAST_EXEC_LEDGER" \
+  ACTIVATION_TX_HASHES_JSON="$TX_JSON" \
+  node "$(dirname "${BASH_SOURCE[0]}")/write-record.mjs" "$RECORD" --phase activate || die "updating activation position"
+fi
 
 note "result"
 say "executed this run  $executed"

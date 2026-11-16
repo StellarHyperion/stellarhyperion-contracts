@@ -54,5 +54,8 @@ export * from "./quotes.js";
 // Deployment records, and a loader that checks them instead of casting them.
 export * from "./deployments.js";
 
+// Network-bound deployment record assembly, lifecycle positions, and legacy evidence inspection.
+export * from "./network-record.js";
+
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";

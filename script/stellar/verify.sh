@@ -46,10 +46,14 @@ note "the record is still valid as written"
 # on and that message is the entire reason to run it.
 node -e '
 const fs = require("fs");
-import(process.argv[2])
-  .then(({ parseDeploymentSet }) => {
-    parseDeploymentSet(JSON.parse(fs.readFileSync(process.argv[1], "utf8")));
-    process.stdout.write("   ok   schema\n");
+const { pathToFileURL } = require("url");
+import(pathToFileURL(process.argv[2]).href)
+  .then(({ parseNetworkBoundDeploymentSet, formatNetworkBoundSummary }) => {
+    const bound = parseNetworkBoundDeploymentSet(JSON.parse(fs.readFileSync(process.argv[1], "utf8")));
+    process.stdout.write("   ok   schema and network binding\n");
+    for (const line of formatNetworkBoundSummary(bound).split("\n")) {
+      process.stdout.write("   " + line + "\n");
+    }
   })
   .catch((error) => {
     process.stderr.write(String(error && error.message ? error.message : error) + "\n");

@@ -84,6 +84,7 @@ say "router           $ROUTER"
 # which it cannot do. The deployer queues and executes, and the last queued action hands over.
 note "initializing the router"
 ROUTER_LEDGER=""
+ROUTER_INIT_TX_HASH=""
 if is_initialized "$ROUTER"; then
   say "already initialized, leaving it alone"
 else
@@ -108,7 +109,13 @@ const m = out.match(/"ledger"\s*:\s*(\d+)/i) ||
           out.match(/in ledger\s+(\d+)/i);
 if (m) process.stdout.write(m[1]);
 ' "$INIT_OUT")
+ROUTER_INIT_TX_HASH=$(node -e '
+const out = process.argv[1] || "";
+const m = out.match(/\b([0-9a-f]{64})\b/i);
+if (m) process.stdout.write(m[1].toLowerCase());
+' "$INIT_OUT")
 [ -z "$ROUTER_LEDGER" ] || say "router ledger    $ROUTER_LEDGER"
+[ -z "$ROUTER_INIT_TX_HASH" ] || say "router init tx   $ROUTER_INIT_TX_HASH"
 fi
 
 # ---------------------------------------------------------------------------------------------
@@ -284,6 +291,7 @@ WHAT_JSON=$(printf '%s\n' "${QUEUE_WHAT[@]}" | node -e 'let s="";process.stdin.o
 STELLAR_NETWORK="$NETWORK" \
 HYPERION_ROUTER="$ROUTER" \
 HYPERION_ROUTER_LEDGER="$ROUTER_LEDGER" \
+ROUTER_INIT_TX_HASH="$ROUTER_INIT_TX_HASH" \
 HYPERION_CCTP="$CCTP" \
 HYPERION_AXELAR="$AXELAR" \
 HYPERION_SAC="$SAC" \
@@ -300,7 +308,7 @@ HYPERION_TOKEN_FLOW_LIMIT="$FLOW_LIMIT" \
 HYPERION_PEER_CHAIN="$PEER" \
 ROUTER_HASH="$ROUTER_HASH" CCTP_HASH="$CCTP_HASH" AXELAR_HASH="$AXELAR_HASH" \
 QUEUE_IDS_JSON="$IDS_JSON" QUEUE_WHAT_JSON="$WHAT_JSON" \
-node "$(dirname "${BASH_SOURCE[0]}")/write-record.mjs" "$RECORD" || die "writing the record"
+node "$(dirname "${BASH_SOURCE[0]}")/write-record.mjs" "$RECORD" --phase init || die "writing the record"
 say "$RECORD"
 
 note "phase one is done"
