@@ -46,11 +46,13 @@ import {
     Origin,
     OutboundRequest,
     PendingClaim,
+    ProvenanceWindow,
     QueuedAction,
     QuoteBlocker,
     RouteKind,
     RouteQuote,
-    TokenConfig
+    TokenConfig,
+    TransferProvenance
 } from "./HyperionTypes.sol";
 import {IHyperionRouter} from "./interfaces/IHyperionRouter.sol";
 import {IRailAdapter} from "./interfaces/IRailAdapter.sol";
@@ -105,6 +107,9 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     /// @notice The longest flow window a limit can be measured over, in seconds.
     uint64 public constant MAX_FLOW_WINDOW = 7 days;
 
+    /// @notice Fixed ring-buffer slot count for read-only outbound transfer provenance lookups.
+    uint64 public constant PROVENANCE_CAPACITY = 256;
+
     /// @notice Where the fee goes.
     address public treasury;
 
@@ -150,11 +155,16 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         uint256 fee;
         uint256 net;
         uint256 gross;
+        uint256 landing;
         address adapterAddress;
+        AddressKind destinationKind;
+        bytes32 destinationKey;
+        uint64 destinationMuxedId;
     }
 
     mapping(uint64 claimId => PendingClaim claim) private _claims;
     mapping(uint64 actionId => QueuedAction queued) private _actions;
+    mapping(uint64 slot => TransferProvenance record) private _provenance;
 
     /// @param admin Holds every privileged power, all of them behind the timelock.
     /// @notice Wires up the router with its roles, its treasury, and its fee and timing limits.
@@ -229,6 +239,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
             request.token, plan.net, request.destination, nonce
         );
 
+        _recordProvenance(request, plan, nonce, railRef);
         _announceOutbound(request, plan, nonce, railRef);
 
         // Rails quote destination gas optimistically and refund the difference. Keeping it would
@@ -249,7 +260,8 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         if (!routeEnabled[request.route]) revert RouteDisabled();
         if (bytes(request.destination.chain).length == 0) revert UnknownChain();
 
-        (AddressKind kind,,) = StellarAddress.parse(request.destination.strkey);
+        (AddressKind kind, bytes32 destinationKey, uint64 muxedId) =
+            StellarAddress.parse(request.destination.strkey);
         if (kind == AddressKind.MuxedAccount && !RouteMeta.carriesPayload(request.route)) {
             revert MuxedNotSupported();
         }
@@ -275,7 +287,44 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         address adapterAddress = _adapters[request.route];
         if (adapterAddress == address(0)) revert AdapterNotSet();
 
-        plan = OutboundPlan({fee: fee, net: net, gross: fee + net, adapterAddress: adapterAddress});
+        plan = OutboundPlan({
+            fee: fee,
+            net: net,
+            gross: fee + net,
+            landing: landing,
+            adapterAddress: adapterAddress,
+            destinationKind: kind,
+            destinationKey: destinationKey,
+            destinationMuxedId: muxedId
+        });
+    }
+
+    /// @dev Writes fixed-width provenance metadata into the circular slot for `nonce`.
+    function _recordProvenance(
+        OutboundRequest calldata request,
+        OutboundPlan memory plan,
+        uint64 nonce,
+        bytes32 railRef
+    ) private {
+        _provenance[nonce % PROVENANCE_CAPACITY] = TransferProvenance({
+            nonce: nonce,
+            route: request.route,
+            sender: msg.sender,
+            adapter: plan.adapterAddress,
+            token: request.token,
+            grossAmount: plan.gross,
+            fee: plan.fee,
+            netAmount: plan.net,
+            destinationAmount: plan.landing,
+            minDestinationAmount: request.minDestinationAmount,
+            destinationDecimals: request.destinationDecimals,
+            destinationKind: plan.destinationKind,
+            destinationKey: plan.destinationKey,
+            destinationMuxedId: plan.destinationMuxedId,
+            destinationChainHash: keccak256(bytes(request.destination.chain)),
+            railRef: railRef,
+            createdAt: uint64(block.timestamp)
+        });
     }
 
     /// @dev The log is the only record this chain keeps of a departure, so it carries every field
@@ -657,6 +706,28 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     /// @notice How many privileged changes have been queued since deployment.
     function actionCount() external view returns (uint64) {
         return _actionCount;
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function transferProvenance(uint64 nonce)
+        external
+        view
+        override
+        returns (TransferProvenance memory record)
+    {
+        if (nonce == 0) return record;
+        TransferProvenance memory stored = _provenance[nonce % PROVENANCE_CAPACITY];
+        if (stored.nonce != nonce) return record;
+        return stored;
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function provenanceWindow() external view override returns (ProvenanceWindow memory window) {
+        uint64 latest = outboundNonce;
+        uint64 earliest =
+            latest == 0 ? 0 : (latest > PROVENANCE_CAPACITY ? latest - PROVENANCE_CAPACITY + 1 : 1);
+        window =
+            ProvenanceWindow({capacity: PROVENANCE_CAPACITY, earliestNonce: earliest, latestNonce: latest});
     }
 
     // -------------------------------------------------------------------------------------

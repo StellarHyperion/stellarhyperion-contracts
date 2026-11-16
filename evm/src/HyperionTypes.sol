@@ -61,13 +61,54 @@ struct TokenConfig {
     bool enabled;
 }
 
-/// @dev Notes on two structs that exist on the Stellar side and deliberately do not exist here.
+/// @dev Bounded provenance metadata for a recent outbound transfer.
 ///
-/// `TransferRecord` and `InboundRecord` are stored contract state in the Soroban router, because
-/// Soroban events are not retained for long and an indexer that falls behind has nowhere else to
-/// look. On this chain a log is permanent and indexable by topic, so the same information is
-/// emitted and not written to storage. Paying sixty thousand gas per transfer to duplicate a log
-/// into a mapping nothing on chain ever reads would be a cost with no reader.
+/// Stored in a fixed-capacity circular buffer (`PROVENANCE_CAPACITY` slots) using fixed-width
+/// digests and decoded Stellar destination parts rather than unbounded strings. Contract state
+/// growth is capped at `256 * 11 = 2,816` storage words across the lifetime of the deployment, and
+/// dispatches past the first full cycle overwrite warm slots instead of allocating cold storage.
+///
+/// Compatibility and migration: `BridgeOut` logs remain unchanged as the permanent archival record.
+/// Callers reconciling older nonces evicted past `ProvenanceWindow.earliestNonce`, or transfers sent
+/// through a retired router deployment, fall back to `BridgeOut` logs keyed by router and `nonce`.
+struct TransferProvenance {
+    /// Router sequence number; zero when no retained record matches the requested nonce.
+    uint64 nonce;
+    RouteKind route;
+    address sender;
+    /// Rail adapter contract that accepted the outbound dispatch.
+    address adapter;
+    address token;
+    /// Total token amount pulled from the sender (`fee + netAmount`).
+    uint256 grossAmount;
+    uint256 fee;
+    /// Committed token amount transferred to `adapter` and dispatched onto the rail.
+    uint256 netAmount;
+    /// Exact landing amount expressed in `destinationDecimals`.
+    uint256 destinationAmount;
+    /// Sender's requested minimum destination amount floor.
+    uint256 minDestinationAmount;
+    uint8 destinationDecimals;
+    AddressKind destinationKind;
+    /// Decoded 32-byte Stellar destination key (`G`, `C`, or base `G` key of an `M` address).
+    bytes32 destinationKey;
+    /// SEP-23 muxed account id when `destinationKind == AddressKind.MuxedAccount`, else zero.
+    uint64 destinationMuxedId;
+    /// `keccak256(bytes(destination.chain))` for fixed-width destination chain reconciliation.
+    bytes32 destinationChainHash;
+    /// Provider reference returned by `IRailAdapter.dispatch`, or zero when unreferenced.
+    bytes32 railRef;
+    uint64 createdAt;
+}
+
+/// @dev Retention bounds for the router's on-chain outbound provenance ring buffer.
+struct ProvenanceWindow {
+    uint64 capacity;
+    /// Earliest `nonce` still retained in storage, or zero before any outbound transfer commits.
+    uint64 earliestNonce;
+    /// Latest committed `outboundNonce`, or zero before any outbound transfer commits.
+    uint64 latestNonce;
+}
 
 /// @dev Funds that arrived but could not be handed over yet.
 ///

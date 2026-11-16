@@ -8,10 +8,12 @@ import {
     Origin,
     OutboundRequest,
     PendingClaim,
+    ProvenanceWindow,
     QueuedAction,
     RouteKind,
     RouteQuote,
-    TokenConfig
+    TokenConfig,
+    TransferProvenance
 } from "../HyperionTypes.sol";
 
 /// @title The router, as everything outside it sees it
@@ -24,9 +26,8 @@ import {
 /// action that has to sit in a timelock first.
 interface IHyperionRouter {
     /// @notice A transfer left for another chain.
-    /// @dev The Soroban router writes a `TransferRecord` to storage as well as emitting, because
-    /// Soroban events age out after about a week and an indexer that fell behind has nowhere else
-    /// to look. A log on this chain is permanent, so this is the only record and that is enough.
+    /// @dev Permanent archival log for every outbound transfer. Recent departures are also retained
+    /// in a bounded on-chain ring buffer queryable via `transferProvenance` and `provenanceWindow`.
     /// @param route Which rail carried it.
     /// @param sender Who paid.
     /// @param nonce This router's counter for the transfer, and what the far side reads back.
@@ -297,4 +298,15 @@ interface IHyperionRouter {
     /// @param route The rail to check.
     /// @return True if the rail is paused.
     function routePaused(RouteKind route) external view returns (bool);
+
+    /// @notice Read bounded provenance metadata for a recent outbound transfer by source nonce.
+    /// @dev Returns a zeroed struct (`nonce == 0`) when `nonce` was never committed or has rolled
+    /// out of the fixed-capacity ring buffer, never returning a newer transfer's slot.
+    /// @param nonce Source outbound transfer sequence number to inspect.
+    /// @return Provenance metadata for `nonce`, or a zeroed record when unavailable.
+    function transferProvenance(uint64 nonce) external view returns (TransferProvenance memory);
+
+    /// @notice Read the retention capacity and currently retained nonce bounds for provenance reads.
+    /// @return Retention capacity, earliest retained nonce, and latest committed outbound nonce.
+    function provenanceWindow() external view returns (ProvenanceWindow memory);
 }

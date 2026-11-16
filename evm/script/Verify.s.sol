@@ -46,6 +46,11 @@ contract Verify is DeployConfig {
         _expectUint("fee bps", router.feeBps(), record.readUint(".feeBps"));
         _expectUint("timelock delay", router.timelockDelay(), record.readUint(".timelockDelay"));
         _expectUint("flow window", router.flowWindow(), record.readUint(".flowWindow"));
+        if (vm.keyExistsJson(record, ".provenanceCapacity")) {
+            _expectUint(
+                "provenance capacity", router.PROVENANCE_CAPACITY(), record.readUint(".provenanceCapacity")
+            );
+        }
 
         _expectAddress("cctp adapter", router.adapter(RouteKind.Cctp), address(cctp));
         _expectAddress("cctp receiver", router.railReceiver(RouteKind.Cctp), address(cctp));

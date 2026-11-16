@@ -298,6 +298,36 @@ export const hyperionRouterInterfaceAbi = [
   },
   {
     "type": "function",
+    "name": "provenanceWindow",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ProvenanceWindow",
+        "components": [
+          {
+            "name": "capacity",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "earliestNonce",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "latestNonce",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "queueAction",
     "inputs": [
       {
@@ -688,6 +718,112 @@ export const hyperionRouterInterfaceAbi = [
             "name": "enabled",
             "type": "bool",
             "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "transferProvenance",
+    "inputs": [
+      {
+        "name": "nonce",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct TransferProvenance",
+        "components": [
+          {
+            "name": "nonce",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "route",
+            "type": "uint8",
+            "internalType": "enum RouteKind"
+          },
+          {
+            "name": "sender",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "adapter",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "grossAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "fee",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "netAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "destinationAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minDestinationAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "destinationDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "destinationKind",
+            "type": "uint8",
+            "internalType": "enum AddressKind"
+          },
+          {
+            "name": "destinationKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "destinationMuxedId",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "destinationChainHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "railRef",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "createdAt",
+            "type": "uint64",
+            "internalType": "uint64"
           }
         ]
       }

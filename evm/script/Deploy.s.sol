@@ -194,6 +194,7 @@ contract Deploy is DeployConfig {
         vm.serializeUint(key, "feeBps", params.feeBps);
         vm.serializeUint(key, "timelockDelay", params.timelockDelay);
         vm.serializeUint(key, "flowWindow", params.flowWindow);
+        vm.serializeUint(key, "provenanceCapacity", router.PROVENANCE_CAPACITY());
         vm.serializeUint(key, "deployedAtBlock", block.number);
         vm.serializeUint(key, "deployedAtTimestamp", block.timestamp);
         vm.serializeString(key, "stellarChain", stellarChain());
