@@ -181,6 +181,20 @@ contract Fixture is Test {
         _run(action);
     }
 
+    function _setTokenCircuitThreshold(address token, uint256 threshold) internal {
+        AdminAction memory action = _empty(ActionKind.SetTokenCircuitThreshold);
+        action.subject = token;
+        action.amount = threshold;
+        _run(action);
+    }
+
+    function _resetTokenCircuitBreaker(address token, uint256 threshold) internal {
+        AdminAction memory action = _empty(ActionKind.ResetTokenCircuitBreaker);
+        action.subject = token;
+        action.amount = threshold;
+        _run(action);
+    }
+
     // -------------------------------------------------------------------------------------
     // Request shorthand
     // -------------------------------------------------------------------------------------

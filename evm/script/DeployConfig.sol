@@ -50,6 +50,7 @@ abstract contract DeployConfig is Script {
         address token;
         uint8 decimals;
         uint256 flowLimit;
+        uint256 circuitThreshold;
         string symbol;
     }
 
@@ -93,6 +94,7 @@ abstract contract DeployConfig is Script {
             token: vm.envAddress("HYPERION_TOKEN"),
             decimals: uint8(vm.envUint("HYPERION_TOKEN_DECIMALS")),
             flowLimit: vm.envUint("HYPERION_TOKEN_FLOW_LIMIT"),
+            circuitThreshold: vm.envOr("HYPERION_TOKEN_CIRCUIT_THRESHOLD", uint256(0)),
             symbol: vm.envOr("HYPERION_TOKEN_SYMBOL", string("USDC"))
         });
     }

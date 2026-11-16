@@ -122,6 +122,8 @@ export const EVM_ERROR_NAMES = [
   "ProtectedAsset",
   "ZeroAddress",
   "RefundFailed",
+  "CircuitBreakerActive",
+  "CircuitBreakerNotConfigured",
 ] as const;
 
 export type EvmErrorName = (typeof EVM_ERROR_NAMES)[number];
@@ -437,6 +439,17 @@ const HELP: Record<HyperionErrorName, Omit<ErrorHelp, "sorobanCode">> = {
   ExceedsRouteLimit: {
     summary: "That transfer exceeds the maximum single transfer limit configured for this route.",
     fault: "limit",
+    retryable: false,
+  },
+  CircuitBreakerActive: {
+    summary:
+      "The emergency circuit breaker for this token has reached its threshold and requires an operator reset before new departures.",
+    fault: "limit",
+    retryable: true,
+  },
+  CircuitBreakerNotConfigured: {
+    summary: "No emergency circuit breaker threshold has been configured for this token yet.",
+    fault: "config",
     retryable: false,
   },
 };

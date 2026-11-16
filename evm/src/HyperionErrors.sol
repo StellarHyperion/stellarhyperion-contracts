@@ -81,3 +81,7 @@ error ZeroAddress();
 // sending change to the sender. A sender who cannot accept it is refused rather than tipped,
 // because silently keeping the difference is a second fee nobody agreed to.
 error RefundFailed();
+
+// Emergency circuit breakers.
+error CircuitBreakerActive(address token, uint256 requested, uint256 remaining);
+error CircuitBreakerNotConfigured();

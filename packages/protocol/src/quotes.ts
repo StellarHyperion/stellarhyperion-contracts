@@ -33,6 +33,7 @@ export const QuoteBlocker = {
   MuxedNotSupported: 9,
   InvalidDestination: 10,
   ChainNotSupported: 11,
+  CircuitBreakerTripped: 12,
 } as const;
 
 export type QuoteBlocker = (typeof QuoteBlocker)[keyof typeof QuoteBlocker];
@@ -128,6 +129,13 @@ const COPY: Record<QuoteBlocker, BlockerCopy> = {
     owner: "rail",
     transient: false,
   },
+  [QuoteBlocker.CircuitBreakerTripped]: {
+    label: "Token circuit tripped",
+    detail:
+      "Cumulative departures for this asset reached its emergency threshold and must wait for a reviewed operator reset.",
+    owner: "operator",
+    transient: true,
+  },
 };
 
 export const BLOCKER_COPY: Readonly<Record<QuoteBlocker, BlockerCopy>> = Object.freeze(COPY);
@@ -182,6 +190,10 @@ export interface RouterSnapshot {
   readonly flowAvailable: Partial<Record<RouteKind, bigint>>;
   /** Per rail, whether the adapter says it can reach the destination chain. */
   readonly chainSupported: Partial<Record<RouteKind, boolean>>;
+  /** Whether the per-token emergency circuit breaker has latched shut. */
+  readonly tokenCircuitTripped?: boolean;
+  /** Remaining outbound headroom before the per-token circuit breaker trips, when configured. */
+  readonly tokenCircuitRemaining?: bigint;
 }
 
 export interface QuoteRequest {
@@ -230,6 +242,9 @@ export function planQuote(request: QuoteRequest, snapshot: RouterSnapshot): Rout
 
   if (!snapshot.tokenRegistered) return blocked(base, QuoteBlocker.TokenNotRegistered);
   if (!snapshot.tokenEnabled) return blocked(base, QuoteBlocker.TokenDisabled);
+  if (snapshot.tokenCircuitTripped === true) {
+    return blocked(base, QuoteBlocker.CircuitBreakerTripped);
+  }
 
   if (amount <= 0n) return blocked(base, QuoteBlocker.AmountTooSmall);
   if (amount > MAX_QUOTE_AMOUNT) return blocked(base, QuoteBlocker.NotRepresentable);
@@ -243,6 +258,9 @@ export function planQuote(request: QuoteRequest, snapshot: RouterSnapshot): Rout
 
   const net = floorToRepresentable(netRaw, snapshot.tokenDecimals, destinationDecimals);
   if (net === 0n) return blocked(base, QuoteBlocker.NotRepresentable);
+  if (snapshot.tokenCircuitRemaining !== undefined && net > snapshot.tokenCircuitRemaining) {
+    return blocked(base, QuoteBlocker.CircuitBreakerTripped);
+  }
 
   const headroom = snapshot.flowAvailable[route] ?? 0n;
   const withFlow: RouteQuote = { ...base, flowAvailable: headroom };

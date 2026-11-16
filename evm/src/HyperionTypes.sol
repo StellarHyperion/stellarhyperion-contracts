@@ -61,6 +61,20 @@ struct TokenConfig {
     bool enabled;
 }
 
+/// @dev Emergency per-token departure ceiling, distinct from sliding flow windows.
+///
+/// Flow limits pace routine volume over a rolling window and recover automatically as time passes.
+/// A circuit breaker tracks cumulative outbound volume since its last reviewed reset and latches
+/// shut once triggered, requiring an explicit timelocked reset rather than waiting out a clock.
+struct TokenCircuitBreaker {
+    bool configured;
+    bool tripped;
+    uint256 threshold;
+    uint256 cumulativeVolume;
+    uint64 trippedAt;
+    uint64 lastResetAt;
+}
+
 /// @dev Notes on two structs that exist on the Stellar side and deliberately do not exist here.
 ///
 /// `TransferRecord` and `InboundRecord` are stored contract state in the Soroban router, because
@@ -122,7 +136,11 @@ enum ActionKind {
     /// while an incident is running. Retiring an asset for good is a different decision, it
     /// waits out the timelock like every other one, and it should say so plainly to anybody
     /// reading a failed quote.
-    SetTokenEnabled
+    SetTokenEnabled,
+    /// Configure or change a bounded per-token emergency circuit-breaker threshold.
+    SetTokenCircuitThreshold,
+    /// Clear cumulative volume and untrip a token circuit breaker without expanding its ceiling.
+    ResetTokenCircuitBreaker
 }
 
 /// @dev One administrative change, in a shape a reviewer can read as fast as the contract can.
@@ -186,5 +204,6 @@ enum QuoteBlocker {
     NotRepresentable,
     MuxedNotSupported,
     InvalidDestination,
-    ChainNotSupported
+    ChainNotSupported,
+    CircuitBreakerTripped
 }

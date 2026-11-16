@@ -75,6 +75,8 @@ export function quoteBatch(
       staticBlocker = QuoteBlocker.TokenNotRegistered;
     } else if (!snapshot.tokenEnabled) {
       staticBlocker = QuoteBlocker.TokenDisabled;
+    } else if (snapshot.tokenCircuitTripped === true) {
+      staticBlocker = QuoteBlocker.CircuitBreakerTripped;
     } else if (tokenDecimalsInvalid) {
       staticBlocker = QuoteBlocker.NotRepresentable;
     }
@@ -128,6 +130,9 @@ export function quoteBatch(
       const net = floorToRepresentable(netRaw, snapshot.tokenDecimals, destinationDecimals);
       if (net === 0n) {
         return { ...base, reason: QuoteBlocker.NotRepresentable };
+      }
+      if (snapshot.tokenCircuitRemaining !== undefined && net > snapshot.tokenCircuitRemaining) {
+        return { ...base, reason: QuoteBlocker.CircuitBreakerTripped };
       }
 
       // Headroom flow limit check

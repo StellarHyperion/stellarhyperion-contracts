@@ -121,6 +121,18 @@ contract Deploy is DeployConfig {
             }),
             string.concat("register ", token.symbol)
         );
+        if (token.circuitThreshold != 0) {
+            _queue(
+                AdminAction({
+                    kind: ActionKind.SetTokenCircuitThreshold,
+                    route: RouteKind.Cctp,
+                    subject: token.token,
+                    amount: token.circuitThreshold,
+                    decimals: 0
+                }),
+                string.concat("set circuit threshold ", token.symbol)
+            );
+        }
 
         _queue(_routeAction(ActionKind.SetAdapter, RouteKind.Cctp, address(cctp), 0), "set cctp adapter");
         _queue(
@@ -215,6 +227,7 @@ contract Deploy is DeployConfig {
         vm.serializeAddress(key, "token", token.token);
         vm.serializeUint(key, "tokenDecimals", token.decimals);
         vm.serializeUint(key, "tokenFlowLimit", token.flowLimit);
+        vm.serializeUint(key, "tokenCircuitThreshold", token.circuitThreshold);
 
         uint256[] memory ids = new uint256[](queued.length);
         string[] memory whats = new string[](queued.length);

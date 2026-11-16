@@ -60,6 +60,8 @@ export const GENERATED_EVM_ERROR_NAMES = [
   "ProtectedAsset",
   "ZeroAddress",
   "RefundFailed",
+  "CircuitBreakerActive",
+  "CircuitBreakerNotConfigured",
 ] as const;
 
 /** Four byte selector to error, for every error the compiled contracts can actually revert with. */
@@ -98,6 +100,7 @@ export const EVM_ERROR_SELECTORS = {
   "0xa1d40c9a": { name: "DecimalOverflow", signature: "DecimalOverflow()" },
   "0xac6b05f5": { name: "InvalidDestination", signature: "InvalidDestination()" },
   "0xb3c237e0": { name: "UnexpectedRailContract", signature: "UnexpectedRailContract()" },
+  "0xb8f1e073": { name: "CircuitBreakerNotConfigured", signature: "CircuitBreakerNotConfigured()" },
   "0xcc3da7e0": { name: "TimelockDelayOutOfRange", signature: "TimelockDelayOutOfRange()" },
   "0xcd4e6167": { name: "FeeTooHigh", signature: "FeeTooHigh()" },
   "0xd25598a0": { name: "InvalidDecimals", signature: "InvalidDecimals()" },
@@ -105,6 +108,7 @@ export const EVM_ERROR_SELECTORS = {
   "0xd92e233d": { name: "ZeroAddress", signature: "ZeroAddress()" },
   "0xd93c0665": { name: "EnforcedPause", signature: "EnforcedPause()" },
   "0xdf359a15": { name: "FlowLimitExceeded", signature: "FlowLimitExceeded(uint256,uint256)" },
+  "0xdf74e893": { name: "CircuitBreakerActive", signature: "CircuitBreakerActive(address,uint256,uint256)" },
   "0xdfc44acf": { name: "TimelockNotQueued", signature: "TimelockNotQueued()" },
   "0xe2517d3f": { name: "AccessControlUnauthorizedAccount", signature: "AccessControlUnauthorizedAccount(address,bytes32)" },
   "0xe55fb509": { name: "InvalidLimit", signature: "InvalidLimit()" },

@@ -201,6 +201,31 @@ describe("the reasons a quote comes back empty", () => {
     expect(quote.flowAvailable).toBe(500_000n);
   });
 
+  it("reports a tripped or exceeded per-token circuit breaker distinctly from flow limits", () => {
+    const tripped = planQuote(
+      { ...request, route: RouteKind.Cctp },
+      snapshot({ tokenCircuitTripped: true }),
+    );
+    expect(tripped.available).toBe(false);
+    expect(tripped.reason).toBe(QuoteBlocker.CircuitBreakerTripped);
+
+    const exceeded = planQuote(
+      { ...request, route: RouteKind.Cctp },
+      snapshot({ tokenCircuitRemaining: 500_000n }),
+    );
+    expect(exceeded.available).toBe(false);
+    expect(exceeded.reason).toBe(QuoteBlocker.CircuitBreakerTripped);
+
+    const batch = quoteBatch([100_000n, 1_000_000n], {
+      strkey: G_ADDR,
+      destinationDecimals: 7,
+      snapshot: snapshot({ tokenCircuitRemaining: 500_000n }),
+    });
+    expect(batch[0]!.available).toBe(true);
+    expect(batch[1]!.available).toBe(false);
+    expect(batch[1]!.quotes[0]!.reason).toBe(QuoteBlocker.CircuitBreakerTripped);
+  });
+
   it("treats a rail missing from the snapshot as closed rather than open", () => {
     // Failing shut. An absent key is an unknown, and an unknown rail is not a rail to send on.
     const quote = planQuote(

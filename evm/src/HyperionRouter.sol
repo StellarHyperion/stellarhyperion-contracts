@@ -11,6 +11,8 @@ import {
     ActionFieldNotEmpty,
     AdapterNotSet,
     AmountNotRepresentable,
+    CircuitBreakerActive,
+    CircuitBreakerNotConfigured,
     ClaimAlreadySettled,
     ClaimNotFound,
     FeeTooHigh,
@@ -50,6 +52,7 @@ import {
     QuoteBlocker,
     RouteKind,
     RouteQuote,
+    TokenCircuitBreaker,
     TokenConfig
 } from "./HyperionTypes.sol";
 import {IHyperionRouter} from "./interfaces/IHyperionRouter.sol";
@@ -105,6 +108,9 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     /// @notice The longest flow window a limit can be measured over, in seconds.
     uint64 public constant MAX_FLOW_WINDOW = 7 days;
 
+    /// @notice Upper bound on per-token emergency circuit-breaker thresholds.
+    uint256 public constant MAX_CIRCUIT_THRESHOLD = type(uint128).max;
+
     /// @notice Where the fee goes.
     address public treasury;
 
@@ -131,6 +137,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     /// @notice Whether an individual rail is currently paused for departures.
     mapping(RouteKind route => bool paused) public routePaused;
     mapping(address token => TokenConfig config) private _tokens;
+    mapping(address token => TokenCircuitBreaker breaker) private _circuitBreakers;
 
     /// @dev Keyed on token and rail together, because a ceiling that makes sense for the rail
     /// carrying native USDC makes no sense for the one carrying a pooled representation of it.
@@ -270,6 +277,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         // The flow limit is charged against what crosses, not against what the sender handed
         // over. The fee never leaves this chain, so it is not cross-chain exposure and counting
         // it would tighten the limit by a number nobody picked.
+        _consumeCircuitBreaker(request.token, net);
         _consumeFlow(request.token, request.route, net);
 
         address adapterAddress = _adapters[request.route];
@@ -425,22 +433,15 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         TokenConfig memory cfg = _tokens[token];
         if (!cfg.registered) return _blocked(q, QuoteBlocker.TokenNotRegistered);
         if (!cfg.enabled) return _blocked(q, QuoteBlocker.TokenDisabled);
+        if (_circuitBreakers[token].tripped) return _blocked(q, QuoteBlocker.CircuitBreakerTripped);
 
         if (amount == 0) return _blocked(q, QuoteBlocker.AmountTooSmall);
 
-        // Nothing past this is a transfer anybody is attempting, and the arithmetic below would
-        // panic rather than answer. Promising never to revert is the whole value of this
-        // function: it is what lets an app render four rows without wrapping each one in a try,
-        // so even the absurd question gets a reason back. The bound is chosen so that the fee
-        // multiply and a widening of up to thirty eight decimal places both stay inside a word.
+        // Bound chosen so fee multiply and decimal widening both stay inside a word.
         if (amount > type(uint128).max) return _blocked(q, QuoteBlocker.NotRepresentable);
 
         uint256 fee = (amount * feeBps) / AmountMath.BPS_DENOMINATOR;
         uint256 netRaw = amount - fee;
-        // Only reachable if `MAX_FEE_BPS` were ever raised to ten thousand, the same way the
-        // matching guard in `AmountMath.applyFee` is. Kept for the same reason: the invariant
-        // worth stating is "a transfer always delivers something", not "today's constants
-        // happen to make that true".
         if (netRaw == 0) return _blocked(q, QuoteBlocker.AmountTooSmall);
         if (cfg.decimals > AmountMath.MAX_DECIMALS || destinationDecimals > AmountMath.MAX_DECIMALS) {
             return _blocked(q, QuoteBlocker.NotRepresentable);
@@ -448,6 +449,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
 
         uint256 net = AmountMath.floorToRepresentable(netRaw, cfg.decimals, destinationDecimals);
         if (net == 0) return _blocked(q, QuoteBlocker.NotRepresentable);
+        if (_quoteCircuitBlocked(token, net)) return _blocked(q, QuoteBlocker.CircuitBreakerTripped);
 
         uint256 headroom = flowAvailable(token, route);
         q.flowAvailable = headroom;
@@ -544,6 +546,45 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         emit TokenRegistered(token, cfg);
     }
 
+    /// @inheritdoc IHyperionRouter
+    function tightenTokenCircuitThreshold(address token, uint256 threshold) external override {
+        if (!hasRole(GUARDIAN_ROLE, msg.sender) && !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            revert Unauthorized();
+        }
+        if (!_tokens[token].registered) revert TokenNotRegistered();
+        if (threshold == 0 || threshold > MAX_CIRCUIT_THRESHOLD) revert InvalidLimit();
+
+        TokenCircuitBreaker storage cb = _circuitBreakers[token];
+        if (cb.configured && threshold >= cb.threshold) revert LimitNotRaised();
+
+        cb.configured = true;
+        cb.threshold = threshold;
+        if (cb.lastResetAt == 0) cb.lastResetAt = uint64(block.timestamp);
+        emit CircuitThresholdConfigured(token, msg.sender, threshold);
+
+        if (!cb.tripped && cb.cumulativeVolume >= threshold) {
+            cb.tripped = true;
+            cb.trippedAt = uint64(block.timestamp);
+            emit CircuitBreakerTripped(token, msg.sender, cb.cumulativeVolume, threshold);
+        }
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function tripTokenCircuitBreaker(address token) external override {
+        if (!hasRole(GUARDIAN_ROLE, msg.sender) && !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            revert Unauthorized();
+        }
+        if (!_tokens[token].registered) revert TokenNotRegistered();
+        TokenCircuitBreaker storage cb = _circuitBreakers[token];
+        if (!cb.configured) revert CircuitBreakerNotConfigured();
+
+        if (!cb.tripped) {
+            cb.tripped = true;
+            cb.trippedAt = uint64(block.timestamp);
+            emit CircuitBreakerTripped(token, msg.sender, cb.cumulativeVolume, cb.threshold);
+        }
+    }
+
     // -------------------------------------------------------------------------------------
     // Everything else, on a clock
     // -------------------------------------------------------------------------------------
@@ -634,6 +675,19 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     }
 
     /// @inheritdoc IHyperionRouter
+    function tokenCircuitBreaker(address token) external view override returns (TokenCircuitBreaker memory) {
+        return _circuitBreakers[token];
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function circuitRemaining(address token) public view override returns (uint256) {
+        TokenCircuitBreaker storage cb = _circuitBreakers[token];
+        if (!cb.configured) return type(uint256).max;
+        if (cb.tripped || cb.cumulativeVolume >= cb.threshold) return 0;
+        return cb.threshold - cb.cumulativeVolume;
+    }
+
+    /// @inheritdoc IHyperionRouter
     function adapter(RouteKind route) external view override returns (address) {
         return _adapters[route];
     }
@@ -680,6 +734,29 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         );
     }
 
+    function _consumeCircuitBreaker(address token, uint256 amount) private {
+        TokenCircuitBreaker storage cb = _circuitBreakers[token];
+        if (!cb.configured) return;
+        if (cb.tripped) revert CircuitBreakerActive(token, amount, 0);
+
+        uint256 remaining = cb.threshold > cb.cumulativeVolume ? cb.threshold - cb.cumulativeVolume : 0;
+        if (amount > remaining) revert CircuitBreakerActive(token, amount, remaining);
+
+        uint256 updated = cb.cumulativeVolume + amount;
+        cb.cumulativeVolume = updated;
+        if (updated == cb.threshold) {
+            cb.tripped = true;
+            cb.trippedAt = uint64(block.timestamp);
+            emit CircuitBreakerTripped(token, msg.sender, updated, cb.threshold);
+        }
+    }
+
+    function _quoteCircuitBlocked(address token, uint256 net) private view returns (bool) {
+        TokenCircuitBreaker storage cb = _circuitBreakers[token];
+        if (!cb.configured) return false;
+        return cb.tripped || cb.cumulativeVolume + net > cb.threshold;
+    }
+
     /// @dev Pay out without letting a refusal take the whole delivery down with it.
     ///
     /// A token can decline a transfer for reasons that have nothing to do with Hyperion: USDC
@@ -719,11 +796,13 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
             || kind == ActionKind.SetGuardian || kind == ActionKind.SetAdapter
             || kind == ActionKind.SetRailReceiver || kind == ActionKind.RegisterToken
             || kind == ActionKind.RaiseTokenFlowLimit || kind == ActionKind.SetRouteFlowLimit
-            || kind == ActionKind.SetTokenEnabled;
+            || kind == ActionKind.SetTokenEnabled || kind == ActionKind.SetTokenCircuitThreshold
+            || kind == ActionKind.ResetTokenCircuitBreaker;
         bool usesAmount = kind == ActionKind.SetFeeBps || kind == ActionKind.EnableRoute
             || kind == ActionKind.RegisterToken || kind == ActionKind.RaiseTokenFlowLimit
             || kind == ActionKind.SetRouteFlowLimit || kind == ActionKind.SetTimelockDelay
-            || kind == ActionKind.SetFlowWindow || kind == ActionKind.SetTokenEnabled;
+            || kind == ActionKind.SetFlowWindow || kind == ActionKind.SetTokenEnabled
+            || kind == ActionKind.SetTokenCircuitThreshold || kind == ActionKind.ResetTokenCircuitBreaker;
         bool usesDecimals = kind == ActionKind.RegisterToken;
 
         if (!usesRoute && action.route != RouteKind.Cctp) revert ActionFieldNotEmpty();
@@ -754,10 +833,28 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         if (kind == ActionKind.SetFlowWindow) {
             if (action.amount < MIN_FLOW_WINDOW || action.amount > MAX_FLOW_WINDOW) revert InvalidWindow();
         }
+        _validateCircuitAction(action);
+    }
+
+    function _validateCircuitAction(AdminAction memory action) private view {
+        if (action.kind == ActionKind.SetTokenCircuitThreshold) {
+            if (action.amount == 0 || action.amount > MAX_CIRCUIT_THRESHOLD) revert InvalidLimit();
+            return;
+        }
+        if (action.kind == ActionKind.ResetTokenCircuitBreaker) {
+            if (!_tokens[action.subject].registered) revert TokenNotRegistered();
+            TokenCircuitBreaker storage cb = _circuitBreakers[action.subject];
+            if (!cb.configured) revert CircuitBreakerNotConfigured();
+            if (action.amount == 0 || action.amount > cb.threshold) revert InvalidLimit();
+        }
     }
 
     function _applyAction(AdminAction memory action) private {
         ActionKind kind = action.kind;
+        if (kind == ActionKind.SetTokenCircuitThreshold || kind == ActionKind.ResetTokenCircuitBreaker) {
+            _applyCircuitAction(action);
+            return;
+        }
 
         if (kind == ActionKind.SetFeeBps) {
             feeBps = uint16(action.amount);
@@ -808,5 +905,31 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         }
 
         emit ConfigChanged(treasury, feeBps, timelockDelay, flowWindow);
+    }
+
+    function _applyCircuitAction(AdminAction memory action) private {
+        if (!_tokens[action.subject].registered) revert TokenNotRegistered();
+        TokenCircuitBreaker storage cb = _circuitBreakers[action.subject];
+
+        if (action.kind == ActionKind.SetTokenCircuitThreshold) {
+            cb.configured = true;
+            cb.threshold = action.amount;
+            if (cb.lastResetAt == 0) cb.lastResetAt = uint64(block.timestamp);
+            emit CircuitThresholdConfigured(action.subject, msg.sender, action.amount);
+            if (!cb.tripped && cb.cumulativeVolume >= action.amount) {
+                cb.tripped = true;
+                cb.trippedAt = uint64(block.timestamp);
+                emit CircuitBreakerTripped(action.subject, msg.sender, cb.cumulativeVolume, action.amount);
+            }
+            return;
+        }
+
+        uint256 cleared = cb.cumulativeVolume;
+        cb.threshold = action.amount;
+        cb.cumulativeVolume = 0;
+        cb.tripped = false;
+        cb.trippedAt = 0;
+        cb.lastResetAt = uint64(block.timestamp);
+        emit CircuitBreakerReset(action.subject, cleared, action.amount);
     }
 }

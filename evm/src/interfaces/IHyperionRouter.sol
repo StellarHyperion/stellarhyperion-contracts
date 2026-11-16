@@ -11,6 +11,7 @@ import {
     QueuedAction,
     RouteKind,
     RouteQuote,
+    TokenCircuitBreaker,
     TokenConfig
 } from "../HyperionTypes.sol";
 
@@ -167,6 +168,27 @@ interface IHyperionRouter {
     /// @param flowWindow How long a flow window now runs, in seconds.
     event ConfigChanged(address treasury, uint16 feeBps, uint64 timelockDelay, uint64 flowWindow);
 
+    /// @notice A per-token emergency circuit-breaker threshold was configured or tightened.
+    /// @param token The ERC20 whose emergency ceiling changed.
+    /// @param by Who applied or tightened the threshold.
+    /// @param threshold The cumulative outbound ceiling in token units.
+    event CircuitThresholdConfigured(address indexed token, address indexed by, uint256 threshold);
+
+    /// @notice A token's emergency circuit breaker latched shut and stopped new departures.
+    /// @param token The ERC20 whose departures were halted.
+    /// @param triggeredBy The sender or operator whose call latched the breaker.
+    /// @param cumulativeVolume Cumulative outbound net volume recorded since the last reset.
+    /// @param threshold The active threshold when the breaker latched.
+    event CircuitBreakerTripped(
+        address indexed token, address indexed triggeredBy, uint256 cumulativeVolume, uint256 threshold
+    );
+
+    /// @notice A tripped or accumulated token circuit breaker was reset after timelock review.
+    /// @param token The ERC20 whose circuit breaker was reset.
+    /// @param clearedVolume Cumulative outbound volume cleared by the reset.
+    /// @param threshold The post-reset threshold enforced going forward.
+    event CircuitBreakerReset(address indexed token, uint256 clearedVolume, uint256 threshold);
+
     /// @notice Send `request.amount` of a token to another chain.
     /// @dev Pull, then fee, then floor, then hand off. The fee comes off the raw amount and the
     /// remainder is floored to what the destination can actually represent, in that order, so the
@@ -297,4 +319,23 @@ interface IHyperionRouter {
     /// @param route The rail to check.
     /// @return True if the rail is paused.
     function routePaused(RouteKind route) external view returns (bool);
+
+    /// @notice Configure an initial bounded circuit threshold or tighten an existing one immediately.
+    /// @param token The registered ERC20 whose emergency ceiling should be tightened.
+    /// @param threshold The bounded cumulative ceiling, strictly lower than any existing threshold.
+    function tightenTokenCircuitThreshold(address token, uint256 threshold) external;
+
+    /// @notice Latch a configured token circuit breaker shut immediately without waiting.
+    /// @param token The registered ERC20 whose circuit breaker should trip.
+    function tripTokenCircuitBreaker(address token) external;
+
+    /// @notice Read a token's emergency circuit-breaker state and cumulative departure volume.
+    /// @param token The ERC20 to inspect.
+    /// @return The circuit-breaker configuration, cumulative volume, and trip state.
+    function tokenCircuitBreaker(address token) external view returns (TokenCircuitBreaker memory);
+
+    /// @notice Remaining outbound volume before a token's circuit breaker trips.
+    /// @param token The ERC20 to inspect.
+    /// @return Remaining headroom in token units, or `type(uint256).max` when unconfigured.
+    function circuitRemaining(address token) external view returns (uint256);
 }

@@ -69,6 +69,16 @@ contract Verify is DeployConfig {
         _expectUint(
             "token flow limit", router.tokenConfig(token).flowLimit, record.readUint(".tokenFlowLimit")
         );
+        if (vm.keyExistsJson(record, ".tokenCircuitThreshold")) {
+            uint256 recordedCircuit = record.readUint(".tokenCircuitThreshold");
+            if (recordedCircuit != 0) {
+                _expectTrue("token circuit configured", router.tokenCircuitBreaker(token).configured);
+                _expectUint(
+                    "token circuit threshold", router.tokenCircuitBreaker(token).threshold, recordedCircuit
+                );
+                _expectFalse("token circuit tripped", router.tokenCircuitBreaker(token).tripped);
+            }
+        }
 
         _expectFalse("router paused", router.paused());
 
