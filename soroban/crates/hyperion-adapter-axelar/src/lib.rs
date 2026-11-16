@@ -69,7 +69,7 @@ use soroban_sdk::{
 };
 
 use rail::{InterchainTokenServiceClient, Token, TokenManagerType};
-use types::{ChainLink, Config};
+use types::{ChainLink, Config, DestinationCapability};
 
 #[contract]
 pub struct AxelarAdapter;
@@ -141,12 +141,24 @@ impl AxelarAdapter {
 
         let this = env.current_contract_address();
         let its = InterchainTokenServiceClient::new(&env, &cfg.its);
+        let manager_type = its.token_manager_type(&token_id);
+
+        // Enforce destination capability admission before authorizing or moving any assets.
+        check_dispatch_capability(
+            &env,
+            &cfg,
+            &link,
+            &token,
+            &token_id,
+            manager_type,
+            amount,
+            false,
+        )?;
 
         // Ask ITS how it intends to take the funds rather than authorising every way it might.
         // Three of the four manager types burn straight out of this balance and only
         // `LockUnlock` moves them somewhere, so one read here buys an authorisation that names
         // exactly one call instead of a pair covering both.
-        let manager_type = its.token_manager_type(&token_id);
         let context = if manager_type.takes_by_burning() {
             ContractContext {
                 contract: token.clone(),
@@ -244,6 +256,20 @@ impl AxelarAdapter {
         let token_id = storage::token_id(&env, &token).ok_or(HyperionError::TokenNotMapped)?;
         let recipient = bytes32_to_evm(&env, &destination)?;
         let its = InterchainTokenServiceClient::new(&env, &cfg.its);
+        let manager_type = its.token_manager_type(&token_id);
+
+        // Enforce destination capability admission before ITS touches sender token or gas balances.
+        check_dispatch_capability(
+            &env,
+            &cfg,
+            &link,
+            &token,
+            &token_id,
+            manager_type,
+            amount,
+            true,
+        )?;
+
         let destination_address = Bytes::from_array(&env, &recipient.to_array());
         its.interchain_transfer(
             &sender,
@@ -264,7 +290,7 @@ impl AxelarAdapter {
             token_id: token_id.clone(),
             axelar_chain: link.axelar_chain,
             destination_address,
-            token_manager_type: its.token_manager_type(&token_id),
+            token_manager_type: manager_type,
             note: None,
             router_nonce: nonce,
         }
@@ -503,6 +529,127 @@ impl AxelarAdapter {
         Ok(())
     }
 
+    /// Record or update an explicit validated capability admission entry for `(chain, token)`,
+    /// separating bare ITS transfer support from GMP contract-call payload support.
+    #[allow(clippy::too_many_arguments)]
+    pub fn admit_capability(
+        env: Env,
+        chain: String,
+        token: Address,
+        remote_manager_type: TokenManagerType,
+        supports_direct_its: bool,
+        supports_gmp_payload: bool,
+        supports_paid_dispatch: bool,
+        max_transfer_amount: i128,
+    ) -> Result<DestinationCapability, HyperionError> {
+        let cfg = require_admin(&env)?;
+        if max_transfer_amount < 0 {
+            return Err(HyperionError::InvalidLimit);
+        }
+        if !supports_direct_its && !supports_gmp_payload {
+            return Err(HyperionError::UnsupportedRoute);
+        }
+        if supports_paid_dispatch && !supports_direct_its {
+            return Err(HyperionError::UnsupportedRoute);
+        }
+
+        let link = storage::link(&env, &chain).ok_or(HyperionError::UnknownChain)?;
+        if supports_gmp_payload && link.peer == BytesN::from_array(&env, &[0u8; 20]) {
+            return Err(HyperionError::ZeroAddressKey);
+        }
+
+        let its = InterchainTokenServiceClient::new(&env, &cfg.its);
+        if !its.is_trusted_chain(&link.axelar_chain) {
+            return Err(HyperionError::UnknownChain);
+        }
+
+        let token_id = storage::token_id(&env, &token).ok_or(HyperionError::TokenNotMapped)?;
+        let registered = its
+            .try_registered_token_address(&token_id)
+            .map_err(|_| HyperionError::TokenNotMapped)?
+            .map_err(|_| HyperionError::TokenNotMapped)?;
+        if registered != token {
+            return Err(HyperionError::TokenNotMapped);
+        }
+
+        let local_manager_type = its
+            .try_token_manager_type(&token_id)
+            .map_err(|_| HyperionError::TokenNotMapped)?
+            .map_err(|_| HyperionError::TokenNotMapped)?;
+        if local_manager_type == TokenManagerType::LockUnlock {
+            its.try_deployed_token_manager(&token_id)
+                .map_err(|_| HyperionError::RailNotConfigured)?
+                .map_err(|_| HyperionError::RailNotConfigured)?;
+        }
+
+        let cap = DestinationCapability {
+            chain: link.chain,
+            axelar_chain: link.axelar_chain,
+            token,
+            token_id,
+            local_manager_type,
+            remote_manager_type,
+            supports_direct_its,
+            supports_gmp_payload,
+            supports_paid_dispatch,
+            max_transfer_amount,
+            enabled: true,
+        };
+        storage::set_capability(&env, &cap);
+        events::CapabilityAdmitted {
+            chain: cap.chain.clone(),
+            token: cap.token.clone(),
+            token_id: cap.token_id.clone(),
+            local_manager_type: cap.local_manager_type,
+            remote_manager_type: cap.remote_manager_type,
+            supports_direct_its: cap.supports_direct_its,
+            supports_gmp_payload: cap.supports_gmp_payload,
+            supports_paid_dispatch: cap.supports_paid_dispatch,
+            max_transfer_amount: cap.max_transfer_amount,
+            enabled: cap.enabled,
+        }
+        .publish(&env);
+        Ok(cap)
+    }
+
+    /// Disable an existing destination capability record without deleting its history. Admin only.
+    pub fn disable_capability(
+        env: Env,
+        chain: String,
+        token: Address,
+    ) -> Result<DestinationCapability, HyperionError> {
+        let _ = require_admin(&env)?;
+        let token_id = storage::token_id(&env, &token).ok_or(HyperionError::TokenNotMapped)?;
+        let mut cap =
+            storage::capability(&env, &chain, &token_id).ok_or(HyperionError::RailNotConfigured)?;
+        cap.enabled = false;
+        storage::set_capability(&env, &cap);
+        events::CapabilityAdmitted {
+            chain: cap.chain.clone(),
+            token: cap.token.clone(),
+            token_id: cap.token_id.clone(),
+            local_manager_type: cap.local_manager_type,
+            remote_manager_type: cap.remote_manager_type,
+            supports_direct_its: cap.supports_direct_its,
+            supports_gmp_payload: cap.supports_gmp_payload,
+            supports_paid_dispatch: cap.supports_paid_dispatch,
+            max_transfer_amount: cap.max_transfer_amount,
+            enabled: false,
+        }
+        .publish(&env);
+        Ok(cap)
+    }
+
+    /// Toggle whether every outbound dispatch requires an explicit admitted capability record.
+    /// Defaults to `false` so existing active Sepolia ITS lanes continue operating seamlessly
+    /// across upgrades until operators opt in to strict enforcement.
+    pub fn set_strict_capabilities(env: Env, required: bool) -> Result<(), HyperionError> {
+        let _ = require_admin(&env)?;
+        storage::set_strict_capabilities(&env, required);
+        events::StrictCapabilitiesSet { required }.publish(&env);
+        Ok(())
+    }
+
     /// Hand the admin role to somebody else.
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), HyperionError> {
         let mut cfg = require_admin(&env)?;
@@ -573,6 +720,108 @@ impl AxelarAdapter {
         let token_id = storage::token_id(&env, &token).ok_or(HyperionError::TokenNotMapped)?;
         Ok(InterchainTokenServiceClient::new(&env, &cfg.its).flow_limit(&token_id))
     }
+
+    /// Read the admitted destination capability record for `(chain, token)`, if configured.
+    pub fn get_capability(
+        env: Env,
+        chain: String,
+        token: Address,
+    ) -> Result<Option<DestinationCapability>, HyperionError> {
+        let _ = storage::config(&env)?;
+        let token_id = storage::token_id(&env, &token).ok_or(HyperionError::TokenNotMapped)?;
+        Ok(storage::capability(&env, &chain, &token_id))
+    }
+
+    /// Whether strict capability enforcement is currently enabled on this adapter.
+    pub fn strict_capabilities_required(env: Env) -> Result<bool, HyperionError> {
+        let _ = storage::config(&env)?;
+        Ok(storage::strict_capabilities(&env))
+    }
+
+    /// Read-only preflight check validating that `amount` of `token` to `destination_chain`
+    /// satisfies capability admission rules for this adapter's route and `paid` dispatch mode.
+    pub fn validate_dispatch_capability(
+        env: Env,
+        token: Address,
+        amount: i128,
+        destination_chain: String,
+        paid: bool,
+    ) -> Result<Option<DestinationCapability>, HyperionError> {
+        let cfg = storage::config(&env)?;
+        if amount <= 0 {
+            return Err(HyperionError::InvalidAmount);
+        }
+        if paid && cfg.route != RouteKind::AxelarIts {
+            return Err(HyperionError::UnsupportedRoute);
+        }
+        let link = storage::link(&env, &destination_chain).ok_or(HyperionError::UnknownChain)?;
+        let token_id = storage::token_id(&env, &token).ok_or(HyperionError::TokenNotMapped)?;
+        let its = InterchainTokenServiceClient::new(&env, &cfg.its);
+        let manager_type = its.token_manager_type(&token_id);
+        check_dispatch_capability(
+            &env,
+            &cfg,
+            &link,
+            &token,
+            &token_id,
+            manager_type,
+            amount,
+            paid,
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn check_dispatch_capability(
+    env: &Env,
+    cfg: &Config,
+    link: &ChainLink,
+    token: &Address,
+    token_id: &BytesN<32>,
+    live_manager_type: TokenManagerType,
+    amount: i128,
+    paid: bool,
+) -> Result<Option<DestinationCapability>, HyperionError> {
+    if cfg.route == RouteKind::AxelarGmp && link.peer == BytesN::from_array(env, &[0u8; 20]) {
+        return Err(HyperionError::ZeroAddressKey);
+    }
+
+    let Some(cap) = storage::capability(env, &link.chain, token_id) else {
+        if storage::strict_capabilities(env) {
+            return Err(HyperionError::RailNotConfigured);
+        }
+        return Ok(None);
+    };
+
+    if !cap.enabled {
+        return Err(HyperionError::RouteDisabled);
+    }
+    if cap.axelar_chain != link.axelar_chain
+        || &cap.token != token
+        || cap.local_manager_type != live_manager_type
+    {
+        return Err(HyperionError::UnexpectedRailContract);
+    }
+    match cfg.route {
+        RouteKind::AxelarIts => {
+            if !cap.supports_direct_its {
+                return Err(HyperionError::UnsupportedRoute);
+            }
+            if paid && !cap.supports_paid_dispatch {
+                return Err(HyperionError::UnsupportedRoute);
+            }
+        }
+        RouteKind::AxelarGmp => {
+            if !cap.supports_gmp_payload {
+                return Err(HyperionError::UnsupportedRoute);
+            }
+        }
+        _ => return Err(HyperionError::UnsupportedRoute),
+    }
+    if cap.max_transfer_amount > 0 && amount > cap.max_transfer_amount {
+        return Err(HyperionError::ExceedsRouteLimit);
+    }
+    Ok(Some(cap))
 }
 
 /// Read the config and insist the admin signed for whatever is about to happen.

@@ -1,7 +1,7 @@
 use hyperion_core::HyperionError;
 use soroban_sdk::{contracttype, Address, BytesN, Env, String};
 
-use crate::types::{ChainLink, Config};
+use crate::types::{ChainLink, Config, DestinationCapability};
 
 pub const BUMP_THRESHOLD: u32 = 17_280;
 pub const BUMP_TO: u32 = 518_400;
@@ -23,6 +23,10 @@ pub enum DataKey {
     /// about; an unmapped one is refused here, which is the correct behaviour on the day Axelar
     /// registers a token nobody on this side has looked at yet.
     Token(BytesN<32>),
+    /// Admitted destination capability for `(chain, token_id)`.
+    Capability(String, BytesN<32>),
+    /// Whether outbound dispatches require an explicit capability record on every lane.
+    StrictCapabilities,
 }
 
 pub fn config(env: &Env) -> Result<Config, HyperionError> {
@@ -122,4 +126,41 @@ pub fn touch_link(env: &Env, chain: &String) {
             .persistent()
             .extend_ttl(&source, BUMP_THRESHOLD, BUMP_TO);
     }
+}
+
+pub fn capability(
+    env: &Env,
+    chain: &String,
+    token_id: &BytesN<32>,
+) -> Option<DestinationCapability> {
+    let key = DataKey::Capability(chain.clone(), token_id.clone());
+    let found: Option<DestinationCapability> = env.storage().persistent().get(&key);
+    if found.is_some() {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    }
+    found
+}
+
+pub fn set_capability(env: &Env, cap: &DestinationCapability) {
+    let key = DataKey::Capability(cap.chain.clone(), cap.token_id.clone());
+    env.storage().persistent().set(&key, cap);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn strict_capabilities(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::StrictCapabilities)
+        .unwrap_or(false)
+}
+
+pub fn set_strict_capabilities(env: &Env, required: bool) {
+    env.storage()
+        .instance()
+        .set(&DataKey::StrictCapabilities, &required);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
 }

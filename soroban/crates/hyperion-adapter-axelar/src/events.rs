@@ -92,3 +92,26 @@ pub struct AdminChanged {
     #[topic]
     pub new: Address,
 }
+
+#[contractevent(topics = ["hyperion", "axl_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CapabilityAdmitted {
+    #[topic]
+    pub chain: String,
+    #[topic]
+    pub token: Address,
+    pub token_id: BytesN<32>,
+    pub local_manager_type: TokenManagerType,
+    pub remote_manager_type: TokenManagerType,
+    pub supports_direct_its: bool,
+    pub supports_gmp_payload: bool,
+    pub supports_paid_dispatch: bool,
+    pub max_transfer_amount: i128,
+    pub enabled: bool,
+}
+
+#[contractevent(topics = ["hyperion", "axl_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StrictCapabilitiesSet {
+    pub required: bool,
+}
