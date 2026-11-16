@@ -5,9 +5,10 @@ import {stdJson} from "forge-std/StdJson.sol";
 import {console} from "forge-std/console.sol";
 
 import {HyperionRouter} from "../src/HyperionRouter.sol";
-import {RouteKind} from "../src/HyperionTypes.sol";
+import {ForkCompatibilityReport, RouteKind} from "../src/HyperionTypes.sol";
 import {AxelarItsAdapter} from "../src/adapters/AxelarItsAdapter.sol";
 import {CctpAdapter} from "../src/adapters/CctpAdapter.sol";
+import {ForkCompatibility} from "../src/libraries/ForkCompatibility.sol";
 
 import {DeployConfig} from "./DeployConfig.sol";
 
@@ -37,10 +38,20 @@ contract Verify is DeployConfig {
         HyperionRouter router = HyperionRouter(payable(record.readAddress(".router")));
         CctpAdapter cctp = CctpAdapter(payable(record.readAddress(".cctpAdapter")));
 
+        string memory expectedSolc = vm.keyExistsJson(record, ".solcVersion")
+            ? record.readString(".solcVersion")
+            : string(ForkCompatibility.EXPECTED_SOLC_VERSION);
+        string memory expectedEvm = vm.keyExistsJson(record, ".evmRevision")
+            ? record.readString(".evmRevision")
+            : string(ForkCompatibility.EXPECTED_EVM_REVISION);
+
         console.log("record              ", path);
         console.log("router              ", address(router));
+        console.log("compiler            ", expectedSolc);
+        console.log("evm revision        ", expectedEvm);
         console.log("");
 
+        verifyFork(router, expectedSolc, expectedEvm);
         _expectUint("chain id", block.chainid, record.readUint(".chainId"));
         _expectAddress("treasury", router.treasury(), record.readAddress(".treasury"));
         _expectUint("fee bps", router.feeBps(), record.readUint(".feeBps"));
@@ -107,6 +118,33 @@ contract Verify is DeployConfig {
         } else {
             console.log("Mismatches          ", problems);
             revert("the chain and the record disagree");
+        }
+    }
+
+    /// @notice Probe Cancun opcodes, compiler assumptions, and target-chain support on `router`.
+    function verifyFork(HyperionRouter router, string memory expectedSolc, string memory expectedEvm)
+        public
+        returns (ForkCompatibilityReport memory report)
+    {
+        report = router.probeForkCompatibility();
+        _expectString("compiler version", report.solcVersion, expectedSolc);
+        _expectString("evm revision", report.evmRevision, expectedEvm);
+        _expectTrue("via-ir pipeline", report.viaIr);
+        _expectTrue("shanghai push0 opcode", report.push0Supported);
+        _expectTrue("cancun mcopy opcode", report.mcopySupported);
+        _expectTrue("cancun transient storage", report.transientStorageSupported);
+        _expectTrue("target chain supported", report.targetChainSupported);
+        _expectTrue("cancun fork compatible", report.compatible);
+    }
+
+    function _expectString(string memory what, string memory found, string memory want) private {
+        if (keccak256(bytes(found)) == keccak256(bytes(want))) {
+            console.log("  ok  ", what, found);
+        } else {
+            problems += 1;
+            console.log("  BAD ", what);
+            console.log("        found", found);
+            console.log("        want ", want);
         }
     }
 

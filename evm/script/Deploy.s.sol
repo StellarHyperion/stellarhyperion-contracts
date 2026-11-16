@@ -4,9 +4,10 @@ pragma solidity 0.8.28;
 import {console} from "forge-std/console.sol";
 
 import {HyperionRouter} from "../src/HyperionRouter.sol";
-import {ActionKind, AdminAction, RouteKind} from "../src/HyperionTypes.sol";
+import {ActionKind, AdminAction, ForkAssumptions, RouteKind} from "../src/HyperionTypes.sol";
 import {AxelarItsAdapter} from "../src/adapters/AxelarItsAdapter.sol";
 import {CctpAdapter} from "../src/adapters/CctpAdapter.sol";
+import {CancunProbe, ForkCompatibility} from "../src/libraries/ForkCompatibility.sol";
 
 import {DeployConfig} from "./DeployConfig.sol";
 
@@ -46,6 +47,9 @@ contract Deploy is DeployConfig {
     Queued[] internal queued;
 
     function run() external {
+        ForkAssumptions memory fork = forkAssumptions();
+        preflightFork(fork);
+
         RouterParams memory params = routerParams();
         RailParams memory rails = railParams();
         TokenParams memory token = tokenParams();
@@ -56,6 +60,8 @@ contract Deploy is DeployConfig {
         address deployer = msg.sender;
 
         console.log("chain id            ", block.chainid);
+        console.log("compiler            ", fork.solcVersion);
+        console.log("evm revision        ", fork.evmRevision);
         console.log("deployer            ", deployer);
         console.log("admin               ", params.admin);
         console.log("guardian            ", params.guardian);
@@ -101,8 +107,15 @@ contract Deploy is DeployConfig {
 
         vm.stopBroadcast();
 
-        _writeRecord(params, rails, token, axelarToo, deployer);
-        _report(params);
+        _writeRecord(params, rails, token, axelarToo, deployer, fork);
+        _report(params, fork);
+    }
+
+    /// @notice Fail before any deployment or timelock proposal when fork assumptions do not hold.
+    function preflightFork(ForkAssumptions memory fork) public {
+        ForkCompatibility.validateAssumptions(fork);
+        CancunProbe probe = new CancunProbe();
+        ForkCompatibility.verifyTargetExecution(fork, address(probe));
     }
 
     /// @dev Order matters here in one place only: the handover is last, because an admin change
@@ -181,11 +194,14 @@ contract Deploy is DeployConfig {
         RailParams memory rails,
         TokenParams memory token,
         bool axelarToo,
-        address deployer
+        address deployer,
+        ForkAssumptions memory fork
     ) private {
         string memory key = "hyperion";
 
         vm.serializeUint(key, "chainId", block.chainid);
+        vm.serializeString(key, "solcVersion", fork.solcVersion);
+        vm.serializeString(key, "evmRevision", fork.evmRevision);
         vm.serializeAddress(key, "router", address(router));
         vm.serializeAddress(key, "deployer", deployer);
         vm.serializeAddress(key, "admin", params.admin);
@@ -233,9 +249,11 @@ contract Deploy is DeployConfig {
         console.log("record              ", path);
     }
 
-    function _report(RouterParams memory params) private view {
+    function _report(RouterParams memory params, ForkAssumptions memory fork) private view {
         console.log("");
         console.log("Phase one done. Nothing is routable yet, which is expected.");
+        console.log("Verified compiler   ", fork.solcVersion);
+        console.log("Verified evm fork   ", fork.evmRevision);
         console.log("Queued actions      ", queued.length);
         console.log("Executable after    ", block.timestamp + params.timelockDelay);
         console.log("");

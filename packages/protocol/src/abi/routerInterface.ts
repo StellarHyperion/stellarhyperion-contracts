@@ -201,6 +201,66 @@ export const hyperionRouterInterfaceAbi = [
   },
   {
     "type": "function",
+    "name": "forkCompatibility",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ForkCompatibilityReport",
+        "components": [
+          {
+            "name": "solcVersion",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "evmRevision",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "viaIr",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "chainId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "push0Supported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "mcopySupported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "transientStorageSupported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "targetChainSupported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "compatible",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lowerTokenFlowLimit",
     "inputs": [
       {
@@ -295,6 +355,66 @@ export const hyperionRouterInterfaceAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "probeForkCompatibility",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ForkCompatibilityReport",
+        "components": [
+          {
+            "name": "solcVersion",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "evmRevision",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "viaIr",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "chainId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "push0Supported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "mcopySupported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "transientStorageSupported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "targetChainSupported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "compatible",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",

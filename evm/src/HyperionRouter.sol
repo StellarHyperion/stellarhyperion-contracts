@@ -43,6 +43,7 @@ import {
     AddressKind,
     AdminAction,
     Destination,
+    ForkCompatibilityReport,
     Origin,
     OutboundRequest,
     PendingClaim,
@@ -56,6 +57,7 @@ import {IHyperionRouter} from "./interfaces/IHyperionRouter.sol";
 import {IRailAdapter} from "./interfaces/IRailAdapter.sol";
 import {AmountMath} from "./libraries/AmountMath.sol";
 import {FlowGuard, FlowWindow} from "./libraries/FlowGuard.sol";
+import {ForkCompatibility} from "./libraries/ForkCompatibility.sol";
 import {RouteMeta} from "./libraries/RouteMeta.sol";
 import {StellarAddress} from "./libraries/StellarAddress.sol";
 
@@ -657,6 +659,16 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     /// @notice How many privileged changes have been queued since deployment.
     function actionCount() external view returns (uint64) {
         return _actionCount;
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function forkCompatibility() external view override returns (ForkCompatibilityReport memory) {
+        return ForkCompatibility.staticReport(block.chainid);
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function probeForkCompatibility() external override returns (ForkCompatibilityReport memory) {
+        return ForkCompatibility.fullReport(block.chainid);
     }
 
     // -------------------------------------------------------------------------------------

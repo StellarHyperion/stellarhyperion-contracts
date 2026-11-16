@@ -3,7 +3,8 @@ pragma solidity 0.8.28;
 
 import {Script} from "forge-std/Script.sol";
 
-import {RouteKind} from "../src/HyperionTypes.sol";
+import {ForkAssumptions, RouteKind} from "../src/HyperionTypes.sol";
+import {ForkCompatibility} from "../src/libraries/ForkCompatibility.sol";
 
 /// @title Everything a deployment needs to know that is not in the source tree
 /// @notice Read from the environment, never from a constant in here, with one exception noted
@@ -143,5 +144,16 @@ abstract contract DeployConfig is Script {
         if (route == RouteKind.AxelarIts) return "axelar-its";
         if (route == RouteKind.AxelarGmp) return "axelar-gmp";
         return "allbridge";
+    }
+
+    /// @notice Compiler, EVM fork revision, and target-chain policy checked before deployment.
+    function forkAssumptions() internal view returns (ForkAssumptions memory assumptions) {
+        assumptions = ForkAssumptions({
+            solcVersion: vm.envOr("HYPERION_SOLC_VERSION", string(ForkCompatibility.EXPECTED_SOLC_VERSION)),
+            evmRevision: vm.envOr("HYPERION_EVM_REVISION", string(ForkCompatibility.EXPECTED_EVM_REVISION)),
+            chainId: block.chainid,
+            allowDevChain: vm.envOr("HYPERION_ALLOW_DEV_CHAIN", true),
+            allowUnlistedChain: vm.envOr("HYPERION_ALLOW_UNLISTED_CHAIN", false)
+        });
     }
 }

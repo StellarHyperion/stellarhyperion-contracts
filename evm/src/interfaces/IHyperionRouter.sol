@@ -5,6 +5,7 @@ import {
     ActionKind,
     AdminAction,
     Destination,
+    ForkCompatibilityReport,
     Origin,
     OutboundRequest,
     PendingClaim,
@@ -297,4 +298,12 @@ interface IHyperionRouter {
     /// @param route The rail to check.
     /// @return True if the rail is paused.
     function routePaused(RouteKind route) external view returns (bool);
+
+    /// @notice Read static compiler, EVM revision, and `PUSH0`/`MCOPY` compatibility metadata.
+    /// @return Compiler version, EVM revision, chain id, and static Cancun capability flags.
+    function forkCompatibility() external view returns (ForkCompatibilityReport memory);
+
+    /// @notice Execute static and transient-storage Cancun probes and return full diagnostics.
+    /// @return Compiler version, EVM revision, chain id, and full Cancun capability flags.
+    function probeForkCompatibility() external returns (ForkCompatibilityReport memory);
 }

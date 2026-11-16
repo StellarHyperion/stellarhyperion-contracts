@@ -188,3 +188,32 @@ enum QuoteBlocker {
     InvalidDestination,
     ChainNotSupported
 }
+
+/// @dev Declared compiler, EVM fork revision, and target-chain policy checked before deployment.
+struct ForkAssumptions {
+    string solcVersion;
+    string evmRevision;
+    uint256 chainId;
+    bool allowDevChain;
+    bool allowUnlistedChain;
+}
+
+/// @dev Compiler and Cancun fork diagnostics returned during deployment and live verification.
+///
+/// Compatibility and migration: Hyperion's EVM contracts are compiled with `solc 0.8.28`,
+/// `evm_version = "cancun"`, and `via_ir = true`, emitting `PUSH0`, `MCOPY`, and transient-storage
+/// instructions. Deployment preflight and `Verify.s.sol` reject pre-Cancun forks or mismatched
+/// compiler assumptions before any router or timelock proposal is broadcast, while legacy phase-1
+/// records without `.solcVersion` or `.evmRevision` fields fall back to verifying live router
+/// probes against `"0.8.28"` and `"cancun"`.
+struct ForkCompatibilityReport {
+    string solcVersion;
+    string evmRevision;
+    bool viaIr;
+    uint256 chainId;
+    bool push0Supported;
+    bool mcopySupported;
+    bool transientStorageSupported;
+    bool targetChainSupported;
+    bool compatible;
+}

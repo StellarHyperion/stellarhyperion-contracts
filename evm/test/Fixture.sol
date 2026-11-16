@@ -4,7 +4,15 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 
 import {HyperionRouter} from "../src/HyperionRouter.sol";
-import {ActionKind, AdminAction, Destination, OutboundRequest, RouteKind} from "../src/HyperionTypes.sol";
+import {
+    ActionKind,
+    AdminAction,
+    Destination,
+    ForkAssumptions,
+    OutboundRequest,
+    RouteKind
+} from "../src/HyperionTypes.sol";
+import {ForkCompatibility} from "../src/libraries/ForkCompatibility.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockRailAdapter} from "./mocks/MockRailAdapter.sol";
 
@@ -222,5 +230,10 @@ contract Fixture is Test {
     function _usdcRequest(uint256 amount) internal view returns (OutboundRequest memory request) {
         request = _request(amount, RouteKind.Cctp);
         request.token = address(usdc);
+    }
+
+    /// @dev Default local Cancun fork profile matching the Foundry test runner.
+    function _cancunProfile() internal view returns (ForkAssumptions memory) {
+        return ForkCompatibility.localCancunProfile(block.chainid);
     }
 }
