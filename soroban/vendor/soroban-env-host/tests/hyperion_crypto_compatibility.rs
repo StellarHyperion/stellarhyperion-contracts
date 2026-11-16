@@ -1,8 +1,42 @@
+use std::fs;
+use std::path::Path;
+
+use sha2::{Digest, Sha256};
 use soroban_env_host::{budget::AsBudget, Env, EnvBase, Host, HostError, U32Val};
+
+/// Pinned upstream `stellar/rs-soroban-env` git commit for `soroban-env-host` 28.0.2.
+const VERIFIED_UPSTREAM_GIT_SHA1: &str = "5061e9c40ce6fc74ade9b9b3b49465b0cf7fdccb";
+/// Pinned SHA-256 digest of `soroban/vendor/soroban-env-host-rustcrypto.patch` (RUSTSEC-2026-0387).
+const VERIFIED_PATCH_SHA256: &str =
+    "48a21c883fafa443d1df73c3d58ba147415b12fe2f2cd2e923619d2e9e97ef0d";
+
+fn assert_verified_patch_provenance() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let vcs_info = fs::read_to_string(manifest_dir.join(".cargo_vcs_info.json"))
+        .expect("read .cargo_vcs_info.json");
+    assert!(
+        vcs_info.contains(VERIFIED_UPSTREAM_GIT_SHA1),
+        ".cargo_vcs_info.json drifted from verified upstream revision {VERIFIED_UPSTREAM_GIT_SHA1}"
+    );
+
+    let patch_bytes = fs::read(manifest_dir.join("../soroban-env-host-rustcrypto.patch"))
+        .expect("read soroban-env-host-rustcrypto.patch");
+    let actual_patch_sha256 = hex::encode(Sha256::digest(&patch_bytes));
+    assert_eq!(
+        actual_patch_sha256, VERIFIED_PATCH_SHA256,
+        "soroban-env-host-rustcrypto.patch digest drifted from verified revision"
+    );
+}
+
+#[test]
+fn cryptographic_vectors_reference_verified_patch_revision() {
+    assert_verified_patch_provenance();
+}
 
 // Public go-ethereum secp256k1 vector retained by upstream src/test/crypto.rs.
 #[test]
 fn secp256k1_recovery_and_invalid_inputs() -> Result<(), HostError> {
+    assert_verified_patch_provenance();
     let host = Host::test_host();
     let digest =
         hex::decode("ce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce971008").unwrap();
@@ -33,6 +67,7 @@ fn secp256k1_recovery_and_invalid_inputs() -> Result<(), HostError> {
 // rejection directly: the NIST/Wycheproof suites intentionally normalize S.
 #[test]
 fn secp256r1_preserves_low_s_and_rejects_malleability() -> Result<(), HostError> {
+    assert_verified_patch_provenance();
     let host = Host::test_host();
     let public_key = hex::decode("04e424dc61d4bb3cb7ef4344a7f8957a0c5134e16f7a67c074f82e6e12f49abf3c970eed7aa2bc48651545949de1dddaf0127e5965ac85d1243d6f60e7dfaee927").unwrap();
     let digest =

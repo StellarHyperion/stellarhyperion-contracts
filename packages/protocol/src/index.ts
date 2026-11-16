@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Dependency provenance verification for vendored Soroban native host patches.
+export * from "./vendorProvenance.js";

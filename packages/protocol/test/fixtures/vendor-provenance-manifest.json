@@ -1,0 +1,1393 @@
+{
+  "schemaVersion": 1,
+  "crateName": "soroban-env-host",
+  "crateVersion": "28.0.2",
+  "cratesIoArchiveSha256": "36d7e5920c200939164cc58038224e2d90d7e2fabbfa505d6e2129d648dce7e2",
+  "upstreamRepository": "https://github.com/stellar/rs-soroban-env",
+  "upstreamGitSha1": "5061e9c40ce6fc74ade9b9b3b49465b0cf7fdccb",
+  "upstreamPathInVcs": "soroban-env-host",
+  "advisoryId": "RUSTSEC-2026-0387",
+  "licenseSpdx": "Apache-2.0",
+  "patchPath": "soroban/vendor/soroban-env-host-rustcrypto.patch",
+  "patchSha256": "48a21c883fafa443d1df73c3d58ba147415b12fe2f2cd2e923619d2e9e97ef0d",
+  "cryptoVectorsPath": "soroban/vendor/soroban-env-host/tests/hyperion_crypto_compatibility.rs",
+  "permittedPatchedPaths": [
+    "soroban/vendor/soroban-env-host/Cargo.toml",
+    "soroban/vendor/soroban-env-host/src/crypto/mod.rs",
+    "soroban/vendor/soroban-env-host/src/cost_runner/util.rs",
+    "soroban/vendor/soroban-env-host/tests/secp256r1_sig_ver.rs"
+  ],
+  "excludedWasmRuntimeCrates": [
+    "soroban-env-host",
+    "k256",
+    "p256",
+    "ecdsa",
+    "elliptic-curve",
+    "sec1",
+    "crypto-bigint",
+    "ed25519-dalek",
+    "curve25519-dalek"
+  ],
+  "files": [
+    {
+      "path": "soroban/vendor/README.md",
+      "role": "vendor-doc",
+      "sha256": "c1f2f30370f6502405daf5d2dcb73dbe51fce1296958d445b02a6ca01a1f8048"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/.cargo_vcs_info.json",
+      "role": "upstream-unchanged",
+      "sha256": "64c3585e1c21e1b7cf865a603229f835f3953ec58f32f617e5fddfaaa9651dd2"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/bls12_381.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f6167c60d05b6c09e3a04626c3ebcc88f751b3b65823ab99d44f855d6533a429"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/bn254.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f295fcec207df0126cf8c10c625cd64ed0a1fc0572dbefed0d3b4e084656bdf6"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/compute_ed25519_pubkey.rs",
+      "role": "upstream-unchanged",
+      "sha256": "d9d8f3baed4de6d7cfc6e16b50d7b7b835aa755801a07aa927430c9a02acf714"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/compute_keccak256_hash.rs",
+      "role": "upstream-unchanged",
+      "sha256": "b5d8a9987537d0122bc77d0e32be5e7b719f372a7baacd0b2edad67f289e60bb"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/compute_sha256_hash.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2b58e5d4e399f9e50afff3ee384b4c13951a4c4dee138f7279017c9381cb67ee"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/decode_ecdsa_curve256_sig.rs",
+      "role": "upstream-unchanged",
+      "sha256": "0ef1bc27c94dda53bf48ff5d3dd0aeec60b34c69f288ca7780755e378d4b7ae1"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/host_mem_alloc.rs",
+      "role": "upstream-unchanged",
+      "sha256": "8ecf8399b1e1dd8c4b73f4fffe61dd452f53981a9e6e6ec452a0314ffa0d5b69"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/host_mem_cmp.rs",
+      "role": "upstream-unchanged",
+      "sha256": "b51a75678bd9ccef22c5b3b9773bc45938a72b049d5d623e01f1820aeaac2165"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/host_mem_cpy.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f8f70678d40a7c3f9d1be299ca828662bc559fdedebd81a44d749c6886898aa0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/invoke.rs",
+      "role": "upstream-unchanged",
+      "sha256": "c9754d6596f06cbefdf6417a735585d68acc0d07835f4b9c7eb6aa18914050c5"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/mod.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2fccf4289c6efff6145473a6f0bbd9e44ba0b84dade16c39253d3390804dd550"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/num_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a4cef5e469feb386cbfe0ad8b3d0e4d9023b026a56cbc683b7dd6a28f40157cd"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/prng.rs",
+      "role": "upstream-unchanged",
+      "sha256": "26bb6149737e2b9f48f244b79b020ba02e46b703ab023cb36b5fb76fae374c84"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/recover_ecdsa_secp256k1_key.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f4ebe6be192c96de1f9668767239b5dd8f3a272ca3cecebfee1fc67268f4354a"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/sec1_decode_point_uncompressed.rs",
+      "role": "upstream-unchanged",
+      "sha256": "c43f32b280333a09e026cf9e40be3f69b1eaa0eb40031b0fda962418d5a4c3df"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/val_deser.rs",
+      "role": "upstream-unchanged",
+      "sha256": "6c350bbb3147d9c41f7c8b5026b5613e2d59a147d96bffa4203c286c7c8a145c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/val_ser.rs",
+      "role": "upstream-unchanged",
+      "sha256": "15c99571ee1a00c3453badd131784b2a10803fdeeab550f8f60c47e6d0dd8d24"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/verify_ecdsa_secp256r1_sig.rs",
+      "role": "upstream-unchanged",
+      "sha256": "d8d6cc83794fd3ec067812639eeb3b16b885933a57ae634a762002c85ec322f1"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/verify_ed25519_sig.rs",
+      "role": "upstream-unchanged",
+      "sha256": "194ec6a6aa4da75e2109178dc999b6cb9ee975c67dbe74270dff19e251557635"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/visit_object.rs",
+      "role": "upstream-unchanged",
+      "sha256": "d940337efb8c2a8c39dfd3f84f619ec2b3d783cf08f1dab87c74e005dd395d3c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/vm_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "dd895f5d4e3f4f2c1d9014e1cabbaa9cc89cba728f083ce07d463ccea0552623"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/cost_types/wasm_insn_exec.rs",
+      "role": "upstream-unchanged",
+      "sha256": "1abebe63e7089d51cff90473d80b2ea76649ba40fd15f155491d9e3ba33127fb"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/bls12_381.rs",
+      "role": "upstream-unchanged",
+      "sha256": "33bd53817966f6728ece517efefab0889e522732c549d07b67e1b46ed5972735"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/decode_secp256r1_sig.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a38d43a9d8b30579d277e7f077dcaf83ab41b5b342c3f6d506bcd5c84075e911"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/ecdsa_secp256k1_verify.rs",
+      "role": "upstream-unchanged",
+      "sha256": "0e2ff11acc363812c60bc60d52f77c3d6db900a0756750b69992edd23853c0da"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/ecdsa_secp256r1_recover.rs",
+      "role": "upstream-unchanged",
+      "sha256": "797e9074a36f6044e7f982d8358021837dcd14d67c652fc83c684ce599f57777"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/ed25519_scalar_mul.rs",
+      "role": "upstream-unchanged",
+      "sha256": "c2130ff9356d5726af09548bc3751fcb641f9c51925d28d53de0a309503ac10f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/map_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "37a4c022d9b34383729bcf98606616e687af4766bb8149fdc989c66e9da4ca62"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/mod.rs",
+      "role": "upstream-unchanged",
+      "sha256": "688c0aeb3e7724eeb6b716c870b8c165dc8d318844538a40e53cf258216db4de"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/read_xdr.rs",
+      "role": "upstream-unchanged",
+      "sha256": "320977a1bccfab0b791feee1178d50c41fe9db5a637eca3ec82fd383ddb46d76"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/sec1_decode_point_compressed.rs",
+      "role": "upstream-unchanged",
+      "sha256": "41d1be0691380651332f822fa559d01eea7541745e0d8ddd7b62d4d1e4ef19b0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/vec_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "55d18094e84e50e1a50dc8b3175ae4b8cafebcf4e8d164459a83ee805fe88f27"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/experimental/vm_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "79c2f6d13b9071115d5f8fbff75af6e89923123482515b8bd979dcbcfb5df5d1"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/measure.rs",
+      "role": "upstream-unchanged",
+      "sha256": "492ac7327b98c4cb71fe1fde069e882d086f24a533a224d2e16340d3bebf6473"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/mod.rs",
+      "role": "upstream-unchanged",
+      "sha256": "8e1dff5d9b74d96b66b182c0920467c422a9b303d372a8bf2a920dfb8cb44f8c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/modelfit.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f9cb3b9f55ca5297aa451cda7d4feceebbf6df5cce54cdaac07827c661f54588"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/rusagev4.rs",
+      "role": "upstream-unchanged",
+      "sha256": "e775f766b27fcece33febfaf91e1b2e46b4ff0d7028a326909fd910dd75c7b17"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/common/util.rs",
+      "role": "upstream-unchanged",
+      "sha256": "0c335feea274b2a710d4225b34cd80a8fd3945c8ab8306a54153d31ffa873374"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/variation_histograms.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a436d7fe5c66dc0c3f1df346829e8e793f86131ac355eefe70fca6a3d14045d1"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/benches/worst_case_linear_models.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2c145b90e70da7ca5bb07421100d201f8e3ebb0d24b22b583a7cebc54a113cb6"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/build.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f90c468c4ab2735a8edeca9f82ca31cf327a27fd8baf47f7417dab8653151005"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/Cargo.lock",
+      "role": "local-addition",
+      "sha256": "82e0b32cb6cd82acc4e682c1d94b25fc4550ec59dd12af2c85d1cc1adf2c16b0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/Cargo.toml",
+      "role": "upstream-patched",
+      "sha256": "11afb4be87e9fe48ed5672b5a3c94f62878c5ce1a4c0cd6cf4e003579a019bce"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/Cargo.toml.orig",
+      "role": "upstream-reference",
+      "sha256": "8fa567372c597ecbc9fe1e30ad8a999cfc96ccac4a92dde77364201ce664ce74"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/LICENSE",
+      "role": "local-addition",
+      "sha256": "1d8e79dfd4c7a8702e6fa49e45a2f1b4b553a9507b29b2dc14d3656b7c47862f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/README.md",
+      "role": "upstream-unchanged",
+      "sha256": "be42938dbd74932c3a923efa9e0908deabf0f216a2cda884ba960e83b79ee71e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/auth.rs",
+      "role": "upstream-unchanged",
+      "sha256": "8307d3aeaf9c1a7c8199d2107714aff9c298ae299475ec4470ad28ead446e91b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/bin/main.rs",
+      "role": "upstream-unchanged",
+      "sha256": "499367447384bdebd2654a72fe3f3f916e523762b2442e1b8417ea7d98d49e9f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/budget.rs",
+      "role": "upstream-unchanged",
+      "sha256": "b341c6f2104379c435358bcdab1c9d6cb26c93cee2b43df872ddd46f3b3abc18"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/budget/dimension.rs",
+      "role": "upstream-unchanged",
+      "sha256": "14d8a99a08a0844636e62d66a77e15d9a215929a65bc062777730f88ce532bfe"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/budget/limits.rs",
+      "role": "upstream-unchanged",
+      "sha256": "0080964f53ec49d2df64306354887cc5565b2628584e64548126a4b95e2eca1e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/budget/model.rs",
+      "role": "upstream-unchanged",
+      "sha256": "70c47d818a27c286180e758280590839971b0cb071f227d33f96f2e935bcc3c7"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/budget/util.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2e16740c47331fe2c88aad6bf3f80ede095f0259e5517cf3ff848a242495a6f9"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/budget/wasmi_helper.rs",
+      "role": "upstream-unchanged",
+      "sha256": "72c4869ce8a190b7afb82091692330700c6f43ba984164815d95ca3c1d62b6b3"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f0bd26290068aff0d567b8e950c3abd9545b9f6fbb50a521001e21f9b3a7ed1e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/account_contract.rs",
+      "role": "upstream-unchanged",
+      "sha256": "7af518b93ec3124d9b38a67a8272e73a7f5af6a5f495e612d08fec87416aad3c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/base_types.rs",
+      "role": "upstream-unchanged",
+      "sha256": "b2c58b80f8d16e72136c8ba04ec8930fd2d22f3d2270b0c59a56398c2b8a60d9"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/common_types.rs",
+      "role": "upstream-unchanged",
+      "sha256": "e70a1ef6507838259fba577aefb9add282e7fe108ea4c98fa79d4b4af50f7348"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/contract_error.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f763a1979d169c8df77ece0426b40a29686435b9b5da466243de60fd005761db"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/invoker_contract_auth.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f3ae7c92ba3f2e9b80cfee73b1b6eba1b3edffbf2c7d92ee1ec649f618617690"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract.rs",
+      "role": "upstream-unchanged",
+      "sha256": "944142447b113d671f1e47dc8a2d8191ef4ff11167b793f2a4c2f4d72efc8e4f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/admin.rs",
+      "role": "upstream-unchanged",
+      "sha256": "ad70748dab976704bdf5fa87dfe30c0746280a24eb46c36a9c102aeb1f11980d"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/allowance.rs",
+      "role": "upstream-unchanged",
+      "sha256": "533b7dde81bf6e70229d1e297aa1e8d6adb94eafd5ebe75c44c38ae179c9b36f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/asset_info.rs",
+      "role": "upstream-unchanged",
+      "sha256": "9a0583a6bec016f2822bc357baa2cce81c8e4ad3077fd8d5e2100172c0b22def"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/balance.rs",
+      "role": "upstream-unchanged",
+      "sha256": "671ea7ffb78b3c59b97ce417fac9cb5b4a6c8af5a592d8d51bd0b8a344108d29"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/contract.rs",
+      "role": "upstream-unchanged",
+      "sha256": "5fe6f53f7da37861501ae6e6205907f3473679a8cabe1eca61759d50210e997a"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/event.rs",
+      "role": "upstream-unchanged",
+      "sha256": "125cc56ff663883f629520b9ea1fc1978527c61b86867063cd57cba7730b211c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/metadata.rs",
+      "role": "upstream-unchanged",
+      "sha256": "12ca5219bd19e98b81880a01e5fe99bfffaf1c5d283371bff34961763ac00331"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/public_types.rs",
+      "role": "upstream-unchanged",
+      "sha256": "84834c2fec3c9763ba73d89fdd44db86da9a35400e82401cd5ba04ed03874026"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/storage_types.rs",
+      "role": "upstream-unchanged",
+      "sha256": "655a0cec594b78db2eeccabfe03e27f2ae0537c65729e456b604cbbdb579f298"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/stellar_asset_contract/test_stellar_asset_contract.rs",
+      "role": "upstream-unchanged",
+      "sha256": "8168b7430934728352f5034daa3264dd273b59f3261b3fde31a06582b3f02a9f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/storage_utils.rs",
+      "role": "upstream-unchanged",
+      "sha256": "216d16572291ac021fd3ee7a0ce6d4b1810f8dbee07fc2791bbf32236a75ed10"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/builtin_contracts/testutils.rs",
+      "role": "upstream-unchanged",
+      "sha256": "3283e6290ed190f99d7a7f39cdb05465a52bb7125817cbafaa68f7f2a634a8e7"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/bls12_381.rs",
+      "role": "upstream-unchanged",
+      "sha256": "965dff98b1d17f2c58dd07697781db1c8033193651fb14d4473b091fb6ab43c4"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/bn254.rs",
+      "role": "upstream-unchanged",
+      "sha256": "b77f33938ce6e3aab58c9ce36abbe2d5ffe5f11643557264de93e493647711e1"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/compute_ed25519_pubkey.rs",
+      "role": "upstream-unchanged",
+      "sha256": "c679365a8825299630452cf28daf21f4e6cff1805ca06910bc4ce49300d04a7c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/compute_keccak256_hash.rs",
+      "role": "upstream-unchanged",
+      "sha256": "c70f481dcea5eba30a4ae54ea476efec3fb3bf938d15987042aaeac222bbef3d"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/compute_sha256_hash.rs",
+      "role": "upstream-unchanged",
+      "sha256": "99eece10c8e2379a0d3675f618b6c9192a57ddd98bc0063cc886ab22d526b509"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/decode_ecdsa_curve256_sig.rs",
+      "role": "upstream-unchanged",
+      "sha256": "6eae776ff6b8ee070b6d51f70a4b231bf78c2bd0e964c0cae695be06a66b251e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/host_mem_alloc.rs",
+      "role": "upstream-unchanged",
+      "sha256": "53bd536e402308f09e0ead2a7825d8a7a88c6da46f0deb55ddce336d6a754a32"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/host_mem_cmp.rs",
+      "role": "upstream-unchanged",
+      "sha256": "db2b390ce0892f2b450a9707d8f3d54a9fe2438d88f73ae021263dc18b266a3c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/host_mem_cpy.rs",
+      "role": "upstream-unchanged",
+      "sha256": "7ab8627489d5882ca2725d3e5872dc5cf3907890341065e5fa9149b121f11316"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/invoke.rs",
+      "role": "upstream-unchanged",
+      "sha256": "451a7818021ac77658771411708fe709c328f8d29abb0906720cd4da4fbb069d"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/mod.rs",
+      "role": "upstream-unchanged",
+      "sha256": "73dbebeea293c5d400ed6bd175b31898d37f2fca843021978f1ac9a6afd7813c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/num_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "cf08647785a4ede49183258e305e4520b3db286536bf2a6e71583e76c89be32b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/prng.rs",
+      "role": "upstream-unchanged",
+      "sha256": "fac74f446f916302d6b27d59040ae6c72aa4decbfe766a862f9b0a2dceb75223"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/recover_ecdsa_secp256k1_key.rs",
+      "role": "upstream-unchanged",
+      "sha256": "21256191032a43cd2584275eebae7e034db553ee6c90c16d6ba5e5e2392eb69a"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/sec1_decode_point_uncompressed.rs",
+      "role": "upstream-unchanged",
+      "sha256": "06fda4cc5f09ca513953f45424b1aa5277fb1fa0805e598e63466ea6b45d1863"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/val_deser.rs",
+      "role": "upstream-unchanged",
+      "sha256": "19b4abd59908d36bc2c1a2d7e05fc67db21df215cf02bcf91ff42d760f18e6d0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/val_ser.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2b3aa6b23feb1d99fdfc267146458eba577e8641124c8673a606fa0cb976b08e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/verify_ecdsa_secp256r1_sig.rs",
+      "role": "upstream-unchanged",
+      "sha256": "8b1e249924c8f329e563122f8e2c1d0e60fbc6c788de70c0dd4e9aeaf8f8b833"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/verify_ed25519_sig.rs",
+      "role": "upstream-unchanged",
+      "sha256": "da86df368d3cdc769f57e48a6fd160ba5c7f1dab0a44876587875be1167215bc"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/visit_object.rs",
+      "role": "upstream-unchanged",
+      "sha256": "c66e1ae7580a923564f8694f34d3ee9ff4c3de2b768529cf75a9f86e23c9c656"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/vm_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "3a7c74abaa9d8e628d3bc586d8b3056218a8a234bd8e4f35857e186cb4fcc135"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/cost_types/wasm_insn_exec.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2c3bfc08db067c5d0320dfbbb55d477019e282d7c7a4d4c6c1c704b47a6b2983"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/bls12_381.rs",
+      "role": "upstream-unchanged",
+      "sha256": "154aed6d61b073065304ff1b68dd8eb3709a82108a7983d23a44cb01cb744ac1"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/decode_secp256r1_sig.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2f7bf5f395b05ad7ae9ab37e404eae4c3bfa85d29eaa8d08becfcfef825b0a1e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/ecdsa_secp256k1_verify.rs",
+      "role": "upstream-unchanged",
+      "sha256": "d5d2bdc6133fc64cdbe0765a2d5ee6069a9cfedb8b03943dff269770d30b88c6"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/ecdsa_secp256r1_recover.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2e4920ce9df183016f9bf4765bde45f76b746f34d636b03d21647e8ee7bfb7f3"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/ed25519_scalar_mut.rs",
+      "role": "upstream-unchanged",
+      "sha256": "5b0755082fbcd387ee756a4fcb85b19abb7f632aabefddae79063463cd81b480"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/map_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "5feb978d228ff705dcee86bb90cedaa328dfa196c6fdbbfc48468d6dfbd8cd74"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/mod.rs",
+      "role": "upstream-unchanged",
+      "sha256": "cc07f061fc69b5348c5cb1e8dbaaad46f4b06ff7a396245618d954e98d4c77cd"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/read_xdr.rs",
+      "role": "upstream-unchanged",
+      "sha256": "476f11215c5a4bdcebe94772688e45f28d96db4f5dfe4da029507cd01d4f3f3f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/sec1_decode_point_compressed.rs",
+      "role": "upstream-unchanged",
+      "sha256": "299089e64c18ca9c4414a6461eaf023cbcfdbdca24db9f55edbf28f922771643"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/vec_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "8116fc7fe3f8d9259a9a98a719f9a8a67d96e2159db1644fc1e14cf352aaae48"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/experimental/vm_ops.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a253e366b149b7583c7e48b3aff4a982fca99e0194b526c5276fcaa81253323a"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/mod.rs",
+      "role": "upstream-unchanged",
+      "sha256": "d8b4f3f225b31efed2489ac70a610d6a774514944bdbb5645431e9cfef8251e3"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/runner.rs",
+      "role": "upstream-unchanged",
+      "sha256": "98f216ef92f42ce6364d6aa13cffcc33a6da9fa344469ebe0b7093614ca71fc7"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/cost_runner/util.rs",
+      "role": "upstream-patched",
+      "sha256": "125c02eef64049a13e21cd7573484b204f7e7a364a1bfbacc12144d667e9780f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/bls12_381.rs",
+      "role": "upstream-unchanged",
+      "sha256": "1d75840927326348ef2e75c4e0c8d40106187e942eae5aa6b8a767bd7f4083f2"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/bn254.rs",
+      "role": "upstream-unchanged",
+      "sha256": "91d5f195e217783d883732c31e1ce33c318c553663bfcd299805b88b61c94885"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/metered_scalar.rs",
+      "role": "upstream-unchanged",
+      "sha256": "b84d9c5e689fd4055ec2de080d3a3c84088943c49d1920bff296d9240f1f833e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/mod.rs",
+      "role": "upstream-patched",
+      "sha256": "5daf7ddb8186d51dd81179d7ddf13a20d6f88acce245a31221f5c0fb850518de"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/poseidon/mod.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a4fc963a5c1761ea73004b2906789078d4eec801d10f63e11c76930a95742ae7"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/poseidon/poseidon.rs",
+      "role": "upstream-unchanged",
+      "sha256": "5846c5e04d6bf324f3acf731886de138f0b0885d56231ffd5894267a4979b13e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/poseidon/poseidon_params.rs",
+      "role": "upstream-unchanged",
+      "sha256": "ce99825f3854cd3b727ba1256535c2189980a3359beb88c7005c88a91790bb12"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/poseidon/poseidon2.rs",
+      "role": "upstream-unchanged",
+      "sha256": "7eec27b062ccb41e8953fc87ec3224d52a0bfca881f5073ecb7b10a11b0b12f4"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/poseidon/poseidon2_params.rs",
+      "role": "upstream-unchanged",
+      "sha256": "98bcac557941192631a9956940a0eeb632803aa60154fff3929b5b3408309041"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/poseidon/README.md",
+      "role": "upstream-unchanged",
+      "sha256": "6ef2b2419ee2a58931e0083a6dc915c31faf73318719ca7457416496c1b675a1"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/crypto/poseidon/utils.rs",
+      "role": "upstream-unchanged",
+      "sha256": "ad887f21baf85f2221d85818720c5b0705f1b15ca9e4dc52225e38b52685d158"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/e2e_invoke.rs",
+      "role": "upstream-unchanged",
+      "sha256": "3ae8d07e58e898ec8144c5127bc3435427d45591fd72c04ca6fe747f66ea0de4"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/e2e_testutils.rs",
+      "role": "upstream-unchanged",
+      "sha256": "27727b47a61951317a21b854bd3440dae8ee7ba95fd913f03a9d84a08c1ccef3"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/events/diagnostic.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a66118d5747c50c89b1c7e1fa859b6b43b91f10add59353f274b115e3a171776"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/events/internal.rs",
+      "role": "upstream-unchanged",
+      "sha256": "44c6828241d86a89af619d88026b57b38a7915632a8d163716c4afe9ac6743be"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/events/mod.rs",
+      "role": "upstream-unchanged",
+      "sha256": "3ae49770e3aad7619a83a7df3ce071dd11558baaf53c0ea7966d82d715a5f010"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/events/system_events.rs",
+      "role": "upstream-unchanged",
+      "sha256": "126b8da42733be7deea23b239008eeca261828c191862f26be1d759b82422f53"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/fees.rs",
+      "role": "upstream-unchanged",
+      "sha256": "08017d0c144556974f05c7511887c91bdf4f9650772bd1b7bb630667fb3be46b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host.rs",
+      "role": "upstream-unchanged",
+      "sha256": "c1ea964df761be15b32de4842809df069209b4190cb6d53871cc47afed1ddd3c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/comparison.rs",
+      "role": "upstream-unchanged",
+      "sha256": "58acd6130f38aa371d8bb78c7780314a1c3afdc05ee6b8fbe9e0ca19f3003382"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/conversion.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f37900ebd42eec74d4bed2303c6d031799d42eca21f392ffb66ae376064c3af0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/data_helper.rs",
+      "role": "upstream-unchanged",
+      "sha256": "24f431604013d735654eec72c0fec8e41ff4dd9b3e353dbc0a641450062fa64b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/declared_size.rs",
+      "role": "upstream-unchanged",
+      "sha256": "9d4398a093cbe85806ce7b327b8837502c229fde3051ff303176255f822071f0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/error.rs",
+      "role": "upstream-unchanged",
+      "sha256": "6d4fa87584f3dc60588f83ac2bc359f8b89f6ca2b89b6bbfc34a32f854155faa"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/frame.rs",
+      "role": "upstream-unchanged",
+      "sha256": "55fce1dfc160bdff39bb5ea7d9d57b8a7eb0edcc21d94b253544d7f0645e9221"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/invocation_metering.rs",
+      "role": "upstream-unchanged",
+      "sha256": "5f908cea34a985296063a1da9f241a46f7eec74dd40f6d4b6202ba82dd756176"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/ledger_entry.rs",
+      "role": "upstream-unchanged",
+      "sha256": "101f183dfa65ec07d52bb1a96f3656de5121a301bcc96000fd058cefa5b39fbf"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/ledger_info_helper.rs",
+      "role": "upstream-unchanged",
+      "sha256": "9144a723b7119e868776cb21260b2f44ce286bc6a6485ada29c6133fc71e33ae"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/lifecycle.rs",
+      "role": "upstream-unchanged",
+      "sha256": "e842de9f63a3d3f833d460d52914a361026dfd823dc51c5a82ca46fc5a897ee1"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/mem_helper.rs",
+      "role": "upstream-unchanged",
+      "sha256": "7572dd84a13b22d152005ea55d3ee37ce2293da6d013382114815b8b9ec1e58e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/metered_clone.rs",
+      "role": "upstream-unchanged",
+      "sha256": "e987eab2736380414d73d6d353743c42410751fac027630a9172fd6e812c1469"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/metered_hash.rs",
+      "role": "upstream-unchanged",
+      "sha256": "3792f8eea8df5b983fb363b0a282f8e91e3b7dfca5a424484cb5d3e0ae5c056b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/metered_map.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f81c4b76b8487f4f6d849751cd26353bf8778ecf0916266cf2e5fb09fd2e5b5c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/metered_vector.rs",
+      "role": "upstream-unchanged",
+      "sha256": "01cb08e2b689a539d06d23518fb7f6507be48677e3b30919cd28151d8dd78da5"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/metered_xdr.rs",
+      "role": "upstream-unchanged",
+      "sha256": "22e70db0f290b025fb1e992b230564210a7b315c9ea7dca1e3e28609c64b7a52"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/num.rs",
+      "role": "upstream-unchanged",
+      "sha256": "db5c486082fc7c58daba77fb9690801c6e68601b3db7a6a2de9ed04590327d3a"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/prng.rs",
+      "role": "upstream-unchanged",
+      "sha256": "eeed1bff44661301241a4bd31c87705cc202eb8efd829763646947091bb6de39"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/trace.rs",
+      "role": "upstream-unchanged",
+      "sha256": "6de79ddfdcc146c188a6f340329d9ec62dfe7cfea46a534b3d8734e487855226"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/trace/fmt.rs",
+      "role": "upstream-unchanged",
+      "sha256": "0436f0f15540985f007b728d426470218ea463ed8b1dde23dedee0c08b986b07"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host/validity.rs",
+      "role": "upstream-unchanged",
+      "sha256": "b5c6baa004d08a398e6553f5336c5c1dc2ccb099dfdc0ed708ed967147c883d5"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/host_object.rs",
+      "role": "upstream-unchanged",
+      "sha256": "8926312be0368c0fe503793a233cfef2782991f84936befd6dfb9844bff93e40"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/ledger_info.rs",
+      "role": "upstream-unchanged",
+      "sha256": "5a7d202b945c0e639624746f926040eb873f640217652d55fb68fbc5acfb1f4c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/lib.rs",
+      "role": "upstream-unchanged",
+      "sha256": "066328815dd01b7616d29bf56f74cf089c53cac95ae66910b44a56befe931cbb"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/macros.rs",
+      "role": "upstream-unchanged",
+      "sha256": "40406f573892430b2bdfce358923e0cd47bd06e0c2ab7d472a15f09b9a06b57d"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/storage.rs",
+      "role": "upstream-unchanged",
+      "sha256": "0a994c02aad9e62b1deb94f4c59d84a1611d138a44a11791e4afeaf75067ba40"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a8a6bd4812c944cc9e6a09013041b39aa5b81db192caeb3b764c795ef04e6e33"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/address.rs",
+      "role": "upstream-unchanged",
+      "sha256": "6a4f9172bce586d06b8fe959d4ad0d93cc9628be947585f5dc76b74df62cbc6e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/auth.rs",
+      "role": "upstream-unchanged",
+      "sha256": "c8de9b17898918e74b5d0615a309282b7a6b55804d1d9f7138567d55a1c9d25e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/auth_delegation.rs",
+      "role": "upstream-unchanged",
+      "sha256": "7cbdd4ebe2d9e1bcb6aff43af6ae682b3bf7d92e33b1695ec825ea7c418f9790"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/basic.rs",
+      "role": "upstream-unchanged",
+      "sha256": "4e493cf5347079fb538e8236591196b6830345d29939c161e4d3bb4b13af36fb"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/bls12_381.rs",
+      "role": "upstream-unchanged",
+      "sha256": "5bd4a5b16cc1b0cb4179aa020b67230386e6daf376ec5d9e00a1b38aa81d07b2"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/bn254.rs",
+      "role": "upstream-unchanged",
+      "sha256": "bc2343e0e058934d84baabd7cb2d3a530247215ae247fa5d4263342d027afb21"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/budget_metering.rs",
+      "role": "upstream-unchanged",
+      "sha256": "9330bc2de4f37bd48b86d027a4765642849fdd57789735574ac3865a38f13218"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/bytes.rs",
+      "role": "upstream-unchanged",
+      "sha256": "75ee0b70dae5d75942f0057a65778ef42269c45db75518a5e1341df91709990c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/complex.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2862b93908719005d1c4a144ac59e00064aa3c76cbae41630ba97082f9c5569b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/crypto.rs",
+      "role": "upstream-unchanged",
+      "sha256": "ba3b7aed94fe3db44fec26b13943a1ffb5936d386bbcfcf4889bc63668697c40"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/data/BLS12381G1_XMD_SHA-256_SSWU_RO_.json",
+      "role": "upstream-unchanged",
+      "sha256": "9ed93f6ae3e5d3e2ef48d7f3a954ac4ccc0702f693e62b2f48798348618ef6cc"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/data/BLS12381G2_XMD_SHA-256_SSWU_RO_.json",
+      "role": "upstream-unchanged",
+      "sha256": "7ff2010d99cd886ab8e951ae1ed657b57e6b95fe6029fa4a0f519ea5ca29f126"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/depth_limit.rs",
+      "role": "upstream-unchanged",
+      "sha256": "28ca3cb95761cc9cfc9e89dfc3382654b58618e5a5ae1a2a751887b11ea721f3"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/dispatch.rs",
+      "role": "upstream-unchanged",
+      "sha256": "01721a91a4959b6906331baf807ae13f87020cfca095147bae5ac5e79ce2f3d4"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/e2e_tests.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2236567e64d88267c8fe7cb4c183014ee1c6658f33156d22ed338566c0f55b97"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/event.rs",
+      "role": "upstream-unchanged",
+      "sha256": "72509084bf5fa4e70e4c30164c6ab5387ad808e6f0add2da14eb9affda212ae8"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/executable_tag.rs",
+      "role": "upstream-unchanged",
+      "sha256": "ebd5d5914c8f1066c2c7490a72f682c5e0edb8364169f0905512d2eae9f7c92a"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/finish.rs",
+      "role": "upstream-unchanged",
+      "sha256": "47122056b6e6907e35245ebe27e0adae0de6aaa1d4947fd14dc6d21385144e3a"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/frame.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a97295f1aad18d12eee0134300bada9c64e768e03ebea427750ba2c11e91a93f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/host.rs",
+      "role": "upstream-unchanged",
+      "sha256": "bcaa60fe9cf5db09674f6153bea681072a9a7bf2d6962ec9ee24fe066bb2bae0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/hostile.rs",
+      "role": "upstream-unchanged",
+      "sha256": "591d20b6281d587bde95ef32fc37cde46f40f5b2e0de9e9d4d3fcaf9759c5cbb"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/hostile_opt.rs",
+      "role": "upstream-unchanged",
+      "sha256": "4c9990edcd39e7c1c18b2433aa62e9f42ba3e83c380e74fa4999725247ec64ab"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/invocation.rs",
+      "role": "upstream-unchanged",
+      "sha256": "2255f57d62306ca19c6c10adbc9b7c7cf0ba2929f7fe54b20f5f5d5f6b79cd8b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/invoker_auth.rs",
+      "role": "upstream-unchanged",
+      "sha256": "6bdb8121687af7f413d0766d27f058ff77523a8e2666f5e99ab5261e46a84447"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/ledger.rs",
+      "role": "upstream-unchanged",
+      "sha256": "0845c2d0caa2bde0709560c9904cadc31141e38b2e2bfcb7b35379843d3d1c11"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/lifecycle.rs",
+      "role": "upstream-unchanged",
+      "sha256": "3f766d60133448f986f4a2c3cd430d76a4e60c65f76567b3c95fded04f1fb71b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/lifetime_extension.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a01d25d062db6035b8be6dba5b3b4dbea932636ee21df136e479a50bb9230e4d"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/linear_memory.rs",
+      "role": "upstream-unchanged",
+      "sha256": "671cc9504b86113cad205f3b086fb39d131cc57cb3ba56fdce46b5ea4d92b98c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/map.rs",
+      "role": "upstream-unchanged",
+      "sha256": "bbc56b54b51920813fd8d64a6be76b43c9eca75bb3725ccc4e0b08159194b6a8"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/metering_benchmark.rs",
+      "role": "upstream-unchanged",
+      "sha256": "519caa6184ee14013ba408772e6abb2af350cf1ebbbd22d6141dc781a0d4b2ce"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/num.rs",
+      "role": "upstream-unchanged",
+      "sha256": "e6ba8516f47fb3912be4478295c4a40c3b7d52357d4f757853d573bd95ffeae2"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/observe.rs",
+      "role": "upstream-unchanged",
+      "sha256": "35104a4b5ac67dc424fa2083debbd050824c0a8c88bcee55b6a69fcac36c9657"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/poseidon/mod.rs",
+      "role": "upstream-unchanged",
+      "sha256": "5e1b1a30aa291cfcc4f4cf4d83535e41fbb6bed9b6737f6bc1dc8534632617c3"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/poseidon/poseidon.rs",
+      "role": "upstream-unchanged",
+      "sha256": "5875c1b96951b571a0138ec084ad3c4235db448e0d5583cce2f9ddcb2acba290"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/poseidon/poseidon_instance_bls12.rs",
+      "role": "upstream-unchanged",
+      "sha256": "a6eb658950ce11abd548d5fcec8a090c4e9b20b55d0ee90a50d8a01761ee0b30"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/poseidon/poseidon_instance_bn254.rs",
+      "role": "upstream-unchanged",
+      "sha256": "550f2517cc7e439c590b2fda0ec9646bcf3096a92e9df17a8aedecd5fe5d7ee9"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/poseidon/poseidon_instance_hadeshash_bls12.rs",
+      "role": "upstream-unchanged",
+      "sha256": "edd04e348904bd2c7e2b8d27f2af940ef6d63321b7a2b5ab97b513dcf1c3c488"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/poseidon/poseidon_instance_hadeshash_bn254.rs",
+      "role": "upstream-unchanged",
+      "sha256": "35a05127d1e2a6cc5c2112c6423d23407f5f2d2cf5190fd3eaa7507e359c03fc"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/poseidon/poseidon2.rs",
+      "role": "upstream-unchanged",
+      "sha256": "3d23c5aab91f746836dc6c3452fb5f5176882b2339506013bb6caaf430e61a01"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/poseidon/poseidon2_instance_bls12.rs",
+      "role": "upstream-unchanged",
+      "sha256": "68280a5e60219a862ddb8fc103ba4da04d246b3d5a3225faa0ccb6968f66c8d9"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/poseidon/poseidon2_instance_bn254.rs",
+      "role": "upstream-unchanged",
+      "sha256": "e282c65a05bfe60219b2dd31b94288be863f0d7dbb9628c3921c5513e5e6703a"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/post_mvp.rs",
+      "role": "upstream-unchanged",
+      "sha256": "9c995fb4db07fa6cb8abf8aec3b686b6356b416cab2abcb5d947f05050d73751"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/prng.rs",
+      "role": "upstream-unchanged",
+      "sha256": "7f92521f91c659f0c4b667fa7298c64cf793f9ff870c1ec9a6ed18596dbae22f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/protocol_gate.rs",
+      "role": "upstream-unchanged",
+      "sha256": "34f3d58b295b56318f8422124c41b5430b88a8f92d13ec296be829b3e5cc4597"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/stellar_asset_contract.rs",
+      "role": "upstream-unchanged",
+      "sha256": "ed1db7e8139ec9cc7ce78eb822964f764cc4e56501d7011a085e91e2995b377c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/storage.rs",
+      "role": "upstream-unchanged",
+      "sha256": "e98260987383d11f5148b15748ae02aa1d320f2e98a3cd7b2e9d99e55972a4e6"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/str.rs",
+      "role": "upstream-unchanged",
+      "sha256": "1bffe1065238f3a1320d02ec9abae855f8c4e85de0e1eb358473af7dff7a8221"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/symbol.rs",
+      "role": "upstream-unchanged",
+      "sha256": "4e615df577b72a61d09c4a60fd0a13138ae0eb12ccdd3ddbf90e5b3b15c6b9da"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/tuple.rs",
+      "role": "upstream-unchanged",
+      "sha256": "9a3f64a607a19ed0062a83305337193cddaaf54896c8ea2302abeec16c9bd1aa"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/test/vec.rs",
+      "role": "upstream-unchanged",
+      "sha256": "10e580d61074cb770c9392a4541c0221626fa6e3f2ee9d09dc3f1d66f63334b0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/testutils.rs",
+      "role": "upstream-unchanged",
+      "sha256": "b39bf85a8500949900f290c9d934ac29540d7f0a9ffa42e4a5af024b4566d78f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/vm.rs",
+      "role": "upstream-unchanged",
+      "sha256": "dcaa075b50bb4aa900ef1dec78a715fcdcb2e189f80d61a85cc03aa9d5676ae0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/vm/dispatch.rs",
+      "role": "upstream-unchanged",
+      "sha256": "6814aed8a87857b728a4a0dcffd959df516bad781875fe874ecc035e232e0eae"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/vm/fuel_refillable.rs",
+      "role": "upstream-unchanged",
+      "sha256": "b8e65b7971534028a2e4f2e865653cee23252a4b750ba5c9da35071b7b1cb110"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/vm/func_info.rs",
+      "role": "upstream-unchanged",
+      "sha256": "80fa97bf3e4b23155b0d52e9694d3f3351f2109f61b7a2bdf1df591f4df0d579"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/vm/module_cache.rs",
+      "role": "upstream-unchanged",
+      "sha256": "240ce8aa32e6723bde86891ba02930d7dc723ffee8af1411c9ae9262ed1fcf0e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/src/vm/parsed_module.rs",
+      "role": "upstream-unchanged",
+      "sha256": "983c4a3559e750e808c46145d5823a8c75a7021a69168bf9922cc95e09beab60"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/array.rs",
+      "role": "upstream-unchanged",
+      "sha256": "f06ec26684e54d32733b3c2ca8ce782bac2d6d155edee4da40011f5484ac4da6"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/bls.rs",
+      "role": "upstream-unchanged",
+      "sha256": "df389e56122bc02793c9cea9684cfa98fc0f70244680787876df6277c9f6e053"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/aggregate/aggregate_0x0000000000000000000000000000000000000000000000000000000000000000.json",
+      "role": "upstream-unchanged",
+      "sha256": "0fd77da79efe9888a1b4fb50956a67f222805f128e629b5ac2732e2d1f72cf13"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/aggregate/aggregate_0x5656565656565656565656565656565656565656565656565656565656565656.json",
+      "role": "upstream-unchanged",
+      "sha256": "c34b74708fcfee2c5b9ad36b70e7023ac05d1a8b029535cc6c33a7dacd954ec5"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/aggregate/aggregate_0xabababababababababababababababababababababababababababababababab.json",
+      "role": "upstream-unchanged",
+      "sha256": "afde7dec686cb4923d0450cfb9921275b8d78552b4dcb02d5166b091ea5c4b19"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/aggregate/aggregate_infinity_signature.json",
+      "role": "upstream-unchanged",
+      "sha256": "8685d4aed7901c676274d0da8836699bf75e9f3d619016ccf4ff469a421a1151"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/aggregate/aggregate_single_signature.json",
+      "role": "upstream-unchanged",
+      "sha256": "f564859b440e57929105f6d743650099d0e8cab67e0f3419585134b1fcfeb7ba"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/aggregate/README.md",
+      "role": "upstream-unchanged",
+      "sha256": "4fa1263d1d7ee08f7dd9946557225b37d04d263c8741fb2229fcc552cd81a35c"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/aggregate_verify/aggregate_verify_valid.json",
+      "role": "upstream-unchanged",
+      "sha256": "71f50eb165aea843e607c070274e5d27734181c1c7bcb80c2baa93d273afd8dc"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/aggregate_verify/README.md",
+      "role": "upstream-unchanged",
+      "sha256": "07647fa088e75ce6a6782a6542315382bc05347327f88ee3376fab545ab0ee27"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/batch_verify/batch_verify_invalid_forged_signature_set.json",
+      "role": "upstream-unchanged",
+      "sha256": "07acd4eb0c7779eace6e594bf38b7dc8ab89bb026226065ac23bc709bb30c4f0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/batch_verify/batch_verify_valid_multiple_signature_set.json",
+      "role": "upstream-unchanged",
+      "sha256": "b442e85adefa054c3026110a0222b519da8b43f52e1886a99dd51345f5e5a290"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/batch_verify/batch_verify_valid_simple_signature_set.json",
+      "role": "upstream-unchanged",
+      "sha256": "afb12805cc81f5969b0b6ac7aeebca13e35408032c8089590964ea90ec180cda"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/batch_verify/README.md",
+      "role": "upstream-unchanged",
+      "sha256": "db09ff95332cacac6230a2380945c48dbce670b249288aab6c510f3d0be3f49b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/fast_aggregate_verify/fast_aggregate_verify_extra_pubkey_4f079f946446fabf.json",
+      "role": "upstream-unchanged",
+      "sha256": "4ca7a65e9654102feb3a98c0304e467848ff24496930eec7fd6b698114116df3"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/fast_aggregate_verify/fast_aggregate_verify_extra_pubkey_5a38e6b4017fe4dd.json",
+      "role": "upstream-unchanged",
+      "sha256": "79b09e4c6c0b671debde16953f005e57502c657ec7555b0681f1fed27c51d158"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/fast_aggregate_verify/fast_aggregate_verify_extra_pubkey_a698ea45b109f303.json",
+      "role": "upstream-unchanged",
+      "sha256": "32a55b57f6a4fa0f95bd9bbb1ac22bc090c3af6bbdcb3568911c353e676d5335"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/fast_aggregate_verify/fast_aggregate_verify_valid_3d7576f3c0e3570a.json",
+      "role": "upstream-unchanged",
+      "sha256": "71b158e0d263798db02b5900b6f5ac1cb9e3556880bdb1269c35def19457de34"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/fast_aggregate_verify/fast_aggregate_verify_valid_5e745ad0c6199a6c.json",
+      "role": "upstream-unchanged",
+      "sha256": "2fb075aaee82ed1a72315c0952039d155bb33c688035d2ab411c2cd3944c75b2"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/fast_aggregate_verify/fast_aggregate_verify_valid_652ce62f09290811.json",
+      "role": "upstream-unchanged",
+      "sha256": "b94f9b580f879b61f7a4668a57ecaa9283f7181a56555cac86c98d372cb6946a"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/fast_aggregate_verify/README.md",
+      "role": "upstream-unchanged",
+      "sha256": "c2cccf11c0b38ecb8a7bc54bfeebab5d6887b7aa84d27f1b73386098c6364f25"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/README.md",
+      "role": "upstream-unchanged",
+      "sha256": "c27dc3e29aea85fc826720c33cc8aa4f3d031fbffd38bc88d1cae0553e557bbe"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/sign_case_11b8c7cad5238946.json",
+      "role": "upstream-unchanged",
+      "sha256": "767c9bb0c9222a656abfa3ec9cfc19e71dfd5b8456361f33608a739b6a1b97b0"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/sign_case_142f678a8d05fcd1.json",
+      "role": "upstream-unchanged",
+      "sha256": "c08768db3ce2207c6dab56965d0705d09ea7cf8aa8eae66a460f6f4ceeba53c3"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/sign_case_37286e1a6d1f6eb3.json",
+      "role": "upstream-unchanged",
+      "sha256": "dad1c8c2e541103508f9f8a84c513deb1da45997f2c55ba110def2b4a5913326"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/sign_case_7055381f640f2c1d.json",
+      "role": "upstream-unchanged",
+      "sha256": "ed1177493322c9a7db9f342f822b45a21cc7d0756409d6c56e57dfe69281dcbf"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/sign_case_84d45c9c7cca6b92.json",
+      "role": "upstream-unchanged",
+      "sha256": "fffd82df05a3cc8e25b0c95935821e93cffa3fee3274b9d04113e590fd36665b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/sign_case_8cd3d4d0d9a5b265.json",
+      "role": "upstream-unchanged",
+      "sha256": "87e87efd08ce6f1fa754b5430a883e2caed34ce3b78194b94d6f2ae85402f9bd"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/sign_case_c82df61aa3ee60fb.json",
+      "role": "upstream-unchanged",
+      "sha256": "89dd0dde565734efda623e0747dc7dfb16fc89cde8470b81384a012951500091"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/sign_case_d0e28d7e76eb6e9c.json",
+      "role": "upstream-unchanged",
+      "sha256": "33000e5e07d884b92c624a94d8e2ad0761918bd807637183a2415daefbcd5712"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/sign/sign_case_f2ae1097e7d0e18b.json",
+      "role": "upstream-unchanged",
+      "sha256": "da32d3aefb62896a3c461a0e695ab83394332e14c48916377b0628aa786dde02"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/README.md",
+      "role": "upstream-unchanged",
+      "sha256": "ad78bd425d63a7fc89d65df233121b76b79d4fe0793693a47f0d9536ad635246"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_valid_case_195246ee3bd3b6ec.json",
+      "role": "upstream-unchanged",
+      "sha256": "31d0d1e654ab088825e054bb2669aa7662f81d6e41dc5d6d9130e9cf82ec390f"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_valid_case_2ea479adf8c40300.json",
+      "role": "upstream-unchanged",
+      "sha256": "3f4648de420dcb333c90293b719e336889fb280fdabb47c3db7e7aa41f8efe2e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_valid_case_2f09d443ab8a3ac2.json",
+      "role": "upstream-unchanged",
+      "sha256": "0684ec2a0fc87de41584621d745afcae73fb5e05b321bcfb6cf14fd893c5ffc1"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_valid_case_3208262581c8fc09.json",
+      "role": "upstream-unchanged",
+      "sha256": "52f3e50bdafd25afca80dabb99f2fe3ba4342d93bf7dd570a3e6785efe56e9f8"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_valid_case_6b3b17f6962a490c.json",
+      "role": "upstream-unchanged",
+      "sha256": "4f98b059930df23abadc3236c578d27c232c7d9f659082159b1a339139372960"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_valid_case_6eeb7c52dfd9baf0.json",
+      "role": "upstream-unchanged",
+      "sha256": "3692901694dd143941bbd9c9d5184145855c8f9585e43093968dc97c5be79653"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_valid_case_8761a0b7e920c323.json",
+      "role": "upstream-unchanged",
+      "sha256": "073f5431c86442b038c44c223b7c35ef0982ddacf427c780a4e75a9e7475fdf4"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_valid_case_d34885d766d5f705.json",
+      "role": "upstream-unchanged",
+      "sha256": "bf14aa35e132b83a46e1ecd3e0678f93ea23c1a75aaf5f44b955bdf48998a8cc"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_valid_case_e8a50c445c855360.json",
+      "role": "upstream-unchanged",
+      "sha256": "b8d47dc670d6ebb314afc7b4eb446ed5cacb54365f2a6f6bcffac5a291dde944"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_wrong_pubkey_case_195246ee3bd3b6ec.json",
+      "role": "upstream-unchanged",
+      "sha256": "1b1f413845d9b08a3c08daf22e0f075a4dcf05d463f67aea2fa974e526c14364"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_wrong_pubkey_case_2ea479adf8c40300.json",
+      "role": "upstream-unchanged",
+      "sha256": "8dbb5f5b5f4cf205e2e014cbd5f55a05ffac44b279d77b9723afb3845959e6d2"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_wrong_pubkey_case_2f09d443ab8a3ac2.json",
+      "role": "upstream-unchanged",
+      "sha256": "51990cfe30c215d0028775cdd96410baf6e86ffc7df4c78a17622693dcb8329b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_wrong_pubkey_case_3208262581c8fc09.json",
+      "role": "upstream-unchanged",
+      "sha256": "899ee3986e9fdb994dd4b3d35f90b6108c85e8d84fb4fdfd5e2f1ee55e039c6b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_wrong_pubkey_case_6b3b17f6962a490c.json",
+      "role": "upstream-unchanged",
+      "sha256": "aaefec94b72f38086ae3907c4006e31c5f5330584cf1eb022bfba72fe8d5f3d2"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_wrong_pubkey_case_6eeb7c52dfd9baf0.json",
+      "role": "upstream-unchanged",
+      "sha256": "6db4c432b28a36fbb5218c368c7e2185b86eb2a599ce6eef034c161093aa125b"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_wrong_pubkey_case_8761a0b7e920c323.json",
+      "role": "upstream-unchanged",
+      "sha256": "6d2e130639371bf3979d012298f02eb1a8504c398c5cf55c0476298f39604d72"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_wrong_pubkey_case_d34885d766d5f705.json",
+      "role": "upstream-unchanged",
+      "sha256": "bf2ea57894b7847aabb395702c923ab18703b64d282f71e4ce95d39b10e5cf79"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verify_wrong_pubkey_case_e8a50c445c855360.json",
+      "role": "upstream-unchanged",
+      "sha256": "c0ffab3aac8191721492c2794e4e256fd671d9041b774376800dff5e749dd22e"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/data/ethereum-bls/verify/verifycase_one_privkey_47117849458281be.json",
+      "role": "upstream-unchanged",
+      "sha256": "f37d78d7a506720e95f8f9753f30a470fe34f4028067fd80c938a92211bf8f70"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/ed25519_edge_cases.rs",
+      "role": "upstream-unchanged",
+      "sha256": "133b65c6339809bc533760c4963f095014885e1e1f39b70b43adc06db65b2e71"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/fees.rs",
+      "role": "upstream-unchanged",
+      "sha256": "74bc2df9a27ac9695682ba83521fa9c2e526e9bce348c2a97b7aeee6108047d4"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/hyperion_crypto_compatibility.rs",
+      "role": "local-addition",
+      "sha256": "93181fd68c4cfab99a19b525a78b6e4f22ec9a733a45f6beadb0701d0f737fe5"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/integration.rs",
+      "role": "upstream-unchanged",
+      "sha256": "87acf5439b94dfae5b3ffe2a1994e88896da6eb53c7578533c420dcc1fa8fddb"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/option.rs",
+      "role": "upstream-unchanged",
+      "sha256": "65d65734313ed9702627022f731145ab22b37f81950017bdda95bbed9c79c8dc"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host/tests/secp256r1_sig_ver.rs",
+      "role": "upstream-patched",
+      "sha256": "1b562075cf696283a2e7ac1cdec70e98eeb968ed3a56e93a14079f42aa296b40"
+    },
+    {
+      "path": "soroban/vendor/soroban-env-host-rustcrypto.patch",
+      "role": "patch-artifact",
+      "sha256": "48a21c883fafa443d1df73c3d58ba147415b12fe2f2cd2e923619d2e9e97ef0d"
+    }
+  ]
+}
