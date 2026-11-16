@@ -16,21 +16,22 @@ against itself.
 
 ## What is in here
 
-| Module        | What it is for                                                                         |
-| ------------- | -------------------------------------------------------------------------------------- |
-| `bytes`       | Hex, big endian integers, ascii, slicing that refuses a short read instead of clamping |
-| `routes`      | The four rails, their tag values, and what is true about each one                      |
-| `errors`      | Both chains' error vocabularies with a sentence of help per error                      |
-| `addresses`   | Stellar strkeys: parse, encode, and the two wire forms the rails want                  |
-| `notes`       | The notes Hyperion writes into a rail's payload so a delivery knows who it is for      |
-| `amounts`     | Fees, decimal conversion, and formatting that never touches a float                    |
-| `flow`        | Sliding flow windows, the same arithmetic both routers run                             |
-| `cctp`        | Reading CCTP V2 messages, which is all this side ever does with them                   |
-| `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
-| `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
-| `deployments` | Deployment records, and a loader that checks them instead of casting them              |
-| `registry`    | Assets and rail contracts per chain, with provenance attached                          |
-| `abi`         | Generated from the Foundry build, behind its own entry point                           |
+| Module          | What it is for                                                                         |
+| --------------- | -------------------------------------------------------------------------------------- |
+| `bytes`         | Hex, big endian integers, ascii, slicing that refuses a short read instead of clamping |
+| `routes`        | The four rails, their tag values, and what is true about each one                      |
+| `errors`        | Both chains' error vocabularies with a sentence of help per error                      |
+| `addresses`     | Stellar strkeys: parse, encode, and the two wire forms the rails want                  |
+| `notes`         | The notes Hyperion writes into a rail's payload so a delivery knows who it is for      |
+| `amounts`       | Fees, decimal conversion, and formatting that never touches a float                    |
+| `flow`          | Sliding flow windows, the same arithmetic both routers run                             |
+| `cctp`          | Reading CCTP V2 messages, which is all this side ever does with them                   |
+| `compatibility` | Comparing registered note, CCTP, address, route and error wire schemas                 |
+| `chains`        | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
+| `quotes`        | Pricing a rail locally, so an app can render four of them while somebody types         |
+| `deployments`   | Deployment records, and a loader that checks them instead of casting them              |
+| `registry`      | Assets and rail contracts per chain, with provenance attached                          |
+| `abi`           | Generated from the Foundry build, behind its own entry point                           |
 
 ```ts
 import { parseStellarAddress, planQuotes, formatUnits } from "@hyperion/protocol";
@@ -97,6 +98,22 @@ and dies before writing a single file. Every dependency here is a dev dependency
 with none at runtime, and `package-lock.json` is committed, so what CI installs is what was tested.
 The flag lives in the repository rather than in somebody's shell history because an install flag
 that only exists on one machine is a build that only works on one machine.
+
+## Wire-format compatibility reporting and migration
+
+`CANONICAL_WIRE_SCHEMA_V1`, `buildCurrentWireFormatSchema`, `verifyCanonicalV1Fixtures`, and
+`compareWireFormatSchemas` compare baseline and candidate wire schemas across SEP-23 address tags,
+route tags, outbound/inbound notes, CCTP V2 header and burn body offsets, `QuoteBlocker` integers,
+and Soroban/EVM error tables:
+
+- **Version-1 stability**: Comparing `CANONICAL_WIRE_SCHEMA_V1` against `buildCurrentWireFormatSchema()`
+  returns `classification: "identical"` (`compatibleWithV1: true`) and runs deterministic v1 round-trip
+  fixture checks.
+- **Compatible vs breaking changes**: Append-only additions to Soroban/EVM error lists, route tags,
+  or `QuoteBlocker` codes report `"compatible"`, while changed byte offsets, altered field widths,
+  reassigned address/route tags, or reordered error variants report `"breaking"` with exact
+  `schemaField` paths so migrations must bump envelope versions explicitly. Active live deployment
+  remains Stellar Testnet outbound ITS/CCTP; EVM origin routers and unvalidated rails stay gated.
 
 ## Provenance
 

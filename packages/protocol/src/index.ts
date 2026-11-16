@@ -45,6 +45,9 @@ export * from "./flow.js";
 // Reading CCTP V2 messages, which is all this side ever does with them.
 export * from "./cctp.js";
 
+// Wire-format schema comparison and v1 compatibility reporting.
+export * from "./compatibility.js";
+
 // Chains, their rpc endpoints, their explorers and their CCTP domains.
 export * from "./chains.js";
 
