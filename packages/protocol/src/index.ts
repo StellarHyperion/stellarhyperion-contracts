@@ -51,6 +51,9 @@ export * from "./chains.js";
 // Pricing a route locally so an app can render four of them while somebody types.
 export * from "./quotes.js";
 
+// Typed validation and conservative overlays for external route-health snapshots.
+export * from "./routeHealth.js";
+
 // Deployment records, and a loader that checks them instead of casting them.
 export * from "./deployments.js";
 

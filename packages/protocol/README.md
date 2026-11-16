@@ -28,6 +28,7 @@ against itself.
 | `cctp`        | Reading CCTP V2 messages, which is all this side ever does with them                   |
 | `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
 | `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
+| `routeHealth` | Typed validation of external route-health records with conservative planning overlays  |
 | `deployments` | Deployment records, and a loader that checks them instead of casting them              |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
@@ -97,6 +98,22 @@ and dies before writing a single file. Every dependency here is a dev dependency
 with none at runtime, and `package-lock.json` is committed, so what CI installs is what was tested.
 The flag lives in the repository rather than in somebody's shell history because an install flag
 that only exists on one machine is a build that only works on one machine.
+
+## External route-health validation and compatibility
+
+`parseRouteHealthRecord`, `parseRouteHealthSnapshot`, `isUsableForLiveQuote`, and
+`applyRouteHealthToSnapshot` validate consumer-supplied health payloads before local quote planning:
+
+- **Scope separation**: `event_config_sample` records (reconstructed from historical router events)
+  and `provider_status` pings cannot carry live `flowAvailable` values or `usableForLiveQuote: true`,
+  so configuration samples never masquerade as live quotes.
+- **Field-accurate diagnostics**: Invalid ISO-8601 timestamps, unknown route slugs, invalid status
+  strings, or non-string `bigint` amounts throw `RouteHealthFormatError` naming the exact JSON path.
+- **Conservative unknown handling**: `applyRouteHealthToSnapshot` leaves the caller's
+  `RouterSnapshot` untouched and produces a derived snapshot where `"unknown"` or `"unavailable"`
+  provider states disable unconfirmed rails rather than assuming live readiness. Active deployment
+  scope remains Stellar Testnet outbound ITS/CCTP; unvalidated EVM origin routers and rails stay
+  gated.
 
 ## Provenance
 
