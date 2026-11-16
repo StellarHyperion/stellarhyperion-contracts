@@ -64,3 +64,21 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Signed acceptance evidence validation and migration
+
+Validate canonical v2 signed acceptance proofs (`schemaVersion: 2`) or migrate historical files under `deployments/evidence/` with `script/stellar/validate-evidence.mjs`:
+
+```bash
+node script/stellar/validate-evidence.mjs \
+  --file deployments/evidence/2026-10-29-cctp.json \
+  --migrate-legacy \
+  --require-delivered
+```
+
+Compatibility and migration notes:
+
+- Canonical `schemaVersion: 2` proofs require explicit `networkBinding`, `partyBinding` (non-zero sender and recipient), `assetBinding` (source and destination token contracts and decimals), exact decimal-string `amountBinding` conservation, `sourceProof`, and `destinationProof` (`receiptStatus: "success"`, `confirmations >= 1`, and `independentlyVerifiedEvents: true`).
+- Source-only checkpoints, forwarding-API-only statuses (`independentlyVerifiedEvents: false`), and mock or local rehearsal fixtures cannot be classified as `delivered`.
+- Existing historical files (`deployments/evidence/2026-10-28-paid-its.json`, `2026-10-29-cctp.json`, and `2026-10-29-conversion.json`) remain preserved verbatim on disk and upgrade cleanly via `migrateHistoricalAcceptanceEvidence` (`--migrate-legacy`).
+
