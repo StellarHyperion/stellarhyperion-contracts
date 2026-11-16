@@ -188,3 +188,27 @@ enum QuoteBlocker {
     InvalidDestination,
     ChainNotSupported
 }
+
+/// @dev Runtime deployment classification observed when inspecting a rail adapter contract.
+enum AdapterDeploymentKind {
+    MissingCode,
+    ImmutableContract,
+    MinimalProxy,
+    UpgradeableContract
+}
+
+/// @dev Code identity, router binding, interface support, and upgradeability report for an adapter.
+struct AdapterIdentityReport {
+    address adapter;
+    bytes32 codeHash;
+    bytes32 approvedCodeHash;
+    address declaredRouter;
+    RouteKind declaredRoute;
+    bool hasCode;
+    bool routerMatches;
+    bool routeMatches;
+    bool interfaceSupported;
+    bool codeHashMatches;
+    AdapterDeploymentKind deploymentKind;
+    address minimalProxyTarget;
+}

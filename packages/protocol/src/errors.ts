@@ -122,6 +122,10 @@ export const EVM_ERROR_NAMES = [
   "ProtectedAsset",
   "ZeroAddress",
   "RefundFailed",
+  "InvalidAdapterCode",
+  "AdapterRouterMismatch",
+  "UnsupportedAdapterInterface",
+  "AdapterCodeHashMismatch",
 ] as const;
 
 export type EvmErrorName = (typeof EVM_ERROR_NAMES)[number];
@@ -437,6 +441,28 @@ const HELP: Record<HyperionErrorName, Omit<ErrorHelp, "sorobanCode">> = {
   ExceedsRouteLimit: {
     summary: "That transfer exceeds the maximum single transfer limit configured for this route.",
     fault: "limit",
+    retryable: false,
+  },
+  InvalidAdapterCode: {
+    summary: "The candidate adapter address holds no deployed contract bytecode.",
+    fault: "config",
+    retryable: false,
+  },
+  AdapterRouterMismatch: {
+    summary: "The candidate adapter is bound to a different router address than this deployment.",
+    fault: "config",
+    retryable: false,
+  },
+  UnsupportedAdapterInterface: {
+    summary:
+      "The candidate adapter does not implement the expected rail interface or declares a different route.",
+    fault: "config",
+    retryable: false,
+  },
+  AdapterCodeHashMismatch: {
+    summary:
+      "The adapter contract bytecode changed after review and no longer matches its approved code hash.",
+    fault: "config",
     retryable: false,
   },
 };

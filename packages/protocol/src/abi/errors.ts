@@ -60,6 +60,10 @@ export const GENERATED_EVM_ERROR_NAMES = [
   "ProtectedAsset",
   "ZeroAddress",
   "RefundFailed",
+  "InvalidAdapterCode",
+  "AdapterRouterMismatch",
+  "UnsupportedAdapterInterface",
+  "AdapterCodeHashMismatch",
 ] as const;
 
 /** Four byte selector to error, for every error the compiled contracts can actually revert with. */
@@ -81,6 +85,7 @@ export const EVM_ERROR_SELECTORS = {
   "0x44e23f21": { name: "ActionFieldNotEmpty", signature: "ActionFieldNotEmpty()" },
   "0x469eb53c": { name: "ReplayedMessage", signature: "ReplayedMessage()" },
   "0x5274afe7": { name: "SafeERC20FailedOperation", signature: "SafeERC20FailedOperation(address)" },
+  "0x58166455": { name: "InvalidAdapterCode", signature: "InvalidAdapterCode(address)" },
   "0x6697b232": { name: "AccessControlBadConfirmation", signature: "AccessControlBadConfirmation()" },
   "0x71c4efed": { name: "SlippageExceeded", signature: "SlippageExceeded(uint256,uint256)" },
   "0x72942d97": { name: "TimelockNotReady", signature: "TimelockNotReady(uint64)" },
@@ -97,7 +102,10 @@ export const EVM_ERROR_SELECTORS = {
   "0xa091855e": { name: "AdapterNotSet", signature: "AdapterNotSet()" },
   "0xa1d40c9a": { name: "DecimalOverflow", signature: "DecimalOverflow()" },
   "0xac6b05f5": { name: "InvalidDestination", signature: "InvalidDestination()" },
+  "0xb0833651": { name: "AdapterCodeHashMismatch", signature: "AdapterCodeHashMismatch(address,bytes32,bytes32)" },
   "0xb3c237e0": { name: "UnexpectedRailContract", signature: "UnexpectedRailContract()" },
+  "0xbd066148": { name: "UnsupportedAdapterInterface", signature: "UnsupportedAdapterInterface(address,uint8)" },
+  "0xc5d12eb0": { name: "AdapterRouterMismatch", signature: "AdapterRouterMismatch(address,address,address)" },
   "0xcc3da7e0": { name: "TimelockDelayOutOfRange", signature: "TimelockDelayOutOfRange()" },
   "0xcd4e6167": { name: "FeeTooHigh", signature: "FeeTooHigh()" },
   "0xd25598a0": { name: "InvalidDecimals", signature: "InvalidDecimals()" },

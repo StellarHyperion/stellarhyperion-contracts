@@ -9,11 +9,13 @@ import {ReentrancyGuard} from "openzeppelin/utils/ReentrancyGuard.sol";
 
 import {
     ActionFieldNotEmpty,
+    AdapterCodeHashMismatch,
     AdapterNotSet,
     AmountNotRepresentable,
     ClaimAlreadySettled,
     ClaimNotFound,
     FeeTooHigh,
+    InvalidAdapterCode,
     InvalidAmount,
     InvalidDecimals,
     InvalidLimit,
@@ -40,6 +42,7 @@ import {
 } from "./HyperionErrors.sol";
 import {
     ActionKind,
+    AdapterIdentityReport,
     AddressKind,
     AdminAction,
     Destination,
@@ -54,6 +57,7 @@ import {
 } from "./HyperionTypes.sol";
 import {IHyperionRouter} from "./interfaces/IHyperionRouter.sol";
 import {IRailAdapter} from "./interfaces/IRailAdapter.sol";
+import {AdapterIdentity} from "./libraries/AdapterIdentity.sol";
 import {AmountMath} from "./libraries/AmountMath.sol";
 import {FlowGuard, FlowWindow} from "./libraries/FlowGuard.sol";
 import {RouteMeta} from "./libraries/RouteMeta.sol";
@@ -155,6 +159,8 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
 
     mapping(uint64 claimId => PendingClaim claim) private _claims;
     mapping(uint64 actionId => QueuedAction queued) private _actions;
+    mapping(uint64 actionId => bytes32 codeHash) private _queuedAdapterCodeHash;
+    mapping(RouteKind route => bytes32 codeHash) private _approvedAdapterCodeHash;
 
     /// @param admin Holds every privileged power, all of them behind the timelock.
     /// @notice Wires up the router with its roles, its treasury, and its fee and timing limits.
@@ -274,6 +280,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
 
         address adapterAddress = _adapters[request.route];
         if (adapterAddress == address(0)) revert AdapterNotSet();
+        _requireApprovedAdapterCode(request.route, adapterAddress);
 
         plan = OutboundPlan({fee: fee, net: net, gross: fee + net, adapterAddress: adapterAddress});
     }
@@ -557,6 +564,11 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     {
         _validateAction(action);
         id = ++_actionCount;
+        if (action.kind == ActionKind.SetAdapter) {
+            AdapterIdentityReport memory report =
+                AdapterIdentity.requireValid(action.route, action.subject, address(this), bytes32(0));
+            _queuedAdapterCodeHash[id] = report.codeHash;
+        }
         uint64 eta = uint64(block.timestamp) + timelockDelay;
         uint64 expiresAt = eta + GRACE_PERIOD;
         _actions[id] = QueuedAction({
@@ -584,7 +596,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         // against can move while it waits, and an action queued under one ceiling should not land
         // under another.
         _validateAction(action);
-        _applyAction(action);
+        _applyAction(id, action);
         emit ActionExecuted(id, action.kind);
     }
 
@@ -599,6 +611,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         if (queued.id == 0) revert TimelockNotQueued();
         if (queued.executed) revert TimelockAlreadyExecuted();
         delete _actions[id];
+        delete _queuedAdapterCodeHash[id];
         emit ActionCancelled(id, msg.sender);
     }
 
@@ -636,6 +649,27 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     /// @inheritdoc IHyperionRouter
     function adapter(RouteKind route) external view override returns (address) {
         return _adapters[route];
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function adapterIdentity(RouteKind route) external view override returns (AdapterIdentityReport memory) {
+        return
+            AdapterIdentity.inspect(route, _adapters[route], address(this), _approvedAdapterCodeHash[route]);
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function inspectAdapterCandidate(RouteKind route, address candidate)
+        external
+        view
+        override
+        returns (AdapterIdentityReport memory)
+    {
+        return AdapterIdentity.inspect(route, candidate, address(this), _approvedAdapterCodeHash[route]);
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function queuedAdapterCodeHash(uint64 actionId) external view override returns (bytes32) {
+        return _queuedAdapterCodeHash[actionId];
     }
 
     /// @notice The contract allowed to call `bridgeIn` for a rail.
@@ -754,10 +788,19 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         if (kind == ActionKind.SetFlowWindow) {
             if (action.amount < MIN_FLOW_WINDOW || action.amount > MAX_FLOW_WINDOW) revert InvalidWindow();
         }
+        if (kind == ActionKind.EnableRoute && action.amount == 1 && _adapters[action.route] != address(0)) {
+            AdapterIdentity.requireValid(
+                action.route, _adapters[action.route], address(this), _approvedAdapterCodeHash[action.route]
+            );
+        }
     }
 
-    function _applyAction(AdminAction memory action) private {
+    function _applyAction(uint64 id, AdminAction memory action) private {
         ActionKind kind = action.kind;
+        if (kind == ActionKind.SetAdapter || kind == ActionKind.EnableRoute) {
+            _applyAdapterOrRouteAction(id, action);
+            return;
+        }
 
         if (kind == ActionKind.SetFeeBps) {
             feeBps = uint16(action.amount);
@@ -767,17 +810,9 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
             _grantRole(DEFAULT_ADMIN_ROLE, action.subject);
         } else if (kind == ActionKind.SetGuardian) {
             _grantRole(GUARDIAN_ROLE, action.subject);
-        } else if (kind == ActionKind.SetAdapter) {
-            _adapters[action.route] = action.subject;
-            emit AdapterSet(action.route, action.subject);
         } else if (kind == ActionKind.SetRailReceiver) {
             _railReceivers[action.route] = action.subject;
             emit RailReceiverSet(action.route, action.subject);
-        } else if (kind == ActionKind.EnableRoute) {
-            bool on = action.amount == 1;
-            routeEnabled[action.route] = on;
-            emit RouteConfigured(action.route, on);
-            return;
         } else if (kind == ActionKind.RegisterToken) {
             TokenConfig storage cfg = _tokens[action.subject];
             cfg.registered = true;
@@ -808,5 +843,40 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         }
 
         emit ConfigChanged(treasury, feeBps, timelockDelay, flowWindow);
+    }
+
+    function _applyAdapterOrRouteAction(uint64 id, AdminAction memory action) private {
+        if (action.kind == ActionKind.SetAdapter) {
+            AdapterIdentityReport memory report = AdapterIdentity.requireValid(
+                action.route, action.subject, address(this), _queuedAdapterCodeHash[id]
+            );
+            _adapters[action.route] = action.subject;
+            _approvedAdapterCodeHash[action.route] = report.codeHash;
+            emit AdapterSet(action.route, action.subject);
+            bytes32 codeHash = report.codeHash;
+            emit AdapterIdentityVerified(action.route, action.subject, codeHash, report.deploymentKind);
+            emit ConfigChanged(treasury, feeBps, timelockDelay, flowWindow);
+            return;
+        }
+
+        bool on = action.amount == 1;
+        address current = _adapters[action.route];
+        if (on && current != address(0)) {
+            AdapterIdentityReport memory verified = AdapterIdentity.requireValid(
+                action.route, current, address(this), _approvedAdapterCodeHash[action.route]
+            );
+            emit AdapterIdentityVerified(action.route, current, verified.codeHash, verified.deploymentKind);
+        }
+        routeEnabled[action.route] = on;
+        emit RouteConfigured(action.route, on);
+    }
+
+    function _requireApprovedAdapterCode(RouteKind route, address adapterAddress) private view {
+        if (adapterAddress.code.length == 0) revert InvalidAdapterCode(adapterAddress);
+        bytes32 approved = _approvedAdapterCodeHash[route];
+        bytes32 actual = adapterAddress.codehash;
+        if (approved != bytes32(0) && actual != approved) {
+            revert AdapterCodeHashMismatch(adapterAddress, approved, actual);
+        }
     }
 }

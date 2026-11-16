@@ -25,6 +25,7 @@ import {ActionKind, AdminAction, QueuedAction, RouteKind, TokenConfig} from "../
 import {IHyperionRouter} from "../../src/interfaces/IHyperionRouter.sol";
 import {Fixture} from "../Fixture.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
+import {MockRailAdapter} from "../mocks/MockRailAdapter.sol";
 
 /// @title Who may change what, and how long they have to wait
 /// @notice The timelock, the guardian, the field validation, and the two overrides that stop
@@ -504,17 +505,18 @@ contract RouterAdminTest is Fixture {
     }
 
     function test_an_adapter_can_be_repointed() public {
+        MockRailAdapter replacement = new MockRailAdapter(RouteKind.Cctp, address(router));
         AdminAction memory action = _empty(ActionKind.SetAdapter);
         action.route = RouteKind.Cctp;
-        action.subject = stranger;
+        action.subject = address(replacement);
         uint64 id = _mature(action);
 
         vm.expectEmit(true, true, true, true, address(router));
-        emit IHyperionRouter.AdapterSet(RouteKind.Cctp, stranger);
+        emit IHyperionRouter.AdapterSet(RouteKind.Cctp, address(replacement));
         vm.prank(admin);
         router.executeAction(id);
 
-        assertEq(router.adapter(RouteKind.Cctp), stranger);
+        assertEq(router.adapter(RouteKind.Cctp), address(replacement));
     }
 
     function test_a_rail_receiver_can_be_repointed() public {

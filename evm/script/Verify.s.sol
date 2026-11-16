@@ -5,7 +5,7 @@ import {stdJson} from "forge-std/StdJson.sol";
 import {console} from "forge-std/console.sol";
 
 import {HyperionRouter} from "../src/HyperionRouter.sol";
-import {RouteKind} from "../src/HyperionTypes.sol";
+import {AdapterDeploymentKind, AdapterIdentityReport, RouteKind} from "../src/HyperionTypes.sol";
 import {AxelarItsAdapter} from "../src/adapters/AxelarItsAdapter.sol";
 import {CctpAdapter} from "../src/adapters/CctpAdapter.sol";
 
@@ -25,6 +25,11 @@ import {DeployConfig} from "./DeployConfig.sol";
 ///   forge script script/Verify.s.sol --rpc-url $RPC
 contract Verify is DeployConfig {
     using stdJson for string;
+
+    bytes32 internal constant EIP1967_IMPL_SLOT =
+        0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    bytes32 internal constant EIP1967_BEACON_SLOT =
+        0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50;
 
     uint256 internal problems;
 
@@ -51,6 +56,7 @@ contract Verify is DeployConfig {
         _expectAddress("cctp receiver", router.railReceiver(RouteKind.Cctp), address(cctp));
         _expectTrue("cctp route enabled", router.routeEnabled(RouteKind.Cctp));
         _expectAddress("cctp adapter router", cctp.ROUTER(), address(router));
+        _verifyAdapterIdentity(router, record, RouteKind.Cctp, "cctp", ".cctpAdapterCodeHash");
         _expectAddress(
             "cctp token messenger", address(cctp.TOKEN_MESSENGER()), record.readAddress(".cctpTokenMessenger")
         );
@@ -78,6 +84,7 @@ contract Verify is DeployConfig {
             _expectAddress("axelar receiver", router.railReceiver(RouteKind.AxelarIts), address(axelar));
             _expectTrue("axelar route enabled", router.routeEnabled(RouteKind.AxelarIts));
             _expectAddress("axelar adapter router", axelar.ROUTER(), address(router));
+            _verifyAdapterIdentity(router, record, RouteKind.AxelarIts, "axelar", ".axelarAdapterCodeHash");
             _expectBytes32("axelar token id", axelar.tokenIdOf(token), record.readBytes32(".axelarTokenId"));
 
             AxelarItsAdapter.Peer memory peer = axelar.peerOf(record.readString(".stellarChain"));
@@ -169,6 +176,41 @@ contract Verify is DeployConfig {
         } else {
             problems += 1;
             console.log("  BAD ", what, "is true and should be false");
+        }
+    }
+
+    function _verifyAdapterIdentity(
+        HyperionRouter router,
+        string memory record,
+        RouteKind route,
+        string memory label,
+        string memory hashJsonKey
+    ) private {
+        AdapterIdentityReport memory report = router.adapterIdentity(route);
+        _expectTrue(string.concat(label, " adapter has code"), report.hasCode);
+        _expectTrue(string.concat(label, " adapter router matches"), report.routerMatches);
+        _expectTrue(string.concat(label, " adapter interface supported"), report.interfaceSupported);
+        _expectTrue(string.concat(label, " adapter route matches"), report.routeMatches);
+        _expectTrue(string.concat(label, " adapter codehash matches"), report.codeHashMatches);
+
+        if (vm.keyExistsJson(record, hashJsonKey)) {
+            _expectBytes32(
+                string.concat(label, " adapter codehash"), report.codeHash, record.readBytes32(hashJsonKey)
+            );
+        }
+
+        bytes32 implSlot = vm.load(report.adapter, EIP1967_IMPL_SLOT);
+        bytes32 beaconSlot = vm.load(report.adapter, EIP1967_BEACON_SLOT);
+        bool proxySlotsSet = implSlot != bytes32(0) || beaconSlot != bytes32(0);
+
+        if (report.deploymentKind == AdapterDeploymentKind.ImmutableContract && !proxySlotsSet) {
+            console.log("  ok  ", string.concat(label, " adapter deployment immutable"));
+        } else {
+            console.log("  WARN", string.concat(label, " adapter uses upgradeable or proxy assumptions"));
+            console.log("       deployment kind   ", uint256(report.deploymentKind));
+            console.log("       clone target      ", report.minimalProxyTarget);
+            console.log("       eip1967 impl slot ", vm.toString(implSlot));
+            console.log("       eip1967 beacon    ", vm.toString(beaconSlot));
         }
     }
 }

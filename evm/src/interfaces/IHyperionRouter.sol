@@ -3,6 +3,8 @@ pragma solidity 0.8.28;
 
 import {
     ActionKind,
+    AdapterDeploymentKind,
+    AdapterIdentityReport,
     AdminAction,
     Destination,
     Origin,
@@ -155,6 +157,18 @@ interface IHyperionRouter {
     /// @param adapter Its new adapter, or zero when the rail was unwired.
     event AdapterSet(RouteKind indexed route, address indexed adapter);
 
+    /// @notice An adapter's runtime code identity, router binding, and deployment kind were verified.
+    /// @param route The rail whose adapter was verified.
+    /// @param adapter The verified adapter contract address.
+    /// @param codeHash The verified runtime `extcodehash` pinned for this adapter.
+    /// @param deploymentKind Observed deployment classification (immutable, minimal proxy, upgradeable).
+    event AdapterIdentityVerified(
+        RouteKind indexed route,
+        address indexed adapter,
+        bytes32 codeHash,
+        AdapterDeploymentKind deploymentKind
+    );
+
     /// @notice The contract allowed to call `bridgeIn` for a rail was changed.
     /// @param route The rail.
     /// @param receiver The only address that rail's arrivals may come from.
@@ -297,4 +311,23 @@ interface IHyperionRouter {
     /// @param route The rail to check.
     /// @return True if the rail is paused.
     function routePaused(RouteKind route) external view returns (bool);
+
+    /// @notice Inspect the currently registered adapter's code identity and upgradeability report.
+    /// @param route The rail whose active adapter should be inspected.
+    /// @return Codehash, router binding, interface support, and deployment classification.
+    function adapterIdentity(RouteKind route) external view returns (AdapterIdentityReport memory);
+
+    /// @notice Inspect a candidate adapter contract before queueing or activating it.
+    /// @param route The rail the candidate would serve.
+    /// @param candidate The candidate adapter address to inspect.
+    /// @return Codehash, router binding, interface support, and deployment classification.
+    function inspectAdapterCandidate(RouteKind route, address candidate)
+        external
+        view
+        returns (AdapterIdentityReport memory);
+
+    /// @notice Read the reviewed runtime `extcodehash` pinned when a `SetAdapter` action was queued.
+    /// @param actionId The timelock action id to query.
+    /// @return The pinned adapter `extcodehash`, or zero for non-adapter actions.
+    function queuedAdapterCodeHash(uint64 actionId) external view returns (bytes32);
 }

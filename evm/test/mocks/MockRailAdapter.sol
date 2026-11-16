@@ -23,7 +23,7 @@ contract MockRailAdapter is IRailAdapter {
     }
 
     RouteKind private immutable ROUTE;
-    address private immutable ROUTER;
+    address public immutable ROUTER;
 
     Call private _lastCall;
     uint256 public callCount;

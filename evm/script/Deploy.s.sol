@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {console} from "forge-std/console.sol";
 
 import {HyperionRouter} from "../src/HyperionRouter.sol";
-import {ActionKind, AdminAction, RouteKind} from "../src/HyperionTypes.sol";
+import {ActionKind, AdapterIdentityReport, AdminAction, RouteKind} from "../src/HyperionTypes.sol";
 import {AxelarItsAdapter} from "../src/adapters/AxelarItsAdapter.sol";
 import {CctpAdapter} from "../src/adapters/CctpAdapter.sol";
 
@@ -199,12 +199,20 @@ contract Deploy is DeployConfig {
         vm.serializeString(key, "stellarChain", stellarChain());
 
         vm.serializeAddress(key, "cctpAdapter", address(cctp));
+        vm.serializeBytes32(key, "cctpAdapterCodeHash", address(cctp).codehash);
+        AdapterIdentityReport memory cctpReport =
+            router.inspectAdapterCandidate(RouteKind.Cctp, address(cctp));
+        vm.serializeUint(key, "cctpAdapterDeploymentKind", uint256(cctpReport.deploymentKind));
         vm.serializeAddress(key, "cctpTokenMessenger", rails.cctpTokenMessenger);
         vm.serializeAddress(key, "cctpMessageTransmitter", rails.cctpMessageTransmitter);
         vm.serializeBytes32(key, "stellarRailRecipient", stellarRailRecipient());
 
         if (axelarToo) {
             vm.serializeAddress(key, "axelarAdapter", address(axelar));
+            vm.serializeBytes32(key, "axelarAdapterCodeHash", address(axelar).codehash);
+            AdapterIdentityReport memory axelarReport =
+                router.inspectAdapterCandidate(RouteKind.AxelarIts, address(axelar));
+            vm.serializeUint(key, "axelarAdapterDeploymentKind", uint256(axelarReport.deploymentKind));
             vm.serializeAddress(key, "axelarIts", rails.axelarIts);
             vm.serializeAddress(key, "axelarGasService", rails.axelarGasService);
             vm.serializeString(key, "axelarStellarChain", axelarStellarChain());

@@ -27,6 +27,87 @@ export const hyperionRouterInterfaceAbi = [
   },
   {
     "type": "function",
+    "name": "adapterIdentity",
+    "inputs": [
+      {
+        "name": "route",
+        "type": "uint8",
+        "internalType": "enum RouteKind"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct AdapterIdentityReport",
+        "components": [
+          {
+            "name": "adapter",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "codeHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "approvedCodeHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "declaredRouter",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "declaredRoute",
+            "type": "uint8",
+            "internalType": "enum RouteKind"
+          },
+          {
+            "name": "hasCode",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "routerMatches",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "routeMatches",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "interfaceSupported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "codeHashMatches",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "deploymentKind",
+            "type": "uint8",
+            "internalType": "enum AdapterDeploymentKind"
+          },
+          {
+            "name": "minimalProxyTarget",
+            "type": "address",
+            "internalType": "address"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "bridgeIn",
     "inputs": [
       {
@@ -195,6 +276,92 @@ export const hyperionRouterInterfaceAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "inspectAdapterCandidate",
+    "inputs": [
+      {
+        "name": "route",
+        "type": "uint8",
+        "internalType": "enum RouteKind"
+      },
+      {
+        "name": "candidate",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct AdapterIdentityReport",
+        "components": [
+          {
+            "name": "adapter",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "codeHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "approvedCodeHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "declaredRouter",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "declaredRoute",
+            "type": "uint8",
+            "internalType": "enum RouteKind"
+          },
+          {
+            "name": "hasCode",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "routerMatches",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "routeMatches",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "interfaceSupported",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "codeHashMatches",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "deploymentKind",
+            "type": "uint8",
+            "internalType": "enum AdapterDeploymentKind"
+          },
+          {
+            "name": "minimalProxyTarget",
+            "type": "address",
+            "internalType": "address"
+          }
+        ]
       }
     ],
     "stateMutability": "view"
@@ -416,6 +583,25 @@ export const hyperionRouterInterfaceAbi = [
             "internalType": "bool"
           }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "queuedAdapterCodeHash",
+    "inputs": [
+      {
+        "name": "actionId",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -772,6 +958,37 @@ export const hyperionRouterInterfaceAbi = [
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AdapterIdentityVerified",
+    "inputs": [
+      {
+        "name": "route",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum RouteKind"
+      },
+      {
+        "name": "adapter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "codeHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "deploymentKind",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum AdapterDeploymentKind"
       }
     ],
     "anonymous": false
