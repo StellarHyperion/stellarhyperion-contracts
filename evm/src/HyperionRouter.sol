@@ -21,6 +21,7 @@ import {
     LimitNotRaised,
     MuxedNotSupported,
     NotRailReceiver,
+    ProtectedAsset,
     RecipientNotReady,
     RefundFailed,
     ReplayedMessage,
@@ -48,9 +49,11 @@ import {
     PendingClaim,
     QueuedAction,
     QuoteBlocker,
+    RecoveryRequest,
     RouteKind,
     RouteQuote,
-    TokenConfig
+    TokenConfig,
+    TokenLiabilityReport
 } from "./HyperionTypes.sol";
 import {IHyperionRouter} from "./interfaces/IHyperionRouter.sol";
 import {IRailAdapter} from "./interfaces/IRailAdapter.sol";
@@ -153,8 +156,16 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         address adapterAddress;
     }
 
+    struct RecoveryBook {
+        uint64 count;
+        mapping(address token => uint256 amount) claimLiabilities;
+        mapping(address token => uint256 amount) dispatchLiabilities;
+        mapping(uint64 id => RecoveryRequest request) requests;
+    }
+
     mapping(uint64 claimId => PendingClaim claim) private _claims;
     mapping(uint64 actionId => QueuedAction queued) private _actions;
+    RecoveryBook private _recovery;
 
     /// @param admin Holds every privileged power, all of them behind the timelock.
     /// @notice Wires up the router with its roles, its treasury, and its fee and timing limits.
@@ -219,8 +230,13 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
 
         IERC20 token = IERC20(request.token);
         token.safeTransferFrom(msg.sender, address(this), plan.gross);
-        if (plan.fee != 0) token.safeTransfer(treasury, plan.fee);
+        _recovery.dispatchLiabilities[request.token] += plan.gross;
+        if (plan.fee != 0) {
+            token.safeTransfer(treasury, plan.fee);
+            _recovery.dispatchLiabilities[request.token] -= plan.fee;
+        }
         token.safeTransfer(plan.adapterAddress, plan.net);
+        _recovery.dispatchLiabilities[request.token] -= plan.net;
 
         nonce = ++outboundNonce;
 
@@ -336,6 +352,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         }
 
         claimId = ++_claimCount;
+        _recovery.claimLiabilities[token] += amount;
         _claims[claimId] = PendingClaim({
             id: claimId,
             recipient: recipient,
@@ -358,6 +375,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         if (claim.settled) revert ClaimAlreadySettled();
 
         claim.settled = true;
+        _recovery.claimLiabilities[claim.token] -= claim.amount;
         if (!_tryPay(claim.token, claim.recipient, claim.amount)) revert RecipientNotReady();
         emit ClaimSettled(claimId, claim.recipient, claim.token, claim.amount, msg.sender);
     }
@@ -657,6 +675,94 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     /// @notice How many privileged changes have been queued since deployment.
     function actionCount() external view returns (uint64) {
         return _actionCount;
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function queueTokenRecovery(address token, address recipient, uint256 amount)
+        external
+        override
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        returns (uint64 id)
+    {
+        if (token == address(0) || recipient == address(0)) revert ZeroAddress();
+        if (amount == 0) revert InvalidAmount();
+        if (amount > recoverableTokenAmount(token)) revert ProtectedAsset();
+
+        id = ++_recovery.count;
+        uint64 eta = uint64(block.timestamp) + timelockDelay;
+        uint64 expiresAt = eta + GRACE_PERIOD;
+        _recovery.requests[id] = RecoveryRequest({
+            id: id,
+            token: token,
+            recipient: recipient,
+            amount: amount,
+            queuedAt: uint64(block.timestamp),
+            eta: eta,
+            expiresAt: expiresAt,
+            executed: false
+        });
+        emit TokenRecoveryQueued(id, token, recipient, amount, eta, expiresAt);
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function executeTokenRecovery(uint64 id) external override nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
+        RecoveryRequest storage req = _recovery.requests[id];
+        if (req.id == 0) revert TimelockNotQueued();
+        if (req.executed) revert TimelockAlreadyExecuted();
+        if (block.timestamp < req.eta) revert TimelockNotReady(req.eta);
+        if (block.timestamp > req.expiresAt) revert TimelockExpired(req.expiresAt);
+        if (req.amount > recoverableTokenAmount(req.token)) revert ProtectedAsset();
+
+        req.executed = true;
+        uint256 locked = _recovery.claimLiabilities[req.token] + _recovery.dispatchLiabilities[req.token];
+        IERC20(req.token).safeTransfer(req.recipient, req.amount);
+        if (IERC20(req.token).balanceOf(address(this)) < locked) revert ProtectedAsset();
+        emit TokenRecoveryExecuted(id, req.token, req.recipient, req.amount);
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function cancelTokenRecovery(uint64 id) external override {
+        if (!hasRole(GUARDIAN_ROLE, msg.sender) && !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            revert Unauthorized();
+        }
+        RecoveryRequest storage req = _recovery.requests[id];
+        if (req.id == 0) revert TimelockNotQueued();
+        if (req.executed) revert TimelockAlreadyExecuted();
+        delete _recovery.requests[id];
+        emit TokenRecoveryCancelled(id, msg.sender);
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function recoverableTokenAmount(address token) public view override returns (uint256) {
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        uint256 locked = _recovery.claimLiabilities[token] + _recovery.dispatchLiabilities[token];
+        return balance > locked ? balance - locked : 0;
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function tokenLiabilityReport(address token)
+        external
+        view
+        override
+        returns (TokenLiabilityReport memory report)
+    {
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        uint256 claims = _recovery.claimLiabilities[token];
+        uint256 dispatches = _recovery.dispatchLiabilities[token];
+        uint256 locked = claims + dispatches;
+        report = TokenLiabilityReport({
+            token: token,
+            registered: _tokens[token].registered,
+            balance: balance,
+            claimLiabilities: claims,
+            dispatchLiabilities: dispatches,
+            recoverable: balance > locked ? balance - locked : 0
+        });
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function tokenRecoveryRequest(uint64 id) external view override returns (RecoveryRequest memory) {
+        return _recovery.requests[id];
     }
 
     // -------------------------------------------------------------------------------------

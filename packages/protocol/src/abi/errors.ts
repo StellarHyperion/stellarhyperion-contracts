@@ -74,6 +74,7 @@ export const EVM_ERROR_SELECTORS = {
   "0x1e4fbdf7": { name: "OwnableInvalidOwner", signature: "OwnableInvalidOwner(address)" },
   "0x259ba1ad": { name: "TokenNotRegistered", signature: "TokenNotRegistered()" },
   "0x276f9a65": { name: "ZeroAddressKey", signature: "ZeroAddressKey()" },
+  "0x2aae93dc": { name: "ProtectedAsset", signature: "ProtectedAsset()" },
   "0x2c5211c6": { name: "InvalidAmount", signature: "InvalidAmount()" },
   "0x392334ed": { name: "InvalidWindow", signature: "InvalidWindow()" },
   "0x3ee5aeb5": { name: "ReentrancyGuardReentrantCall", signature: "ReentrancyGuardReentrantCall()" },

@@ -9,9 +9,11 @@ import {
     OutboundRequest,
     PendingClaim,
     QueuedAction,
+    RecoveryRequest,
     RouteKind,
     RouteQuote,
-    TokenConfig
+    TokenConfig,
+    TokenLiabilityReport
 } from "../HyperionTypes.sol";
 
 /// @title The router, as everything outside it sees it
@@ -167,6 +169,36 @@ interface IHyperionRouter {
     /// @param flowWindow How long a flow window now runs, in seconds.
     event ConfigChanged(address treasury, uint16 feeBps, uint64 timelockDelay, uint64 flowWindow);
 
+    /// @notice A timelocked accidental-token recovery was proposed.
+    /// @param id The recovery request id.
+    /// @param token The ERC20 asset requested for recovery.
+    /// @param recipient The authorized recipient address.
+    /// @param amount The exact non-liability token amount queued.
+    /// @param eta Earliest timestamp when the recovery may execute.
+    /// @param expiresAt Timestamp after which the recovery request expires.
+    event TokenRecoveryQueued(
+        uint64 indexed id,
+        address indexed token,
+        address indexed recipient,
+        uint256 amount,
+        uint64 eta,
+        uint64 expiresAt
+    );
+
+    /// @notice A matured accidental-token recovery transferred surplus assets.
+    /// @param id The recovery request id.
+    /// @param token The ERC20 asset recovered.
+    /// @param recipient Who received the recovered tokens.
+    /// @param amount The exact amount recovered.
+    event TokenRecoveryExecuted(
+        uint64 indexed id, address indexed token, address indexed recipient, uint256 amount
+    );
+
+    /// @notice A queued accidental-token recovery was cancelled before execution.
+    /// @param id The recovery request id.
+    /// @param by Who cancelled the recovery request.
+    event TokenRecoveryCancelled(uint64 indexed id, address indexed by);
+
     /// @notice Send `request.amount` of a token to another chain.
     /// @dev Pull, then fee, then floor, then hand off. The fee comes off the raw amount and the
     /// remainder is floored to what the destination can actually represent, in that order, so the
@@ -297,4 +329,34 @@ interface IHyperionRouter {
     /// @param route The rail to check.
     /// @return True if the rail is paused.
     function routePaused(RouteKind route) external view returns (bool);
+
+    /// @notice Propose a timelocked recovery for tokens outside active custody liabilities.
+    /// @param token The ERC20 asset to recover.
+    /// @param recipient The authorized destination for recovered surplus tokens.
+    /// @param amount The exact amount to recover, bounded by `recoverableTokenAmount(token)`.
+    /// @return The queued recovery request id.
+    function queueTokenRecovery(address token, address recipient, uint256 amount) external returns (uint64);
+
+    /// @notice Execute a matured token recovery after re-verifying liability exclusions.
+    /// @param id The recovery request id to execute.
+    function executeTokenRecovery(uint64 id) external;
+
+    /// @notice Cancel a pending token recovery before execution.
+    /// @param id The recovery request id to cancel.
+    function cancelTokenRecovery(uint64 id) external;
+
+    /// @notice Compute how much of `token` sits outside active claim and dispatch liabilities.
+    /// @param token The ERC20 asset to inspect.
+    /// @return The non-liability surplus currently eligible for recovery.
+    function recoverableTokenAmount(address token) external view returns (uint256);
+
+    /// @notice Read full balance, liability, and recoverable surplus metadata for `token`.
+    /// @param token The ERC20 asset to inspect.
+    /// @return report Balance, claim liabilities, dispatch liabilities, and surplus.
+    function tokenLiabilityReport(address token) external view returns (TokenLiabilityReport memory report);
+
+    /// @notice Read a queued or executed accidental-token recovery request.
+    /// @param id The recovery request id to inspect.
+    /// @return request The stored recovery request metadata.
+    function tokenRecoveryRequest(uint64 id) external view returns (RecoveryRequest memory request);
 }

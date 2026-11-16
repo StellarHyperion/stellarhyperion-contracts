@@ -181,6 +181,14 @@ contract Fixture is Test {
         _run(action);
     }
 
+    function _recoverToken(address token, address recipient, uint256 amount) internal returns (uint64 id) {
+        vm.prank(admin);
+        id = router.queueTokenRecovery(token, recipient, amount);
+        vm.warp(block.timestamp + TIMELOCK + 1);
+        vm.prank(admin);
+        router.executeTokenRecovery(id);
+    }
+
     // -------------------------------------------------------------------------------------
     // Request shorthand
     // -------------------------------------------------------------------------------------

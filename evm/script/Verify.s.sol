@@ -5,7 +5,7 @@ import {stdJson} from "forge-std/StdJson.sol";
 import {console} from "forge-std/console.sol";
 
 import {HyperionRouter} from "../src/HyperionRouter.sol";
-import {RouteKind} from "../src/HyperionTypes.sol";
+import {RouteKind, TokenLiabilityReport} from "../src/HyperionTypes.sol";
 import {AxelarItsAdapter} from "../src/adapters/AxelarItsAdapter.sol";
 import {CctpAdapter} from "../src/adapters/CctpAdapter.sol";
 
@@ -69,6 +69,9 @@ contract Verify is DeployConfig {
         _expectUint(
             "token flow limit", router.tokenConfig(token).flowLimit, record.readUint(".tokenFlowLimit")
         );
+        TokenLiabilityReport memory liability = router.tokenLiabilityReport(token);
+        _expectUint("token dispatch liabilities", liability.dispatchLiabilities, 0);
+        _expectTrue("token claim backing intact", liability.balance >= liability.claimLiabilities);
 
         _expectFalse("router paused", router.paused());
 

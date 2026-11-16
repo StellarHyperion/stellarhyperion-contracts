@@ -188,3 +188,25 @@ enum QuoteBlocker {
     InvalidDestination,
     ChainNotSupported
 }
+
+/// @dev Custody liability breakdown for accidental-token recovery checks.
+struct TokenLiabilityReport {
+    address token;
+    bool registered;
+    uint256 balance;
+    uint256 claimLiabilities;
+    uint256 dispatchLiabilities;
+    uint256 recoverable;
+}
+
+/// @dev Timelocked request to recover assets outside active router liabilities.
+struct RecoveryRequest {
+    uint64 id;
+    address token;
+    address recipient;
+    uint256 amount;
+    uint64 queuedAt;
+    uint64 eta;
+    uint64 expiresAt;
+    bool executed;
+}
