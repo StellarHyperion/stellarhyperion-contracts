@@ -18,6 +18,9 @@ require_identity
 RECORD="${HYPERION_RECORD:-$RECORD_DIR/stellar-$NETWORK-phase1.json}"
 [ -f "$RECORD" ] || die "no record at $RECORD; run script/stellar/deploy.sh first"
 
+node "$(dirname "$0")/check-lifecycle.mjs" --record "$RECORD" --operation "phase-two execute" \
+  || die "refusing to execute a deprecated or archived deployment record"
+
 CHAIN_KEY=$(node -e '
 const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
 const keys=Object.keys(d.networks??{});

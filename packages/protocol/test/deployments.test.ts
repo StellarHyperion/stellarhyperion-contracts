@@ -1,14 +1,24 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   DEPLOYMENT_SCHEMA_VERSION,
   DeploymentFormatError,
+  RetiredDeploymentError,
+  activeDeployedChains,
   adapterFor,
+  assertActiveDeployment,
+  deprecateDeploymentSet,
   deployedChains,
   deploymentFor,
+  inspectRouterLifecycle,
+  isActiveDeployment,
   isEvmDeployment,
+  isRetiredDeployment,
   isStellarDeployment,
   parseDeploymentSet,
   tokenFor,
+  warningForDeployment,
 } from "../src/deployments.js";
 import { RouteKind } from "../src/routes.js";
 import { C_ADDR, G_ADDR } from "./fixtures.js";
@@ -269,5 +279,148 @@ describe("refusing a record that does not", () => {
         generatedAt: "2026-09-30T12:00:00.000Z",
       }),
     ).toThrow(/networks/);
+  });
+});
+
+describe("deployment manifest deprecation, successor links, and historical evidence", () => {
+  const repoRoot = resolve(import.meta.dirname, "..", "..", "..");
+  const activeManifestRaw = JSON.parse(
+    readFileSync(resolve(repoRoot, "deployments/stellar-testnet-phase1.json"), "utf8"),
+  ) as Record<string, unknown>;
+  const archivedManifestRaw = JSON.parse(
+    readFileSync(resolve(repoRoot, "deployments/archive/stellar-testnet-2026-10-01.json"), "utf8"),
+  ) as Record<string, unknown>;
+
+  it("distinguishes active and archived repository records through parsed metadata", () => {
+    const activeSet = parseDeploymentSet(activeManifestRaw);
+    const archivedSet = parseDeploymentSet(archivedManifestRaw);
+
+    const activeDep = deploymentFor(activeSet, "stellar-testnet")!;
+    const archivedDep = deploymentFor(archivedSet, "stellar-testnet")!;
+
+    expect(isActiveDeployment(activeDep)).toBe(true);
+    expect(isRetiredDeployment(activeDep)).toBe(false);
+    expect(activeDep.lifecycle).toEqual({ status: "active" });
+    expect(activeDeployedChains(activeSet)).toEqual(["stellar-testnet"]);
+    expect(() => {
+      assertActiveDeployment(activeDep, "verify");
+    }).not.toThrow();
+
+    expect(isActiveDeployment(archivedDep)).toBe(false);
+    expect(isRetiredDeployment(archivedDep)).toBe(true);
+    expect(archivedDep.lifecycle.status).toBe("archived");
+    expect(archivedDep.lifecycle.successor).toEqual({
+      chain: "stellar-testnet",
+      router: activeDep.router,
+      manifest: "deployments/stellar-testnet-phase1.json",
+    });
+    expect(activeDeployedChains(archivedSet)).toEqual([]);
+  });
+
+  it("preserves all historical transaction evidence when deprecating a manifest", () => {
+    const beforeSet = parseDeploymentSet(activeManifestRaw);
+    const beforeDep = deploymentFor(beforeSet, "stellar-testnet")!;
+    expect(beforeDep.historicalEvidence.txHashes).toHaveLength(8);
+    expect(beforeDep.historicalEvidence.evidenceFiles).toEqual([
+      "evidence/2026-10-28-paid-its.json",
+      "evidence/2026-10-29-cctp.json",
+    ]);
+
+    const { raw, parsed } = deprecateDeploymentSet(activeManifestRaw, {
+      chain: "stellar-testnet",
+      status: "deprecated",
+      deprecatedAt: "2026-11-15T00:00:00.000Z",
+      reason: "Rotated router admin to multisig governance deployment.",
+      successor: {
+        chain: "stellar-testnet",
+        router: C_ADDR,
+        manifest: "deployments/stellar-testnet-phase2.json",
+      },
+    });
+
+    const afterDep = deploymentFor(parsed, "stellar-testnet")!;
+    expect(afterDep.lifecycle.status).toBe("deprecated");
+    expect(afterDep.historicalEvidence.txHashes).toEqual(beforeDep.historicalEvidence.txHashes);
+    expect(afterDep.historicalEvidence.evidenceFiles).toEqual(
+      beforeDep.historicalEvidence.evidenceFiles,
+    );
+    expect(afterDep.historicalEvidence.queuedActionIds).toEqual([1, 2, 3, 4]);
+
+    // Raw activation block and hashes remain intact in serialized output.
+    const rawNet = (raw.networks as Record<string, Record<string, unknown>>)["stellar-testnet"]!;
+    expect(rawNet.activation).toEqual(
+      (activeManifestRaw.networks as Record<string, Record<string, unknown>>)["stellar-testnet"]!
+        .activation,
+    );
+  });
+
+  it("emits actionable retired-router warnings and blocks accidental operational execution", () => {
+    const activeSet = parseDeploymentSet(activeManifestRaw);
+    const archivedSet = parseDeploymentSet(archivedManifestRaw);
+    const archivedDep = deploymentFor(archivedSet, "stellar-testnet")!;
+
+    const warning = inspectRouterLifecycle(
+      [activeSet, archivedSet],
+      "stellar-testnet",
+      archivedDep.router,
+    );
+    expect(warning).not.toBeNull();
+    expect(warning?.retiredRouter).toBe("CDMOLDF4SJDEDRWTDF7XAYMSRE6L3YEHHIRF57CFWNQYNC6ZOZ5LWCWF");
+    expect(warning?.successor?.router).toBe(
+      "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V",
+    );
+    expect(warning?.message).toContain("deployments/stellar-testnet-phase1.json");
+    expect(warningForDeployment(archivedDep)).toEqual(warning);
+
+    expect(
+      inspectRouterLifecycle(
+        [activeSet, archivedSet],
+        "stellar-testnet",
+        "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V",
+      ),
+    ).toBeNull();
+
+    expect(() => {
+      assertActiveDeployment(archivedDep, "phase-two execute");
+    }).toThrow(RetiredDeploymentError);
+    expect(() => {
+      assertActiveDeployment(archivedDep, "phase-two execute");
+    }).toThrow(/Use successor router CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V/);
+  });
+
+  it("rejects self-referential or malformed successor links", () => {
+    expect(() =>
+      parseDeploymentSet(
+        set({
+          stellar: stellarRecord({
+            lifecycle: {
+              status: "deprecated",
+              deprecatedAt: "2026-10-28T17:08:25.000Z",
+              reason: "Retired",
+              successor: {
+                chain: "stellar",
+                router: ROUTER_C,
+              },
+            },
+          }),
+        }),
+      ),
+    ).toThrow(/successor router must differ from the retired router/);
+
+    expect(() =>
+      parseDeploymentSet(
+        set({
+          base: evmRecord({
+            lifecycle: {
+              status: "active",
+              successor: {
+                chain: "base",
+                router: `0x${"9".repeat(40)}`,
+              },
+            },
+          }),
+        }),
+      ),
+    ).toThrow(/active deployment cannot declare a successor/);
   });
 });

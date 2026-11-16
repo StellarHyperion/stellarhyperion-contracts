@@ -42,7 +42,17 @@
         "set axelar adapter",
         "set axelar receiver",
         "enable axelar its"
-      ]
+      ],
+      "lifecycle": {
+        "status": "archived",
+        "deprecatedAt": "2026-10-28T17:08:25.000Z",
+        "reason": "Superseded by dedicated wallet-owned October 28 Stellar Testnet deployment after 3600s timelock activation.",
+        "successor": {
+          "chain": "stellar-testnet",
+          "router": "CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V",
+          "manifest": "deployments/stellar-testnet-phase1.json"
+        }
+      }
     }
   }
 }

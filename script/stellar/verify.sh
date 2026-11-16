@@ -16,6 +16,13 @@ require_tools
 RECORD="${HYPERION_RECORD:-$RECORD_DIR/stellar-$NETWORK-phase1.json}"
 [ -f "$RECORD" ] || die "no record at $RECORD"
 
+lifecycle_flags=(--record "$RECORD" --operation "deployment verification")
+if [ "${HYPERION_ALLOW_RETIRED_RECORD:-0}" = "1" ]; then
+  lifecycle_flags+=(--allow-retired)
+fi
+node "$(dirname "$0")/check-lifecycle.mjs" "${lifecycle_flags[@]}" \
+  || die "refusing to verify a retired deployment record as active (set HYPERION_ALLOW_RETIRED_RECORD=1 to inspect historical state)"
+
 CHAIN_KEY=$(node -e '
 const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
 process.stdout.write(Object.keys(d.networks??{})[0]??"");

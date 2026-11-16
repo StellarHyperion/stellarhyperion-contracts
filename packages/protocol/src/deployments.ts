@@ -13,10 +13,33 @@
  */
 import type { Hex } from "./bytes.js";
 import type { ChainKey } from "./chains.js";
-import { isChainKey } from "./chains.js";
+import { CHAINS, isChainKey } from "./chains.js";
 import type { RouteKind } from "./routes.js";
 import { ROUTE_KINDS, ROUTE_SLUGS, tryRouteFromSlug } from "./routes.js";
 import { isStellarAddress } from "./addresses.js";
+import {
+  buildRetiredRouterWarning,
+  deprecateDeploymentManifest,
+  extractHistoricalEvidence,
+  parseDeploymentLifecycle,
+  RetiredDeploymentError,
+  type DeprecateManifestOptions,
+  type DeploymentHistoricalEvidence,
+  type DeploymentLifecycle,
+  type DeploymentLifecycleStatus,
+  type DeploymentSuccessorLink,
+  type RouterLifecycleWarning,
+} from "./deployments/lifecycle.js";
+
+export {
+  RetiredDeploymentError,
+  type DeprecateManifestOptions,
+  type DeploymentHistoricalEvidence,
+  type DeploymentLifecycle,
+  type DeploymentLifecycleStatus,
+  type DeploymentSuccessorLink,
+  type RouterLifecycleWarning,
+};
 
 /** The schema version of a deployment file, so an old file fails loudly rather than oddly. */
 export const DEPLOYMENT_SCHEMA_VERSION = 1;
@@ -71,6 +94,8 @@ export interface EvmDeployment {
   readonly deployedAt: DeployedAtEvm;
   /** The commit the bytecode was built from. The only thing tying an address to a source tree. */
   readonly commit: string;
+  readonly lifecycle: DeploymentLifecycle;
+  readonly historicalEvidence: DeploymentHistoricalEvidence;
 }
 
 export interface StellarDeployment {
@@ -91,6 +116,8 @@ export interface StellarDeployment {
   readonly wasmHashes: Readonly<Record<string, string>>;
   readonly deployedAt: DeployedAtStellar;
   readonly commit: string;
+  readonly lifecycle: DeploymentLifecycle;
+  readonly historicalEvidence: DeploymentHistoricalEvidence;
 }
 
 export type Deployment = EvmDeployment | StellarDeployment;
@@ -230,11 +257,20 @@ function readEvmDeployment(
   }
 
   const deployedAt = asRecord(raw.deployedAt, `${path}.deployedAt`);
+  const router = asEvmAddress(raw.router, `${path}.router`);
+  const lifecycle = parseDeploymentLifecycle(
+    raw.lifecycle,
+    chain,
+    router,
+    `${path}.lifecycle`,
+    fail,
+  );
+  const historicalEvidence = extractHistoricalEvidence(raw, path, fail);
   return {
     family: "evm",
     chain,
     chainId: asInteger(raw.chainId, `${path}.chainId`, 1),
-    router: asEvmAddress(raw.router, `${path}.router`),
+    router,
     adapters: asAdapters(raw.adapters, `${path}.adapters`, asEvmAddress),
     tokens,
     treasury: asEvmAddress(raw.treasury, `${path}.treasury`),
@@ -249,6 +285,8 @@ function readEvmDeployment(
       txHash: asHash(deployedAt.txHash, `${path}.deployedAt.txHash`),
     },
     commit: asString(raw.commit, `${path}.commit`),
+    lifecycle,
+    historicalEvidence,
   };
 }
 
@@ -283,11 +321,20 @@ function readStellarDeployment(
   }
 
   const deployedAt = asRecord(raw.deployedAt, `${path}.deployedAt`);
+  const router = asStellarContract(raw.router, `${path}.router`);
+  const lifecycle = parseDeploymentLifecycle(
+    raw.lifecycle,
+    chain,
+    router,
+    `${path}.lifecycle`,
+    fail,
+  );
+  const historicalEvidence = extractHistoricalEvidence(raw, path, fail);
   return {
     family: "stellar",
     chain,
     networkPassphrase: asString(raw.networkPassphrase, `${path}.networkPassphrase`),
-    router: asStellarContract(raw.router, `${path}.router`),
+    router,
     adapters: asAdapters(raw.adapters, `${path}.adapters`, asStellarContract),
     tokens,
     treasury: asStellarAccount(raw.treasury, `${path}.treasury`),
@@ -302,6 +349,8 @@ function readStellarDeployment(
       timestamp: asTimestamp(deployedAt.timestamp, `${path}.deployedAt.timestamp`),
     },
     commit: asString(raw.commit, `${path}.commit`),
+    lifecycle,
+    historicalEvidence,
   };
 }
 
@@ -376,4 +425,73 @@ export function tokenFor(
 /** Every chain in a set that has a router, which is the list a chain picker should offer. */
 export function deployedChains(set: DeploymentSet): readonly ChainKey[] {
   return Object.keys(set.networks).filter(isChainKey);
+}
+
+/** Chains in a set whose deployment lifecycle status is `active`. */
+export function activeDeployedChains(set: DeploymentSet): readonly ChainKey[] {
+  return deployedChains(set).filter((key) => {
+    const dep = set.networks[key];
+    return dep?.lifecycle.status === "active";
+  });
+}
+
+export function isActiveDeployment(deployment: Deployment): boolean {
+  return deployment.lifecycle.status === "active";
+}
+
+export function isRetiredDeployment(deployment: Deployment): boolean {
+  return deployment.lifecycle.status === "deprecated" || deployment.lifecycle.status === "archived";
+}
+
+export function warningForDeployment(deployment: Deployment): RouterLifecycleWarning | null {
+  return buildRetiredRouterWarning(deployment.chain, deployment.router, deployment.lifecycle);
+}
+
+export function assertActiveDeployment(deployment: Deployment, operation: string): void {
+  const warning = warningForDeployment(deployment);
+  if (warning !== null) {
+    throw new RetiredDeploymentError(
+      deployment.chain,
+      deployment.router,
+      warning.status,
+      warning.successor,
+      `Refusing ${operation}: ${warning.message}`,
+    );
+  }
+}
+
+function isDeploymentSetList(
+  value: DeploymentSet | readonly DeploymentSet[],
+): value is readonly DeploymentSet[] {
+  return Array.isArray(value);
+}
+
+export function inspectRouterLifecycle(
+  sets: DeploymentSet | readonly DeploymentSet[],
+  chainKey: ChainKey,
+  router: string,
+): RouterLifecycleWarning | null {
+  const list: readonly DeploymentSet[] = isDeploymentSetList(sets) ? sets : [sets];
+  const family = CHAINS[chainKey].family;
+  const targetNorm = family === "evm" ? router.trim().toLowerCase() : router.trim();
+  for (const set of list) {
+    const dep = set.networks[chainKey];
+    if (dep === undefined) continue;
+    const candidateNorm = family === "evm" ? dep.router.toLowerCase() : dep.router;
+    if (candidateNorm === targetNorm) {
+      const warning = warningForDeployment(dep);
+      if (warning !== null) return warning;
+    }
+  }
+  return null;
+}
+
+export function deprecateDeploymentSet(
+  rawManifest: unknown,
+  options: DeprecateManifestOptions,
+): { readonly raw: Record<string, unknown>; readonly parsed: DeploymentSet } {
+  const rec = asRecord(rawManifest, "$");
+  const updated = deprecateDeploymentManifest(rec, options, fail);
+  const parsed = parseDeploymentSet(updated);
+  return { raw: updated, parsed };
 }

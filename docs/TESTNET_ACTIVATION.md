@@ -64,3 +64,20 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Deployment manifest deprecation and successor links
+
+Retired deployment manifests carry explicit `lifecycle` metadata (`status: "deprecated" | "archived"`, `deprecatedAt`, `reason`, and optional `successor` pointing to the replacement chain, router, and manifest path). For example, `deployments/archive/stellar-testnet-2026-10-01.json` is marked `archived` and links forward to `CCXPCT3YFLVANSF3AQMYCCZVGCMLTURAYQ6O6DYGQJMTKVYQL6NTOC2V` in `deployments/stellar-testnet-phase1.json`.
+
+```bash
+node script/stellar/check-lifecycle.mjs \
+  --record deployments/archive/stellar-testnet-2026-10-01.json \
+  --operation "phase-two execute"
+```
+
+Compatibility and migration notes:
+
+- Manifests without a `lifecycle` object continue to parse under `schemaVersion: 1` with `lifecycle.status = "active"`, preserving backward compatibility across all three repositories.
+- `script/stellar/execute.sh`, `script/stellar/link.sh`, and `script/stellar/verify.sh` refuse retired records by default (`HYPERION_ALLOW_RETIRED_RECORD=1` permits read-only historical inspection in `verify.sh`).
+- Deprecating a manifest via `deprecateDeploymentSet` preserves all historical transaction hashes, `activation` proofs, `wasmHashes`, and queued action records verbatim.
+

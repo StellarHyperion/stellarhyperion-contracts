@@ -19,6 +19,9 @@ require_identity
 RECORD="${HYPERION_RECORD:-$RECORD_DIR/stellar-$NETWORK-phase1.json}"
 [ -f "$RECORD" ] || die "no record at $RECORD; run script/stellar/deploy.sh first"
 
+node "$(dirname "$0")/check-lifecycle.mjs" --record "$RECORD" --operation "adapter peer link" \
+  || die "refusing to link peers on a deprecated or archived deployment record"
+
 CHAIN_KEY=$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(Object.keys(d.networks??{})[0]??"")' "$RECORD")
 [ -n "$CHAIN_KEY" ] || die "the record names no network"
 
