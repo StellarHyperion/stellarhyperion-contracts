@@ -36,3 +36,23 @@ pub struct AssetLink {
     /// The destination token's address, left padded to thirty two bytes.
     pub receive_token: BytesN<32>,
 }
+
+/// Bounded native gas-float solvency snapshot independent of bridged token balances.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GasFloatSolvency {
+    /// Current native gas balance held by the adapter.
+    pub current_float: i128,
+    /// Cumulative native gas spent across completed outbound provider dispatches.
+    pub committed_spending: u128,
+    /// Configured minimum operational reserve in native stroops.
+    pub min_operational_reserve: u128,
+    /// Live bridge + messenger relay quote for the queried lane (`0` if lane omitted).
+    pub next_relay_cost: u128,
+    /// Total native balance required (`min_operational_reserve + next_relay_cost`).
+    pub required_float: u128,
+    /// Signed surplus (`>= 0`) or deficit (`< 0`) relative to `required_float`.
+    pub headroom: i128,
+    /// Whether `current_float` covers `required_float`.
+    pub solvent: bool,
+}

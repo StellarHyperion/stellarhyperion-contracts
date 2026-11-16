@@ -72,7 +72,7 @@ use soroban_sdk::{
 };
 
 use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
-use types::{AssetLink, ChainLane, Config};
+use types::{AssetLink, ChainLane, Config, GasFloatSolvency};
 
 #[contract]
 pub struct AllbridgeAdapter;
@@ -157,9 +157,14 @@ impl AllbridgeAdapter {
             .checked_add(messenger.get_transaction_cost(&lane.allbridge_chain_id))
             .ok_or(HyperionError::DecimalOverflow)?;
         let cost_i128 = i128::try_from(cost).map_err(|_| HyperionError::DecimalOverflow)?;
+        let required_float = storage::min_gas_reserve(&env)
+            .checked_add(cost)
+            .ok_or(HyperionError::DecimalOverflow)?;
+        let required_i128 =
+            i128::try_from(required_float).map_err(|_| HyperionError::DecimalOverflow)?;
 
         let native = token::Client::new(&env, &cfg.native);
-        if native.balance(&this) < cost_i128 {
+        if native.balance(&this) < required_i128 {
             return Err(HyperionError::GasFloatTooLow);
         }
 
@@ -219,6 +224,11 @@ impl AllbridgeAdapter {
             // Zero, always. The float pays, not the transfer.
             &0u128,
         );
+
+        let next_committed = storage::committed_gas_spent(&env)
+            .checked_add(cost)
+            .ok_or(HyperionError::DecimalOverflow)?;
+        storage::set_committed_gas_spent(&env, next_committed);
 
         events::Dispatched {
             token,
@@ -452,6 +462,79 @@ impl AllbridgeAdapter {
             .get_transaction_cost(&lane.allbridge_chain_id)
             .checked_add(messenger.get_transaction_cost(&lane.allbridge_chain_id))
             .ok_or(HyperionError::DecimalOverflow)
+    }
+
+    /// Configure the minimum operational native gas reserve maintained above per-hop relay cost.
+    pub fn set_min_gas_reserve(env: Env, min_reserve: u128) -> Result<(), HyperionError> {
+        let _ = require_admin(&env)?;
+        let _ = i128::try_from(min_reserve).map_err(|_| HyperionError::InvalidLimit)?;
+        storage::set_min_gas_reserve(&env, min_reserve);
+        events::GasReserveUpdated {
+            min_operational_reserve: min_reserve,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Read the configured minimum operational native gas reserve.
+    pub fn min_gas_reserve(env: Env) -> Result<u128, HyperionError> {
+        let _ = storage::config(&env)?;
+        Ok(storage::min_gas_reserve(&env))
+    }
+
+    /// Read cumulative native gas spent across committed outbound dispatches.
+    pub fn committed_gas_spending(env: Env) -> Result<u128, HyperionError> {
+        let _ = storage::config(&env)?;
+        Ok(storage::committed_gas_spent(&env))
+    }
+
+    /// Report current native gas float, cumulative committed spending, minimum operational
+    /// reserve, live lane relay cost, signed headroom, and solvency using checked arithmetic.
+    ///
+    /// Strictly isolated from bridged SEP-41 token balances held or routed by the adapter.
+    pub fn gas_solvency(
+        env: Env,
+        chain: Option<String>,
+    ) -> Result<GasFloatSolvency, HyperionError> {
+        let cfg = storage::config(&env)?;
+        let current_float =
+            token::Client::new(&env, &cfg.native).balance(&env.current_contract_address());
+        if current_float < 0 {
+            return Err(HyperionError::DecimalOverflow);
+        }
+        let committed_spending = storage::committed_gas_spent(&env);
+        let min_operational_reserve = storage::min_gas_reserve(&env);
+        let next_relay_cost = match chain {
+            Some(c) => {
+                let lane = storage::lane(&env, &c).ok_or(HyperionError::UnknownChain)?;
+                let bridge = AllbridgeBridgeClient::new(&env, &cfg.bridge);
+                let messenger = AllbridgeMessengerClient::new(&env, &bridge.get_config().messenger);
+                bridge
+                    .get_transaction_cost(&lane.allbridge_chain_id)
+                    .checked_add(messenger.get_transaction_cost(&lane.allbridge_chain_id))
+                    .ok_or(HyperionError::DecimalOverflow)?
+            }
+            None => 0,
+        };
+        let required_float = min_operational_reserve
+            .checked_add(next_relay_cost)
+            .ok_or(HyperionError::DecimalOverflow)?;
+        let required_i128 =
+            i128::try_from(required_float).map_err(|_| HyperionError::DecimalOverflow)?;
+        let headroom = current_float
+            .checked_sub(required_i128)
+            .ok_or(HyperionError::DecimalOverflow)?;
+        let solvent = current_float >= required_i128;
+
+        Ok(GasFloatSolvency {
+            current_float,
+            committed_spending,
+            min_operational_reserve,
+            next_relay_cost,
+            required_float,
+            headroom,
+            solvent,
+        })
     }
 
     // ---------------------------------------------------------------------------------------

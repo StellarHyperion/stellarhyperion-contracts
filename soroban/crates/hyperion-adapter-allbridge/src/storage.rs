@@ -23,6 +23,10 @@ pub enum DataKey {
     Validator,
     /// Inbound message digests that have already been delivered to prevent replays.
     Processed(BytesN<32>),
+    /// Minimum native gas reserve maintained above single-dispatch relay cost.
+    MinGasReserve,
+    /// Cumulative native gas spent across committed outbound dispatches.
+    CommittedGasSpent,
 }
 
 pub fn config(env: &Env) -> Result<Config, HyperionError> {
@@ -127,4 +131,32 @@ pub fn mark_processed(env: &Env, message_id: &BytesN<32>) {
     env.storage()
         .persistent()
         .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn min_gas_reserve(env: &Env) -> u128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::MinGasReserve)
+        .unwrap_or(0)
+}
+
+pub fn set_min_gas_reserve(env: &Env, reserve: u128) {
+    env.storage()
+        .instance()
+        .set(&DataKey::MinGasReserve, &reserve);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn committed_gas_spent(env: &Env) -> u128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::CommittedGasSpent)
+        .unwrap_or(0)
+}
+
+pub fn set_committed_gas_spent(env: &Env, spent: u128) {
+    env.storage()
+        .instance()
+        .set(&DataKey::CommittedGasSpent, &spent);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
 }

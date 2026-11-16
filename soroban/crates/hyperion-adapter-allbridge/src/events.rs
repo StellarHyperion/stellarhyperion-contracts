@@ -42,6 +42,13 @@ pub struct GasWithdrawn {
     pub balance: i128,
 }
 
+/// The admin updated the minimum operational native gas reserve.
+#[contractevent(topics = ["hyperion", "abr_gas"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GasReserveUpdated {
+    pub min_operational_reserve: u128,
+}
+
 /// Dust sent on to the treasury.
 #[contractevent(topics = ["hyperion", "abr_dust"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
