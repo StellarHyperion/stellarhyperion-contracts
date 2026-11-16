@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Claim lifecycle crash, upgrade, archival restoration, and settlement harness.
+export * from "./claimLifecycle.js";
