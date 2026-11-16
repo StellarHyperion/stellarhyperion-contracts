@@ -84,6 +84,10 @@ contract Deploy is DeployConfig {
         // the far side, so a wrong value here is a burn on this chain against a mint nobody owns.
         cctp.setLane(stellarChain(), STELLAR_CCTP_DOMAIN, stellarRailRecipient());
         console.log("cctp lane           ", stellarChain());
+        if (params.admin != deployer) {
+            cctp.transferOwnership(params.admin);
+            console.log("cctp pending owner  ", params.admin);
+        }
 
         if (axelarToo) {
             axelar = new AxelarItsAdapter(address(router), rails.axelarIts, rails.axelarGasService, deployer);
@@ -95,6 +99,10 @@ contract Deploy is DeployConfig {
             // Asks ITS whether the id really belongs to this token, so a typo fails here.
             axelar.linkToken(token.token, axelarTokenId());
             console.log("axelar peer         ", axelarStellarChain());
+            if (params.admin != deployer) {
+                axelar.transferOwnership(params.admin);
+                console.log("axelar pending owner", params.admin);
+            }
         }
 
         _queueRouterSetup(token, axelarToo, params.admin, deployer);
@@ -199,12 +207,16 @@ contract Deploy is DeployConfig {
         vm.serializeString(key, "stellarChain", stellarChain());
 
         vm.serializeAddress(key, "cctpAdapter", address(cctp));
+        vm.serializeAddress(key, "cctpOwner", cctp.owner());
+        vm.serializeAddress(key, "cctpPendingOwner", cctp.pendingOwner());
         vm.serializeAddress(key, "cctpTokenMessenger", rails.cctpTokenMessenger);
         vm.serializeAddress(key, "cctpMessageTransmitter", rails.cctpMessageTransmitter);
         vm.serializeBytes32(key, "stellarRailRecipient", stellarRailRecipient());
 
         if (axelarToo) {
             vm.serializeAddress(key, "axelarAdapter", address(axelar));
+            vm.serializeAddress(key, "axelarOwner", axelar.owner());
+            vm.serializeAddress(key, "axelarPendingOwner", axelar.pendingOwner());
             vm.serializeAddress(key, "axelarIts", rails.axelarIts);
             vm.serializeAddress(key, "axelarGasService", rails.axelarGasService);
             vm.serializeString(key, "axelarStellarChain", axelarStellarChain());

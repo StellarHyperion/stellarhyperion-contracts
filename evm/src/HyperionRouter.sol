@@ -40,8 +40,10 @@ import {
 } from "./HyperionErrors.sol";
 import {
     ActionKind,
+    AdapterAuthorityReport,
     AddressKind,
     AdminAction,
+    AuthoritySnapshot,
     Destination,
     Origin,
     OutboundRequest,
@@ -657,6 +659,45 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
     /// @notice How many privileged changes have been queued since deployment.
     function actionCount() external view returns (uint64) {
         return _actionCount;
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function adapterAuthority(RouteKind route)
+        public
+        view
+        override
+        returns (AdapterAuthorityReport memory report)
+    {
+        address target = _adapters[route];
+        report.route = route;
+        report.adapter = target;
+        if (target == address(0) || target.code.length == 0) return report;
+
+        (bool hasOwner, bytes memory ownerBytes) = target.staticcall(abi.encodeWithSignature("owner()"));
+        (bool hasPending, bytes memory pendingBytes) =
+            target.staticcall(abi.encodeWithSignature("pendingOwner()"));
+        if (hasOwner && ownerBytes.length >= 32) {
+            report.owner = abi.decode(ownerBytes, (address));
+        }
+        if (hasPending && pendingBytes.length >= 32) {
+            report.pendingOwner = abi.decode(pendingBytes, (address));
+            report.supportsTwoStep = hasOwner && ownerBytes.length >= 32;
+        }
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function authoritySnapshot(address deployer, address targetAdmin)
+        external
+        view
+        override
+        returns (AuthoritySnapshot memory snapshot)
+    {
+        snapshot.router = address(this);
+        snapshot.deployerHasAdmin = hasRole(DEFAULT_ADMIN_ROLE, deployer);
+        snapshot.targetHasAdmin = hasRole(DEFAULT_ADMIN_ROLE, targetAdmin);
+        snapshot.targetHasGuardian = hasRole(GUARDIAN_ROLE, targetAdmin);
+        snapshot.cctp = adapterAuthority(RouteKind.Cctp);
+        snapshot.axelar = adapterAuthority(RouteKind.AxelarIts);
     }
 
     // -------------------------------------------------------------------------------------

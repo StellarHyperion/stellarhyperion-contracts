@@ -89,6 +89,7 @@ contract Verify is DeployConfig {
         // The admin handover is the one thing that cannot be checked by equality alone, because a
         // record written before the handover matured names the deployer.
         address recordedAdmin = record.readAddress(".admin");
+        address recordedDeployer = record.readAddress(".deployer");
         bool adminHolds = router.hasRole(router.DEFAULT_ADMIN_ROLE(), recordedAdmin);
         console.log(
             adminHolds
@@ -97,8 +98,16 @@ contract Verify is DeployConfig {
         );
         if (!adminHolds) {
             console.log("       recorded admin    ", recordedAdmin);
-            console.log("       deployer          ", record.readAddress(".deployer"));
+            console.log("       deployer          ", recordedDeployer);
             console.log("       run Execute.s.sol if the handover action is still queued");
+        }
+
+        _verifyAdapterOwner("cctp", cctp.owner(), cctp.pendingOwner(), recordedDeployer, recordedAdmin);
+        if (vm.keyExistsJson(record, ".axelarAdapter")) {
+            AxelarItsAdapter axelar = AxelarItsAdapter(payable(record.readAddress(".axelarAdapter")));
+            _verifyAdapterOwner(
+                "axelar", axelar.owner(), axelar.pendingOwner(), recordedDeployer, recordedAdmin
+            );
         }
 
         console.log("");
@@ -169,6 +178,27 @@ contract Verify is DeployConfig {
         } else {
             problems += 1;
             console.log("  BAD ", what, "is true and should be false");
+        }
+    }
+
+    function _verifyAdapterOwner(
+        string memory label,
+        address currentOwner,
+        address pendingOwnerAddr,
+        address recordedDeployer,
+        address recordedAdmin
+    ) private {
+        console.log(string.concat("  info ", label, " current owner"), currentOwner);
+        console.log(string.concat("  info ", label, " pending owner"), pendingOwnerAddr);
+        if (currentOwner == recordedAdmin && pendingOwnerAddr == address(0)) {
+            console.log(string.concat("  ok   ", label, " adapter owned by recorded admin"));
+        } else if (currentOwner == recordedDeployer && pendingOwnerAddr == recordedAdmin) {
+            console.log(string.concat("  WARN ", label, " adapter ownership pending acceptance"));
+        } else if (currentOwner == recordedDeployer && recordedDeployer != recordedAdmin) {
+            console.log(string.concat("  WARN ", label, " adapter still owned by deployer"));
+        } else {
+            problems += 1;
+            console.log(string.concat("  BAD  ", label, " adapter ownership unexpected"));
         }
     }
 }

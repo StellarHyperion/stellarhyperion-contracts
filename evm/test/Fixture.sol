@@ -223,4 +223,9 @@ contract Fixture is Test {
         request = _request(amount, RouteKind.Cctp);
         request.token = address(usdc);
     }
+
+    /// @dev Deploy a bootstrap router whose initial admin is `deployerAddr` rather than `admin`.
+    function _bootstrapRouter(address deployerAddr) internal returns (HyperionRouter) {
+        return new HyperionRouter(deployerAddr, guardian, treasury, FEE_BPS, TIMELOCK, FLOW_WINDOW);
+    }
 }

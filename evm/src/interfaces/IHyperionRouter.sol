@@ -3,7 +3,9 @@ pragma solidity 0.8.28;
 
 import {
     ActionKind,
+    AdapterAuthorityReport,
     AdminAction,
+    AuthoritySnapshot,
     Destination,
     Origin,
     OutboundRequest,
@@ -297,4 +299,18 @@ interface IHyperionRouter {
     /// @param route The rail to check.
     /// @return True if the rail is paused.
     function routePaused(RouteKind route) external view returns (bool);
+
+    /// @notice Read the current and pending two-step owner reported by a wired adapter.
+    /// @param route The rail whose wired adapter should be inspected.
+    /// @return report Current owner, pending owner, and two-step capability metadata.
+    function adapterAuthority(RouteKind route) external view returns (AdapterAuthorityReport memory report);
+
+    /// @notice Read router admin state alongside CCTP and Axelar adapter ownership.
+    /// @param deployer The bootstrap deployer address whose residual role should be checked.
+    /// @param targetAdmin The intended governance address receiving authority.
+    /// @return snapshot Router role flags and adapter current/pending owners.
+    function authoritySnapshot(address deployer, address targetAdmin)
+        external
+        view
+        returns (AuthoritySnapshot memory snapshot);
 }

@@ -27,6 +27,162 @@ export const hyperionRouterInterfaceAbi = [
   },
   {
     "type": "function",
+    "name": "adapterAuthority",
+    "inputs": [
+      {
+        "name": "route",
+        "type": "uint8",
+        "internalType": "enum RouteKind"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "report",
+        "type": "tuple",
+        "internalType": "struct AdapterAuthorityReport",
+        "components": [
+          {
+            "name": "route",
+            "type": "uint8",
+            "internalType": "enum RouteKind"
+          },
+          {
+            "name": "adapter",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "pendingOwner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "supportsTwoStep",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "authoritySnapshot",
+    "inputs": [
+      {
+        "name": "deployer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "targetAdmin",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "snapshot",
+        "type": "tuple",
+        "internalType": "struct AuthoritySnapshot",
+        "components": [
+          {
+            "name": "router",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "deployerHasAdmin",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "targetHasAdmin",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "targetHasGuardian",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "cctp",
+            "type": "tuple",
+            "internalType": "struct AdapterAuthorityReport",
+            "components": [
+              {
+                "name": "route",
+                "type": "uint8",
+                "internalType": "enum RouteKind"
+              },
+              {
+                "name": "adapter",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "owner",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "pendingOwner",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "supportsTwoStep",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
+          },
+          {
+            "name": "axelar",
+            "type": "tuple",
+            "internalType": "struct AdapterAuthorityReport",
+            "components": [
+              {
+                "name": "route",
+                "type": "uint8",
+                "internalType": "enum RouteKind"
+              },
+              {
+                "name": "adapter",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "owner",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "pendingOwner",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "supportsTwoStep",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "bridgeIn",
     "inputs": [
       {

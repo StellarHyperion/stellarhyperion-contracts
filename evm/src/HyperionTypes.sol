@@ -188,3 +188,22 @@ enum QuoteBlocker {
     InvalidDestination,
     ChainNotSupported
 }
+
+/// @dev Current and pending two-step ownership read from a wired rail adapter.
+struct AdapterAuthorityReport {
+    RouteKind route;
+    address adapter;
+    address owner;
+    address pendingOwner;
+    bool supportsTwoStep;
+}
+
+/// @dev Snapshot of router admin authority and adapter ownership across a deployment.
+struct AuthoritySnapshot {
+    address router;
+    bool deployerHasAdmin;
+    bool targetHasAdmin;
+    bool targetHasGuardian;
+    AdapterAuthorityReport cctp;
+    AdapterAuthorityReport axelar;
+}
