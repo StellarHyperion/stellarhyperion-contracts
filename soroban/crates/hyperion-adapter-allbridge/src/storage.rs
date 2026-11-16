@@ -3,7 +3,7 @@
 use hyperion_core::HyperionError;
 use soroban_sdk::{contracttype, Address, BytesN, Env, String};
 
-use crate::types::{AssetLink, ChainLane, Config};
+use crate::types::{AssetLink, ChainLane, Config, OutboundRecord};
 
 /// Extend when there is less than a day of life left, and extend to thirty days.
 pub const BUMP_THRESHOLD: u32 = 17_280;
@@ -23,6 +23,8 @@ pub enum DataKey {
     Validator,
     /// Inbound message digests that have already been delivered to prevent replays.
     Processed(BytesN<32>),
+    /// Recorded outbound provider handoff keyed by the router's monotonic nonce.
+    Outbound(u64),
 }
 
 pub fn config(env: &Env) -> Result<Config, HyperionError> {
@@ -127,4 +129,43 @@ pub fn mark_processed(env: &Env, message_id: &BytesN<32>) {
     env.storage()
         .persistent()
         .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn has_outbound(env: &Env, nonce: u64) -> bool {
+    let key = DataKey::Outbound(nonce);
+    let found = env.storage().persistent().has(&key);
+    if found {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    }
+    found
+}
+
+pub fn outbound(env: &Env, nonce: u64) -> Option<OutboundRecord> {
+    let key = DataKey::Outbound(nonce);
+    let found: Option<OutboundRecord> = env.storage().persistent().get(&key);
+    if found.is_some() {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    }
+    found
+}
+
+pub fn set_outbound(env: &Env, record: &OutboundRecord) {
+    let key = DataKey::Outbound(record.nonce);
+    env.storage().persistent().set(&key, record);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn touch_outbound(env: &Env, nonce: u64) {
+    let key = DataKey::Outbound(nonce);
+    if env.storage().persistent().has(&key) {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    }
 }

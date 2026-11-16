@@ -5,6 +5,8 @@
 
 use soroban_sdk::{contractevent, Address, BytesN, String, U256};
 
+use crate::types::{OutboundStatus, RecoveryAction};
+
 /// A transfer handed to Allbridge.
 #[contractevent(topics = ["hyperion", "abr_out"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -99,4 +101,16 @@ pub struct Received {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidatorSet {
     pub validator: BytesN<32>,
+}
+
+/// Operator reconciled an outbound transfer record with Allbridge provider evidence.
+#[contractevent(topics = ["hyperion", "abr_rec"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OutboundReconciled {
+    #[topic]
+    pub nonce: u64,
+    pub status: OutboundStatus,
+    pub action: RecoveryAction,
+    pub recipient: BytesN<32>,
+    pub message_id: BytesN<32>,
 }

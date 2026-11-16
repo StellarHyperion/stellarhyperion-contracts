@@ -72,7 +72,10 @@ use soroban_sdk::{
 };
 
 use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
-use types::{AssetLink, ChainLane, Config};
+use types::{
+    AssetLink, ChainLane, Config, OutboundRecord, OutboundStatus, ProviderObservation,
+    RecoveryAction, RecoveryPlan,
+};
 
 #[contract]
 pub struct AllbridgeAdapter;
@@ -130,6 +133,9 @@ impl AllbridgeAdapter {
         }
         if amount <= 0 {
             return Err(HyperionError::InvalidAmount);
+        }
+        if storage::has_outbound(&env, nonce) {
+            return Err(HyperionError::ReplayedMessage);
         }
         let lane = storage::lane(&env, &destination_chain).ok_or(HyperionError::UnknownChain)?;
         let link = storage::asset(&env, &token, lane.allbridge_chain_id)
@@ -220,6 +226,35 @@ impl AllbridgeAdapter {
             &0u128,
         );
 
+        let nominal_message_id = rail::hash_message(
+            &env,
+            amount_u128,
+            &destination,
+            STELLAR_CHAIN_ID,
+            lane.allbridge_chain_id,
+            &link.receive_token,
+            &rail_nonce,
+        );
+        storage::set_outbound(
+            &env,
+            &OutboundRecord {
+                nonce,
+                rail_nonce: rail_nonce.clone(),
+                token: token.clone(),
+                amount,
+                destination_chain: lane.chain.clone(),
+                source_chain_id: STELLAR_CHAIN_ID,
+                allbridge_chain_id: lane.allbridge_chain_id,
+                recipient: destination.clone(),
+                receive_token: link.receive_token.clone(),
+                gas_spent: cost,
+                nominal_message_id,
+                verified_message_id: None,
+                verified_v_usd: None,
+                status: OutboundStatus::Dispatched,
+            },
+        );
+
         events::Dispatched {
             token,
             chain: lane.chain,
@@ -232,6 +267,53 @@ impl AllbridgeAdapter {
         }
         .publish(&env);
         Ok(())
+    }
+
+    /// Reconcile a recorded outbound handoff with observed Allbridge Core provider status.
+    ///
+    /// Admin-only state transition for interrupted operator workflows:
+    /// - `Unknown` marks the handoff `OutcomeUnknown` and forbids any second token debit.
+    /// - `MessageSent(v_usd, message_id)` verifies the exact 32-byte Allbridge digest (including
+    ///   stamped chain IDs, original `recipient`, `receive_token`, and full `U256` wire nonce),
+    ///   marks the handoff `ProviderConfirmed`, and reports `UnsupportedProviderRecovery` because
+    ///   Allbridge Core exposes no standalone resend or post-dispatch gas top-up entrypoint.
+    /// - `ConfirmedAbsent` is rejected when an on-chain `Outbound(nonce)` debit already committed.
+    pub fn reconcile_outbound(
+        env: Env,
+        nonce: u64,
+        observation: ProviderObservation,
+    ) -> Result<RecoveryPlan, HyperionError> {
+        let _ = require_admin(&env)?;
+        let mut record = storage::outbound(&env, nonce).ok_or(HyperionError::UnknownNonce)?;
+        let plan = evaluate_recorded_recovery(&env, &mut record, &observation)?;
+        storage::set_outbound(&env, &record);
+        events::OutboundReconciled {
+            nonce,
+            status: plan.status,
+            action: plan.action,
+            recipient: plan.recipient.clone(),
+            message_id: plan.message_id.clone(),
+        }
+        .publish(&env);
+        Ok(plan)
+    }
+
+    /// Guarded operator recovery entrypoint for a recorded outbound handoff.
+    ///
+    /// - Unreconciled (`Dispatched`) or `OutcomeUnknown` handoffs fail with `ReplayedMessage` so
+    ///   unknown outcomes never result in a second token debit.
+    /// - `ProviderConfirmed` handoffs fail explicitly with `UnsupportedRoute` instead of
+    ///   simulating a provider replay or debiting user/adapter assets a second time.
+    pub fn attempt_provider_recovery(env: Env, nonce: u64) -> Result<(), HyperionError> {
+        let _ = require_admin(&env)?;
+        let record = storage::outbound(&env, nonce).ok_or(HyperionError::UnknownNonce)?;
+        match record.status {
+            OutboundStatus::Dispatched | OutboundStatus::OutcomeUnknown => {
+                Err(HyperionError::ReplayedMessage)
+            }
+            OutboundStatus::ProviderConfirmed => Err(HyperionError::UnsupportedRoute),
+            OutboundStatus::InterruptedBeforeDebit => Err(HyperionError::UnknownNonce),
+        }
     }
 
     // ---------------------------------------------------------------------------------------
@@ -498,6 +580,13 @@ impl AllbridgeAdapter {
         Ok(())
     }
 
+    /// Extend the TTL of a recorded outbound recovery entry without modifying it.
+    pub fn keep_alive_outbound(env: Env, nonce: u64) -> Result<(), HyperionError> {
+        let _ = storage::config(&env)?;
+        storage::touch_outbound(&env, nonce);
+        Ok(())
+    }
+
     // ---------------------------------------------------------------------------------------
     // Administration
     // ---------------------------------------------------------------------------------------
@@ -675,6 +764,180 @@ impl AllbridgeAdapter {
     pub fn is_processed(env: Env, message_id: BytesN<32>) -> Result<bool, HyperionError> {
         let _ = storage::config(&env)?;
         Ok(storage::is_processed(&env, &message_id))
+    }
+
+    /// Read a recorded outbound provider handoff by router nonce.
+    pub fn get_outbound(env: Env, nonce: u64) -> Result<OutboundRecord, HyperionError> {
+        let _ = storage::config(&env)?;
+        storage::outbound(&env, nonce).ok_or(HyperionError::UnknownNonce)
+    }
+
+    /// Read-only reconciliation planner for an interrupted outbound provider call.
+    ///
+    /// Evaluates both committed `Outbound(nonce)` records and pre-inclusion interrupted RPC calls:
+    /// - Unknown outcomes (`ProviderObservation::Unknown`) always return `HoldDoNotDebit` with
+    ///   `second_debit_permitted: false`.
+    /// - Recorded handoffs enforce exact agreement on `token`, `amount`, `destination_chain`, and
+    ///   `expected_recipient`, preserving the original recipient and full 32-byte message digest.
+    /// - Confirmed provider messages report `UnsupportedProviderRecovery` rather than simulating
+    ///   unsupported Allbridge Core source-side recovery.
+    pub fn inspect_outbound_recovery(
+        env: Env,
+        nonce: u64,
+        token: Address,
+        amount: i128,
+        destination_chain: String,
+        expected_recipient: BytesN<32>,
+        observation: ProviderObservation,
+    ) -> Result<RecoveryPlan, HyperionError> {
+        let _ = storage::config(&env)?;
+        if amount <= 0 {
+            return Err(HyperionError::InvalidAmount);
+        }
+        let _ = bytes32_to_evm(&env, &expected_recipient)?;
+
+        if let Some(mut record) = storage::outbound(&env, nonce) {
+            if record.recipient != expected_recipient {
+                return Err(HyperionError::InvalidDestination);
+            }
+            if record.token != token
+                || record.amount != amount
+                || record.destination_chain != destination_chain
+            {
+                return Err(HyperionError::MalformedMessage);
+            }
+            return evaluate_recorded_recovery(&env, &mut record, &observation);
+        }
+
+        // No `Outbound(nonce)` debit is recorded on-chain.
+        let lane = storage::lane(&env, &destination_chain).ok_or(HyperionError::UnknownChain)?;
+        let link = storage::asset(&env, &token, lane.allbridge_chain_id)
+            .ok_or(HyperionError::TokenNotMapped)?;
+        let amount_u128 = u128::try_from(amount).map_err(|_| HyperionError::InvalidAmount)?;
+        let rail_nonce = U256::from_u128(&env, u128::from(nonce));
+        let nominal_message_id = rail::hash_message(
+            &env,
+            amount_u128,
+            &expected_recipient,
+            STELLAR_CHAIN_ID,
+            lane.allbridge_chain_id,
+            &link.receive_token,
+            &rail_nonce,
+        );
+
+        match observation {
+            ProviderObservation::Unknown => Ok(RecoveryPlan {
+                nonce,
+                rail_nonce,
+                recipient: expected_recipient,
+                destination_chain: lane.chain,
+                source_chain_id: STELLAR_CHAIN_ID,
+                allbridge_chain_id: lane.allbridge_chain_id,
+                receive_token: link.receive_token,
+                amount,
+                verified_v_usd: None,
+                message_id: nominal_message_id,
+                status: OutboundStatus::OutcomeUnknown,
+                action: RecoveryAction::HoldDoNotDebit,
+                second_debit_permitted: false,
+            }),
+            ProviderObservation::ConfirmedAbsent => Ok(RecoveryPlan {
+                nonce,
+                rail_nonce,
+                recipient: expected_recipient,
+                destination_chain: lane.chain,
+                source_chain_id: STELLAR_CHAIN_ID,
+                allbridge_chain_id: lane.allbridge_chain_id,
+                receive_token: link.receive_token,
+                amount,
+                verified_v_usd: None,
+                message_id: nominal_message_id,
+                status: OutboundStatus::InterruptedBeforeDebit,
+                action: RecoveryAction::SafeFreshSubmission,
+                second_debit_permitted: false,
+            }),
+            ProviderObservation::MessageSent(_, _) => Err(HyperionError::MalformedMessage),
+        }
+    }
+}
+
+fn evaluate_recorded_recovery(
+    env: &Env,
+    record: &mut OutboundRecord,
+    observation: &ProviderObservation,
+) -> Result<RecoveryPlan, HyperionError> {
+    let max_v_usd = u128::try_from(record.amount).map_err(|_| HyperionError::InvalidAmount)?;
+    match observation {
+        ProviderObservation::Unknown => {
+            if record.status != OutboundStatus::ProviderConfirmed {
+                record.status = OutboundStatus::OutcomeUnknown;
+            }
+            let msg = record
+                .verified_message_id
+                .clone()
+                .unwrap_or_else(|| record.nominal_message_id.clone());
+            let action = if record.status == OutboundStatus::ProviderConfirmed {
+                RecoveryAction::UnsupportedProviderRecovery
+            } else {
+                RecoveryAction::HoldDoNotDebit
+            };
+            Ok(RecoveryPlan {
+                nonce: record.nonce,
+                rail_nonce: record.rail_nonce.clone(),
+                recipient: record.recipient.clone(),
+                destination_chain: record.destination_chain.clone(),
+                source_chain_id: record.source_chain_id,
+                allbridge_chain_id: record.allbridge_chain_id,
+                receive_token: record.receive_token.clone(),
+                amount: record.amount,
+                verified_v_usd: record.verified_v_usd,
+                message_id: msg,
+                status: record.status,
+                action,
+                second_debit_permitted: false,
+            })
+        }
+        ProviderObservation::ConfirmedAbsent => Err(HyperionError::MalformedMessage),
+        ProviderObservation::MessageSent(v_usd, observed_msg) => {
+            if *v_usd == 0 || *v_usd > max_v_usd {
+                return Err(HyperionError::InvalidAmount);
+            }
+            let expected_msg = rail::hash_message(
+                env,
+                *v_usd,
+                &record.recipient,
+                record.source_chain_id,
+                record.allbridge_chain_id,
+                &record.receive_token,
+                &record.rail_nonce,
+            );
+            if expected_msg != *observed_msg {
+                return Err(HyperionError::MalformedMessage);
+            }
+            if let Some(existing) = &record.verified_message_id {
+                if existing != &expected_msg {
+                    return Err(HyperionError::MalformedMessage);
+                }
+            }
+            record.status = OutboundStatus::ProviderConfirmed;
+            record.verified_v_usd = Some(*v_usd);
+            record.verified_message_id = Some(expected_msg.clone());
+            Ok(RecoveryPlan {
+                nonce: record.nonce,
+                rail_nonce: record.rail_nonce.clone(),
+                recipient: record.recipient.clone(),
+                destination_chain: record.destination_chain.clone(),
+                source_chain_id: record.source_chain_id,
+                allbridge_chain_id: record.allbridge_chain_id,
+                receive_token: record.receive_token.clone(),
+                amount: record.amount,
+                verified_v_usd: Some(*v_usd),
+                message_id: expected_msg,
+                status: OutboundStatus::ProviderConfirmed,
+                action: RecoveryAction::UnsupportedProviderRecovery,
+                second_debit_permitted: false,
+            })
+        }
     }
 }
 
