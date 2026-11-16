@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Multi-currency token conservation invariant harness for paid ITS and CCTP paths.
+export * from "./conservation.js";

@@ -14,6 +14,7 @@
 
 mod admin;
 mod circle;
+mod conservation;
 mod inbound;
 mod outbound;
 mod paid;
