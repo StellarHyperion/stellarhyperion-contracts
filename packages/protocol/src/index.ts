@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Read-only activation evidence gate for candidate Allbridge lanes.
+export * from "./allbridgeActivationGate.js";

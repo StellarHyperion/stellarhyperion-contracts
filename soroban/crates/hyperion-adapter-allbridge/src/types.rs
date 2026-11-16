@@ -36,3 +36,26 @@ pub struct AssetLink {
     /// The destination token's address, left padded to thirty two bytes.
     pub receive_token: BytesN<32>,
 }
+
+/// Read-only snapshot of authority, pool, liquidity, gas float and validator state for a
+/// candidate Allbridge lane. Inspecting this never enables a route or moves assets.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LaneReadinessSnapshot {
+    pub admin: Address,
+    pub router: Address,
+    pub bridge: Address,
+    pub native: Address,
+    pub lane_linked: bool,
+    pub allbridge_chain_id: u32,
+    pub rail_open: bool,
+    pub asset_mapped: bool,
+    pub receive_token: BytesN<32>,
+    pub pool: Option<Address>,
+    pub pool_liquidity: i128,
+    pub gas_float: i128,
+    pub relay_cost: u128,
+    pub float_covers_relay: bool,
+    pub validator_configured: bool,
+    pub validator: Option<BytesN<32>>,
+}

@@ -72,7 +72,7 @@ use soroban_sdk::{
 };
 
 use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
-use types::{AssetLink, ChainLane, Config};
+use types::{AssetLink, ChainLane, Config, LaneReadinessSnapshot};
 
 #[contract]
 pub struct AllbridgeAdapter;
@@ -675,6 +675,99 @@ impl AllbridgeAdapter {
     pub fn is_processed(env: Env, message_id: BytesN<32>) -> Result<bool, HyperionError> {
         let _ = storage::config(&env)?;
         Ok(storage::is_processed(&env, &message_id))
+    }
+
+    /// Collect read-only readiness facts for a candidate `(chain, token)` lane without mutating
+    /// configuration, enabling routes, or submitting transfers.
+    pub fn inspect_lane_readiness(
+        env: Env,
+        chain: String,
+        token: Address,
+    ) -> Result<LaneReadinessSnapshot, HyperionError> {
+        let cfg = storage::config(&env)?;
+        let this = env.current_contract_address();
+        let bridge = AllbridgeBridgeClient::new(&env, &cfg.bridge);
+        let bridge_cfg = bridge.get_config();
+        let gas_float = token::Client::new(&env, &cfg.native).balance(&this);
+
+        let token_key = codec::contract_key(&env, &token)?;
+        let pool = bridge
+            .try_get_pool_address(&BytesN::from_array(&env, &token_key))
+            .ok()
+            .and_then(|res| res.ok());
+        let pool_liquidity = match &pool {
+            Some(pool_addr) => token::Client::new(&env, &token).balance(pool_addr),
+            None => 0,
+        };
+
+        let zero_key = BytesN::from_array(&env, &[0u8; 32]);
+        let stored_validator = storage::validator(&env);
+        let validator_configured = match &stored_validator {
+            Some(pk) => *pk != zero_key,
+            None => false,
+        };
+
+        let (lane_linked, allbridge_chain_id, asset_mapped, receive_token, relay_cost) =
+            match storage::lane(&env, &chain) {
+                Some(lane) => {
+                    let messenger = AllbridgeMessengerClient::new(&env, &bridge_cfg.messenger);
+                    let cost = bridge
+                        .get_transaction_cost(&lane.allbridge_chain_id)
+                        .checked_add(messenger.get_transaction_cost(&lane.allbridge_chain_id))
+                        .ok_or(HyperionError::DecimalOverflow)?;
+                    match storage::asset(&env, &token, lane.allbridge_chain_id) {
+                        Some(link) => {
+                            let remote_ok = bridge
+                                .try_get_another_bridge(&lane.allbridge_chain_id)
+                                .ok()
+                                .and_then(|r| r.ok())
+                                .map(|remote| {
+                                    remote.tokens.get(link.receive_token.clone()) == Some(true)
+                                })
+                                .unwrap_or(false);
+                            (
+                                lane.allbridge_chain_id != STELLAR_CHAIN_ID,
+                                lane.allbridge_chain_id,
+                                remote_ok && link.receive_token != zero_key,
+                                link.receive_token,
+                                cost,
+                            )
+                        }
+                        None => (
+                            lane.allbridge_chain_id != STELLAR_CHAIN_ID,
+                            lane.allbridge_chain_id,
+                            false,
+                            zero_key.clone(),
+                            cost,
+                        ),
+                    }
+                }
+                None => (false, 0, false, zero_key.clone(), 0),
+            };
+
+        let float_covers_relay = match i128::try_from(relay_cost) {
+            Ok(cost_i128) => lane_linked && gas_float >= cost_i128,
+            Err(_) => false,
+        };
+
+        Ok(LaneReadinessSnapshot {
+            admin: cfg.admin,
+            router: cfg.router,
+            bridge: cfg.bridge,
+            native: cfg.native,
+            lane_linked,
+            allbridge_chain_id,
+            rail_open: bridge_cfg.can_swap,
+            asset_mapped,
+            receive_token,
+            pool,
+            pool_liquidity,
+            gas_float,
+            relay_cost,
+            float_covers_relay,
+            validator_configured,
+            validator: stored_validator,
+        })
     }
 }
 

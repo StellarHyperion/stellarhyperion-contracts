@@ -33,6 +33,7 @@
   },
   "scripts": {
     "gen": "node scripts/gen-artifacts.mjs",
+    "allbridge:gate": "node ../../script/stellar/check-allbridge-activation.mjs",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
