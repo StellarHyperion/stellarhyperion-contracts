@@ -5,3 +5,4 @@ mod admin;
 mod inbound;
 mod outbound;
 mod quotes;
+mod replay_collision_corpus;

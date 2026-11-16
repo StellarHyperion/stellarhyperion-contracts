@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Adversarial replay-identity collision corpus and full-width identifier audit harness.
+export * from "./replayCorpus.js";
