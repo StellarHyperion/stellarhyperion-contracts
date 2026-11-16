@@ -27,7 +27,7 @@ against itself.
 | `flow`        | Sliding flow windows, the same arithmetic both routers run                             |
 | `cctp`        | Reading CCTP V2 messages, which is all this side ever does with them                   |
 | `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
-| `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
+| `quotes`      | Local rail pricing, fee ladders, and dated multi-snapshot comparison                   |
 | `deployments` | Deployment records, and a loader that checks them instead of casting them              |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
@@ -107,3 +107,16 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Multi-snapshot route comparison
+
+`compareRouteSnapshots` compares candidate route snapshots collected at explicit timestamps against
+a canonical `SnapshotComparisonTarget` and `SnapshotFreshnessPolicy`:
+
+- Mixed networks (`mainnet` vs `testnet`), mismatched chains, or distinct token representations
+  (such as 6-decimal Circle native ERC-20 USDC vs 7-decimal Axelar ITS Stellar-USDC) are partitioned
+  under `incompatible` and never ranked as equivalent destination amounts.
+- Timestamp validation separates expired or clock-skewed inputs (`status: "stale"`) from fresh
+  observations where the rail is paused or out of headroom (`status: "unavailable"`).
+- Eligible candidates sort deterministically by `destinationAmount`, canonical status, attestation
+  latency, observation freshness, `RouteKind`, and candidate `id` regardless of input order.
