@@ -64,6 +64,142 @@ export const axelarItsAdapterAbi = [
   },
   {
     "type": "function",
+    "name": "computeTopUpIntentId",
+    "inputs": [
+      {
+        "name": "intent",
+        "type": "tuple",
+        "internalType": "struct AxelarItsAdapter.GasTopUpIntent",
+        "components": [
+          {
+            "name": "sender",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "txHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "logIndex",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "transferNonce",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "destinationChain",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "axelarChain",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "recipientStrkey",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "originalAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "refundAddress",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "maxNativeGas",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "intentNonce",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "deadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cumulativeGasTopUpOf",
+    "inputs": [
+      {
+        "name": "dispatchKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "totalPaid",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "DEFAULT_MAX_GAS_TOP_UP_PER_CALL",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "DEFAULT_MAX_TOTAL_GAS_TOP_UP",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "dispatch",
     "inputs": [
       {
@@ -107,6 +243,30 @@ export const axelarItsAdapterAbi = [
       }
     ],
     "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "dispatchBindingKey",
+    "inputs": [
+      {
+        "name": "chain",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "transferNonce",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -213,6 +373,98 @@ export const axelarItsAdapterAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "maxGasTopUpPerCall",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxTotalGasTopUpPerTransfer",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "outboundDispatchOf",
+    "inputs": [
+      {
+        "name": "chain",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "transferNonce",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct AxelarItsAdapter.OutboundDispatchBinding",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "destinationChainHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "axelarChainHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "recipientStrkeyHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "noteHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "recorded",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -340,6 +592,24 @@ export const axelarItsAdapterAbi = [
   },
   {
     "type": "function",
+    "name": "setGasTopUpCaps",
+    "inputs": [
+      {
+        "name": "maxPerCall",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxPerTransfer",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setPeer",
     "inputs": [
       {
@@ -442,6 +712,116 @@ export const axelarItsAdapterAbi = [
   },
   {
     "type": "function",
+    "name": "topUpGasWithIntent",
+    "inputs": [
+      {
+        "name": "intent",
+        "type": "tuple",
+        "internalType": "struct AxelarItsAdapter.GasTopUpIntent",
+        "components": [
+          {
+            "name": "sender",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "txHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "logIndex",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "transferNonce",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "destinationChain",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "axelarChain",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "recipientStrkey",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "originalAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "refundAddress",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "maxNativeGas",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "intentNonce",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "deadline",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "intentId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "topUpIntentUsed",
+    "inputs": [
+      {
+        "name": "intentId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "used",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "transferOwnership",
     "inputs": [
       {
@@ -486,6 +866,74 @@ export const axelarItsAdapterAbi = [
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GasTopUpCapsUpdated",
+    "inputs": [
+      {
+        "name": "maxPerCall",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxPerTransfer",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GasTopUpSubmitted",
+    "inputs": [
+      {
+        "name": "intentId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "dispatchKey",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "txHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "logIndex",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "refundAddress",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "paidValue",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -651,6 +1099,11 @@ export const axelarItsAdapterAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidLimit",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MalformedMessage",
     "inputs": []
   },
@@ -688,12 +1141,28 @@ export const axelarItsAdapterAbi = [
   },
   {
     "type": "error",
+    "name": "ReplayedMessage",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "SafeERC20FailedOperation",
     "inputs": [
       {
         "name": "token",
         "type": "address",
         "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TimelockExpired",
+    "inputs": [
+      {
+        "name": "expiredAt",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ]
   },

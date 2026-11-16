@@ -9,8 +9,13 @@ import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {
     AlreadyConfigured,
     InvalidAmount,
+    InvalidDestination,
+    InvalidLimit,
+    MalformedMessage,
     RailNotConfigured,
     RefundFailed,
+    ReplayedMessage,
+    TimelockExpired,
     TokenNotMapped,
     Unauthorized,
     UnexpectedRailContract,
@@ -52,6 +57,12 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
     /// it without looking.
     bytes32 public constant EXECUTE_SUCCESS = keccak256("its-execute-success");
 
+    /// @notice Default ceiling on native currency spent in a single gas top-up call.
+    uint256 public constant DEFAULT_MAX_GAS_TOP_UP_PER_CALL = 1 ether;
+
+    /// @notice Default cumulative ceiling on native gas top-ups for one outbound transfer.
+    uint256 public constant DEFAULT_MAX_TOTAL_GAS_TOP_UP = 5 ether;
+
     /// @dev Axelar's own envelope version for "there is a payload and it is for a contract".
     uint32 private constant METADATA_CONTRACT_CALL = 0;
 
@@ -75,6 +86,42 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
         bool enabled;
     }
 
+    /// @notice Immutable record of an outbound ITS transfer used to verify gas top-up intents.
+    struct OutboundDispatchBinding {
+        address token;
+        bytes32 tokenId;
+        uint256 amount;
+        bytes32 destinationChainHash;
+        bytes32 axelarChainHash;
+        bytes32 recipientStrkeyHash;
+        bytes32 noteHash;
+        bool recorded;
+    }
+
+    /// @notice Sender-bound gas top-up intent tied to a recorded outbound ITS transfer.
+    struct GasTopUpIntent {
+        address sender;
+        bytes32 txHash;
+        uint256 logIndex;
+        uint64 transferNonce;
+        string destinationChain;
+        string axelarChain;
+        string recipientStrkey;
+        address token;
+        bytes32 tokenId;
+        uint256 originalAmount;
+        address refundAddress;
+        uint256 maxNativeGas;
+        uint64 intentNonce;
+        uint64 deadline;
+    }
+
+    /// @notice Maximum native currency permitted in any single gas top-up call.
+    uint256 public maxGasTopUpPerCall;
+
+    /// @notice Maximum cumulative native currency permitted across top-ups for one transfer.
+    uint256 public maxTotalGasTopUpPerTransfer;
+
     mapping(string chain => Peer peer) private _peers;
 
     /// @dev Reverse lookup, so an inbound delivery can check the chain it names against the peer
@@ -84,6 +131,17 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
     /// @notice The ITS token id this chain's ERC20 is registered under, or zero if it is not
     /// linked. An unlinked token is a token this adapter will refuse to send.
     mapping(address token => bytes32 tokenId) public tokenIdOf;
+
+    mapping(bytes32 dispatchKey => OutboundDispatchBinding binding) private _dispatches;
+
+    /// @notice Cumulative native currency topped up for a recorded outbound transfer.
+    mapping(bytes32 dispatchKey => uint256 totalPaid) public cumulativeGasTopUpOf;
+
+    /// @notice Whether a domain-separated sender-bound gas top-up intent has already executed.
+    mapping(bytes32 intentId => bool used) public topUpIntentUsed;
+
+    mapping(bytes32 dispatchKey => bytes32 sourceEventHash) private _boundSourceEventOf;
+    mapping(bytes32 sourceEventHash => bytes32 dispatchKey) private _dispatchKeyOfSourceEvent;
 
     /// @notice A chain became reachable.
     event PeerConfigured(string chain, string axelarChain, bytes peer);
@@ -108,11 +166,27 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
         uint64 sourceNonce
     );
 
+    /// @notice Native gas spending caps for top-ups were updated.
+    event GasTopUpCapsUpdated(uint256 maxPerCall, uint256 maxPerTransfer);
+
+    /// @notice A sender-bound gas top-up intent was validated and forwarded to Axelar Gas Service.
+    event GasTopUpSubmitted(
+        bytes32 indexed intentId,
+        bytes32 indexed dispatchKey,
+        address indexed sender,
+        bytes32 txHash,
+        uint256 logIndex,
+        address refundAddress,
+        uint256 paidValue
+    );
+
     constructor(address router, address its, address gasService, address owner_) Ownable(owner_) {
         if (router == address(0) || its == address(0) || gasService == address(0)) revert ZeroAddress();
         ROUTER = router;
         ITS = IInterchainTokenService(its);
         GAS_SERVICE = IAxelarGasService(gasService);
+        maxGasTopUpPerCall = DEFAULT_MAX_GAS_TOP_UP_PER_CALL;
+        maxTotalGasTopUpPerTransfer = DEFAULT_MAX_TOTAL_GAS_TOP_UP;
     }
 
     /// @dev Axelar refunds unspent destination gas by sending it back to whoever paid, which is
@@ -167,6 +241,9 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
 
         (AddressKind kind,,) = StellarAddress.parse(destination.strkey);
         bytes memory note = HyperionNotes.encodeInboundNote(kind, destination.strkey, nonce);
+        _recordOutboundDispatch(
+            token, tokenId, amount, destination.chain, peer.axelarChain, destination.strkey, nonce, note
+        );
 
         emit TransferSubmitted(destination.chain, tokenId, amount, nonce, msg.value, note);
 
@@ -247,8 +324,49 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
     /// the transfer going through, which is the only incentive that needs to exist here.
     function topUpGas(bytes32 txHash, uint256 logIndex, address refundAddress) external payable {
         if (msg.value == 0) revert InvalidAmount();
+        if (msg.value > maxGasTopUpPerCall) revert InvalidLimit();
         if (refundAddress == address(0)) revert ZeroAddress();
+        if (txHash == bytes32(0)) revert MalformedMessage();
         GAS_SERVICE.addNativeGas{value: msg.value}(txHash, logIndex, refundAddress);
+    }
+
+    /// @notice Execute a sender-bound gas top-up intent verified against a recorded transfer.
+    /// @dev Validates caller identity, deadline, per-call and per-transfer native gas caps,
+    /// non-replay of the domain-separated intent hash, and exact immutable agreement on
+    /// destination chain, recipient strkey, token, ITS token id, and original transfer amount.
+    function topUpGasWithIntent(GasTopUpIntent calldata intent) external payable returns (bytes32 intentId) {
+        if (intent.sender == address(0) || intent.refundAddress == address(0)) revert ZeroAddress();
+        if (msg.sender != intent.sender) revert Unauthorized();
+        if (msg.value == 0) revert InvalidAmount();
+        if (block.timestamp > intent.deadline) revert TimelockExpired(intent.deadline);
+        if (intent.maxNativeGas == 0 || msg.value > intent.maxNativeGas) revert InvalidLimit();
+        if (msg.value > maxGasTopUpPerCall) revert InvalidLimit();
+        if (intent.txHash == bytes32(0)) revert MalformedMessage();
+
+        bytes32 dispatchKey = _verifyTopUpBindings(intent);
+
+        intentId = computeTopUpIntentId(intent);
+        if (topUpIntentUsed[intentId]) revert ReplayedMessage();
+
+        uint256 updatedTotal = cumulativeGasTopUpOf[dispatchKey] + msg.value;
+        if (updatedTotal > maxTotalGasTopUpPerTransfer) revert InvalidLimit();
+
+        topUpIntentUsed[intentId] = true;
+        cumulativeGasTopUpOf[dispatchKey] = updatedTotal;
+
+        emit GasTopUpSubmitted(
+            intentId, dispatchKey, msg.sender, intent.txHash, intent.logIndex, intent.refundAddress, msg.value
+        );
+
+        GAS_SERVICE.addNativeGas{value: msg.value}(intent.txHash, intent.logIndex, intent.refundAddress);
+    }
+
+    /// @notice Update per-call and cumulative per-transfer native gas top-up ceilings.
+    function setGasTopUpCaps(uint256 maxPerCall, uint256 maxPerTransfer) external onlyOwner {
+        if (maxPerCall == 0 || maxPerTransfer < maxPerCall) revert InvalidLimit();
+        maxGasTopUpPerCall = maxPerCall;
+        maxTotalGasTopUpPerTransfer = maxPerTransfer;
+        emit GasTopUpCapsUpdated(maxPerCall, maxPerTransfer);
     }
 
     /// @notice Make a chain reachable, and name the contract allowed to speak for it.
@@ -307,6 +425,102 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
     /// @notice Hyperion's own name for whatever Axelar calls a chain.
     function chainForAxelarName(string calldata axelarChain) external view returns (string memory) {
         return _byAxelarName[axelarChain];
+    }
+
+    /// @notice Deterministic storage key for a recorded outbound transfer binding.
+    function dispatchBindingKey(string calldata chain, uint64 transferNonce) public pure returns (bytes32) {
+        return keccak256(abi.encode(keccak256(bytes(chain)), transferNonce));
+    }
+
+    /// @notice Read the immutable binding recorded when an outbound ITS transfer left.
+    function outboundDispatchOf(string calldata chain, uint64 transferNonce)
+        external
+        view
+        returns (OutboundDispatchBinding memory)
+    {
+        return _dispatches[dispatchBindingKey(chain, transferNonce)];
+    }
+
+    /// @notice Compute the domain-separated replay identifier for a sender-bound top-up intent.
+    function computeTopUpIntentId(GasTopUpIntent calldata intent) public view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                block.chainid,
+                address(this),
+                intent.sender,
+                intent.txHash,
+                intent.logIndex,
+                intent.transferNonce,
+                keccak256(bytes(intent.destinationChain)),
+                keccak256(bytes(intent.axelarChain)),
+                keccak256(bytes(intent.recipientStrkey)),
+                intent.token,
+                intent.tokenId,
+                intent.originalAmount,
+                intent.refundAddress,
+                intent.maxNativeGas,
+                intent.intentNonce,
+                intent.deadline
+            )
+        );
+    }
+
+    function _recordOutboundDispatch(
+        address token,
+        bytes32 tokenId,
+        uint256 amount,
+        string calldata destinationChain,
+        string memory axelarChain,
+        string calldata recipientStrkey,
+        uint64 nonce,
+        bytes memory note
+    ) private {
+        bytes32 dispatchKey = dispatchBindingKey(destinationChain, nonce);
+        _dispatches[dispatchKey] = OutboundDispatchBinding({
+            token: token,
+            tokenId: tokenId,
+            amount: amount,
+            destinationChainHash: keccak256(bytes(destinationChain)),
+            axelarChainHash: keccak256(bytes(axelarChain)),
+            recipientStrkeyHash: keccak256(bytes(recipientStrkey)),
+            noteHash: keccak256(note),
+            recorded: true
+        });
+    }
+
+    function _verifyTopUpBindings(GasTopUpIntent calldata intent) private returns (bytes32 dispatchKey) {
+        Peer storage peer = _peers[intent.destinationChain];
+        if (!peer.configured) revert UnknownChain();
+        if (!peer.enabled) revert RailNotConfigured();
+
+        dispatchKey = dispatchBindingKey(intent.destinationChain, intent.transferNonce);
+        OutboundDispatchBinding storage recorded = _dispatches[dispatchKey];
+        if (!recorded.recorded) revert MalformedMessage();
+
+        if (keccak256(bytes(intent.axelarChain)) != recorded.axelarChainHash) {
+            revert InvalidDestination();
+        }
+        if (keccak256(bytes(intent.recipientStrkey)) != recorded.recipientStrkeyHash) {
+            revert InvalidDestination();
+        }
+        if (intent.token != recorded.token || intent.tokenId != recorded.tokenId) {
+            revert TokenNotMapped();
+        }
+        if (intent.originalAmount != recorded.amount) revert InvalidAmount();
+
+        bytes32 eventHash = keccak256(abi.encode(intent.txHash, intent.logIndex));
+        bytes32 existingEvent = _boundSourceEventOf[dispatchKey];
+        if (existingEvent != bytes32(0) && existingEvent != eventHash) revert MalformedMessage();
+
+        bytes32 existingDispatch = _dispatchKeyOfSourceEvent[eventHash];
+        if (existingDispatch != bytes32(0) && existingDispatch != dispatchKey) {
+            revert MalformedMessage();
+        }
+
+        if (existingEvent == bytes32(0)) {
+            _boundSourceEventOf[dispatchKey] = eventHash;
+            _dispatchKeyOfSourceEvent[eventHash] = dispatchKey;
+        }
     }
 
     function _refund() private {
