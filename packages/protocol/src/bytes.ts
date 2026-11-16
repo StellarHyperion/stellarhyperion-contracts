@@ -5,6 +5,9 @@
  * because this package is imported by a browser bundle as often as by a server.
  */
 
+import { assertByteBudget, resolveCodecLimits } from "./limits.js";
+import type { CodecResourceLimits } from "./limits.js";
+
 /** A hex string with the prefix, which is what viem, ethers and every JSON RPC endpoint expect. */
 export type Hex = `0x${string}`;
 
@@ -18,14 +21,18 @@ export function toHex(bytes: Uint8Array): Hex {
 }
 
 /** Hex back to bytes, with or without the prefix, refusing anything that is not even length. */
-export function fromHex(value: string): Uint8Array {
-  const body = value.startsWith("0x") || value.startsWith("0X") ? value.slice(2) : value;
-  if (body.length % 2 !== 0) {
-    throw new RangeError(`hex needs an even number of digits, got ${String(body.length)}`);
+export function fromHex(value: string, limits?: Partial<CodecResourceLimits>): Uint8Array {
+  const resolved = resolveCodecLimits(limits);
+  const prefixLen = value.startsWith("0x") || value.startsWith("0X") ? 2 : 0;
+  const digitLen = value.length - prefixLen;
+  assertByteBudget(Math.ceil(digitLen / 2), resolved.maxHexBytes, "maxHexBytes");
+  if (digitLen % 2 !== 0) {
+    throw new RangeError(`hex needs an even number of digits, got ${String(digitLen)}`);
   }
-  const out = new Uint8Array(body.length / 2);
+  const out = new Uint8Array(digitLen / 2);
   for (let i = 0; i < out.length; i += 1) {
-    const pair = body.slice(i * 2, i * 2 + 2);
+    const offset = prefixLen + i * 2;
+    const pair = value.slice(offset, offset + 2);
     const byte = Number.parseInt(pair, 16);
     if (Number.isNaN(byte)) throw new RangeError(`${pair} is not a hex byte`);
     out[i] = byte;
@@ -33,10 +40,15 @@ export function fromHex(value: string): Uint8Array {
   return out;
 }
 
-/** Glue byte arrays together, which is what `abi.encodePacked` does on the other side. */
-export function concatBytes(...parts: readonly Uint8Array[]): Uint8Array {
+/** Glue byte arrays together with explicit resource-budget overrides. */
+export function concatBytesBounded(
+  parts: readonly Uint8Array[],
+  limits?: Partial<CodecResourceLimits>,
+): Uint8Array {
+  const resolved = resolveCodecLimits(limits);
   let total = 0;
   for (const part of parts) total += part.length;
+  assertByteBudget(total, resolved.maxConcatBytes, "maxConcatBytes");
   const out = new Uint8Array(total);
   let offset = 0;
   for (const part of parts) {
@@ -44,6 +56,11 @@ export function concatBytes(...parts: readonly Uint8Array[]): Uint8Array {
     offset += part.length;
   }
   return out;
+}
+
+/** Glue byte arrays together, which is what `abi.encodePacked` does on the other side. */
+export function concatBytes(...parts: readonly Uint8Array[]): Uint8Array {
+  return concatBytesBounded(parts);
 }
 
 /** Constant time is not the point here; these are public wire formats, not secrets. */
@@ -56,7 +73,9 @@ export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /** Big endian, because every integer Hyperion puts on a wire is big endian. */
-export function bytesToBigInt(bytes: Uint8Array): bigint {
+export function bytesToBigInt(bytes: Uint8Array, limits?: Partial<CodecResourceLimits>): bigint {
+  const resolved = resolveCodecLimits(limits);
+  assertByteBudget(bytes.length, resolved.maxBigIntBytes, "maxBigIntBytes");
   let value = 0n;
   for (const byte of bytes) {
     value = (value << 8n) | BigInt(byte);
@@ -70,8 +89,17 @@ export function bytesToBigInt(bytes: Uint8Array): bigint {
  * Refuses a value that does not fit rather than silently truncating, which is the mistake that
  * turns a muxed sub account id into somebody else's sub account id.
  */
-export function bigIntToBytes(value: bigint, length: number): Uint8Array {
+export function bigIntToBytes(
+  value: bigint,
+  length: number,
+  limits?: Partial<CodecResourceLimits>,
+): Uint8Array {
+  const resolved = resolveCodecLimits(limits);
   if (value < 0n) throw new RangeError("negative values have no place on this wire");
+  if (!Number.isSafeInteger(length) || length < 0) {
+    throw new RangeError(`byte length must be a non-negative integer, got ${String(length)}`);
+  }
+  assertByteBudget(length, resolved.maxBigIntBytes, "maxBigIntBytes");
   const out = new Uint8Array(length);
   let remaining = value;
   for (let i = length - 1; i >= 0; i -= 1) {
@@ -85,7 +113,9 @@ export function bigIntToBytes(value: bigint, length: number): Uint8Array {
 }
 
 /** ASCII to bytes. Strkeys are base32, so every character is one byte and stays one byte. */
-export function asciiToBytes(value: string): Uint8Array {
+export function asciiToBytes(value: string, limits?: Partial<CodecResourceLimits>): Uint8Array {
+  const resolved = resolveCodecLimits(limits);
+  assertByteBudget(value.length, resolved.maxAsciiBytes, "maxAsciiBytes");
   const out = new Uint8Array(value.length);
   for (let i = 0; i < value.length; i += 1) {
     const code = value.charCodeAt(i);
@@ -96,7 +126,9 @@ export function asciiToBytes(value: string): Uint8Array {
 }
 
 /** Bytes back to ASCII. */
-export function bytesToAscii(bytes: Uint8Array): string {
+export function bytesToAscii(bytes: Uint8Array, limits?: Partial<CodecResourceLimits>): string {
+  const resolved = resolveCodecLimits(limits);
+  assertByteBudget(bytes.length, resolved.maxAsciiBytes, "maxAsciiBytes");
   let out = "";
   for (const byte of bytes) out += String.fromCharCode(byte);
   return out;

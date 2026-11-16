@@ -21,9 +21,18 @@ import {
   strkeyDestination,
   taggedDestination,
 } from "./addresses.js";
-import { bytesToAscii, bytesToBigInt, concatBytes, fromHex, toHex } from "./bytes.js";
+import {
+  bytesToAscii,
+  bytesToBigInt,
+  concatBytes,
+  concatBytesBounded,
+  fromHex,
+  toHex,
+} from "./bytes.js";
 import type { Hex } from "./bytes.js";
 import { fail } from "./errors.js";
+import { assertWirePayloadBudget, resolveCodecLimits } from "./limits.js";
+import type { CodecResourceLimits } from "./limits.js";
 
 /** One envelope version across both rails, so nobody has to remember which rail numbers what. */
 export const NOTE_VERSION = 1;
@@ -57,8 +66,16 @@ export interface InboundNote {
  * else built, and reading the first twenty nine bytes of it anyway is how a parser becomes an
  * attack surface.
  */
-export function decodeOutboundNote(payload: Uint8Array | Hex): OutboundNote {
-  const bytes = typeof payload === "string" ? fromHex(payload) : payload;
+export function decodeOutboundNote(
+  payload: Uint8Array | Hex,
+  limits?: Partial<CodecResourceLimits>,
+): OutboundNote {
+  const resolved = resolveCodecLimits(limits);
+  assertWirePayloadBudget(payload, resolved.maxOutboundNoteBytes, "maxOutboundNoteBytes");
+  const bytes =
+    typeof payload === "string"
+      ? fromHex(payload, { maxHexBytes: resolved.maxOutboundNoteBytes })
+      : payload;
   if (bytes.length !== OUTBOUND_NOTE_LEN) {
     fail("MalformedMessage", `an outbound note is ${String(OUTBOUND_NOTE_LEN)} bytes`);
   }
@@ -92,8 +109,16 @@ export function encodeInboundNote(strkey: string, nonce: bigint): Uint8Array {
 }
 
 /** Read an inbound note back, which is what the Stellar side does with it. */
-export function decodeInboundNote(payload: Uint8Array | Hex): InboundNote {
-  const bytes = typeof payload === "string" ? fromHex(payload) : payload;
+export function decodeInboundNote(
+  payload: Uint8Array | Hex,
+  limits?: Partial<CodecResourceLimits>,
+): InboundNote {
+  const resolved = resolveCodecLimits(limits);
+  assertWirePayloadBudget(payload, resolved.maxInboundNoteBytes, "maxInboundNoteBytes");
+  const bytes =
+    typeof payload === "string"
+      ? fromHex(payload, { maxHexBytes: resolved.maxInboundNoteBytes })
+      : payload;
   if (bytes.length < INBOUND_NOTE_MIN) fail("MalformedMessage", "too short to be a note");
   if (bytes[0] !== NOTE_VERSION) fail("UnsupportedHookVersion", `note version ${String(bytes[0])}`);
 
@@ -105,10 +130,10 @@ export function decodeInboundNote(payload: Uint8Array | Hex): InboundNote {
   if (bytes.length !== 3 + len + 8)
     fail("MalformedMessage", "the length byte and the note disagree");
 
-  const strkey = bytesToAscii(bytes.slice(3, 3 + len));
+  const strkey = bytesToAscii(bytes.slice(3, 3 + len), resolved);
   // The far side will parse this and check its checksum. Doing it here too means a note built by
   // something other than Hyperion fails in the app rather than at the rail.
-  const parsed = parseStellarAddress(strkey);
+  const parsed = parseStellarAddress(strkey, resolved);
   if (parsed.kind !== kind) fail("MalformedMessage", "the kind tag and the strkey disagree");
 
   return { kind, strkey, nonce: bytesToBigInt(bytes.slice(3 + len, 3 + len + 8)) };
@@ -130,12 +155,20 @@ export function encodeCctpHook(strkey: string): Uint8Array {
 }
 
 /** Read a CCTP hook back into the destination it names. */
-export function decodeCctpHook(payload: Uint8Array | Hex): {
+export function decodeCctpHook(
+  payload: Uint8Array | Hex,
+  limits?: Partial<CodecResourceLimits>,
+): {
   kind: AddressKind;
   key: Hex;
   muxedId: bigint;
 } {
-  const bytes = typeof payload === "string" ? fromHex(payload) : payload;
+  const resolved = resolveCodecLimits(limits);
+  assertWirePayloadBudget(payload, resolved.maxCctpHookBytes, "maxCctpHookBytes");
+  const bytes =
+    typeof payload === "string"
+      ? fromHex(payload, { maxHexBytes: resolved.maxCctpHookBytes })
+      : payload;
   if (bytes.length !== 34 && bytes.length !== 42) {
     fail(
       "MalformedMessage",
@@ -164,15 +197,21 @@ export function decodeCctpHook(payload: Uint8Array | Hex): {
  * Empty metadata and "version zero plus nothing" are not the same thing to the receiving side,
  * which is a distinction worth encoding once rather than rediscovering from a failed transfer.
  */
-export function encodeAxelarMetadata(note: Uint8Array): Uint8Array {
-  return concatBytes(
-    Uint8Array.of(
-      (METADATA_CONTRACT_CALL >> 24) & 0xff,
-      (METADATA_CONTRACT_CALL >> 16) & 0xff,
-      (METADATA_CONTRACT_CALL >> 8) & 0xff,
-      METADATA_CONTRACT_CALL & 0xff,
-    ),
-    note,
+export function encodeAxelarMetadata(
+  note: Uint8Array,
+  limits?: Partial<CodecResourceLimits>,
+): Uint8Array {
+  return concatBytesBounded(
+    [
+      Uint8Array.of(
+        (METADATA_CONTRACT_CALL >> 24) & 0xff,
+        (METADATA_CONTRACT_CALL >> 16) & 0xff,
+        (METADATA_CONTRACT_CALL >> 8) & 0xff,
+        METADATA_CONTRACT_CALL & 0xff,
+      ),
+      note,
+    ],
+    limits,
   );
 }
 
@@ -183,8 +222,10 @@ export function encodeAxelarMetadata(note: Uint8Array): Uint8Array {
  * produces an address that looks completely ordinary and belongs to nobody, and that is the failure
  * this exists to prevent rather than tidy up after.
  */
-export function toEvmAddress(word: Hex | Uint8Array): Hex {
-  const bytes = typeof word === "string" ? fromHex(word) : word;
+export function toEvmAddress(word: Hex | Uint8Array, limits?: Partial<CodecResourceLimits>): Hex {
+  const resolved = resolveCodecLimits(limits);
+  assertWirePayloadBudget(word, resolved.maxHexBytes, "maxHexBytes");
+  const bytes = typeof word === "string" ? fromHex(word, resolved) : word;
   if (bytes.length !== 32) fail("MalformedMessage", "a word is thirty two bytes");
   if (bytesToBigInt(bytes.slice(0, 12)) !== 0n) fail("NotEvmAddress");
   const out = bytes.slice(12, 32);

@@ -19,6 +19,8 @@
 import { asciiToBytes, bigIntToBytes, bytesToBigInt, concatBytes, toHex } from "./bytes.js";
 import type { Hex } from "./bytes.js";
 import { fail } from "./errors.js";
+import { assertCharBudget, resolveCodecLimits } from "./limits.js";
+import type { CodecResourceLimits } from "./limits.js";
 
 /**
  * The three kinds of Stellar address, numbered the way `AddressKind` numbers them in Solidity and
@@ -106,7 +108,13 @@ export function checksum(data: Uint8Array, length: number = data.length): number
 }
 
 /** Take a strkey apart, refusing anything that does not add up. */
-export function parseStellarAddress(value: string): StellarAddressParts {
+export function parseStellarAddress(
+  value: string,
+  limits?: Partial<CodecResourceLimits>,
+): StellarAddressParts {
+  const resolved = resolveCodecLimits(limits);
+  assertCharBudget(value.length, resolved.maxStrkeyChars, "maxStrkeyChars");
+
   let rawLen: number;
   let bodyLen: number;
 
@@ -151,9 +159,11 @@ export function parseStellarAddress(value: string): StellarAddressParts {
 }
 
 /** Whether a string is a strkey this library will accept, without throwing to find out. */
-export function isStellarAddress(value: string): boolean {
+export function isStellarAddress(value: string, limits?: Partial<CodecResourceLimits>): boolean {
+  const resolved = resolveCodecLimits(limits);
+  if (value.length > resolved.maxStrkeyChars) return false;
   try {
-    parseStellarAddress(value);
+    parseStellarAddress(value, resolved);
     return true;
   } catch {
     return false;
@@ -163,9 +173,11 @@ export function isStellarAddress(value: string): boolean {
 /** Parse without throwing, for a form field that revalidates on every keystroke. */
 export function tryParseStellarAddress(
   value: string,
+  limits?: Partial<CodecResourceLimits>,
 ): { ok: true; parts: StellarAddressParts } | { ok: false; reason: string } {
+  const resolved = resolveCodecLimits(limits);
   try {
-    return { ok: true, parts: parseStellarAddress(value) };
+    return { ok: true, parts: parseStellarAddress(value, resolved) };
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : "not a Stellar address" };
   }

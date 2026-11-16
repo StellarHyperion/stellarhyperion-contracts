@@ -18,6 +18,7 @@ against itself.
 
 | Module        | What it is for                                                                         |
 | ------------- | -------------------------------------------------------------------------------------- |
+| `limits`      | Browser-safe input-size budgets for byte, strkey, note, CCTP and amount parsers        |
 | `bytes`       | Hex, big endian integers, ascii, slicing that refuses a short read instead of clamping |
 | `routes`      | The four rails, their tag values, and what is true about each one                      |
 | `errors`      | Both chains' error vocabularies with a sentence of help per error                      |
@@ -97,6 +98,27 @@ and dies before writing a single file. Every dependency here is a dev dependency
 with none at runtime, and `package-lock.json` is committed, so what CI installs is what was tested.
 The flag lives in the repository rather than in somebody's shell history because an install flag
 that only exists on one machine is a build that only works on one machine.
+
+## Browser-safe codec resource limits and compatibility
+
+Public decoders (`fromHex`, `concatBytesBounded`, `bytesToBigInt`, `bigIntToBytes`, `asciiToBytes`,
+`bytesToAscii`, `parseStellarAddress`, `isStellarAddress`, `tryParseStellarAddress`,
+`decodeOutboundNote`, `decodeInboundNote`, `decodeCctpHook`, `parseCctpMessage`, `cctpBody`,
+`parseCctpBurnMessage`, `cctpHookData`, `parseUnits`, and `parseAmountInput`) enforce pre-allocation
+byte and character budgets from `DEFAULT_CODEC_LIMITS` before slicing strings, allocating
+`Uint8Array` buffers, or shifting wide integers.
+
+- **Compatibility**: Every canonical v1 message, Stellar strkey (`G`, `C`, `M`), 29-byte outbound
+  note, inbound note, 34/42-byte CCTP hook, CCTP V2 message, and `uint256`-width decimal amount
+  fits well inside `DEFAULT_CODEC_LIMITS` and decodes identically with zero call-site changes.
+- **Migration and error handling**: Inputs exceeding a configured budget throw
+  `CodecResourceLimitError` (which extends `RangeError` and exposes `limit`, `actual`, and
+  `maximum`), so existing `RangeError` handlers continue to catch oversized byte/hex inputs.
+- **Provider extensions**: Callers inspecting larger provider hook payloads or custom extensions
+  can pass partial `CodecResourceLimits` overrides to individual parsers (for example,
+  `cctpHookData(body, { maxCctpHookBytes: 1024, maxCctpBodyBytes: 2048 })`) without relaxing other
+  protocol invariants. Active live support remains Stellar Testnet outbound ITS/CCTP; EVM origin
+  routers and unvalidated rails stay gated regardless of codec buffer overrides.
 
 ## Provenance
 

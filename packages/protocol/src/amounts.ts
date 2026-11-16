@@ -11,6 +11,8 @@
  * muxed sub account id, so the temptation is removed by not offering the type.
  */
 import { fail } from "./errors.js";
+import { assertCharBudget, resolveCodecLimits } from "./limits.js";
+import type { CodecResourceLimits } from "./limits.js";
 
 /** Past this and ten to the power of it stops fitting in a word. */
 export const MAX_DECIMALS = 38;
@@ -157,8 +159,14 @@ export function formatUnits(amount: bigint, decimals: number, maxFractionDigits?
  * asset meant something, and quietly dropping the last digit is the bug that gets reported as
  * "the app stole a stroop".
  */
-export function parseUnits(value: string, decimals: number): bigint {
+export function parseUnits(
+  value: string,
+  decimals: number,
+  limits?: Partial<CodecResourceLimits>,
+): bigint {
+  const resolved = resolveCodecLimits(limits);
   assertDecimals(decimals);
+  assertCharBudget(value.length, resolved.maxAmountInputChars, "maxAmountInputChars");
   // Strict on purpose. No whitespace, no grouping separators, no sign, no exponent. An amount is
   // unsigned everywhere in this protocol, and a parser that accepted "-1" here would hand a
   // negative into `applyFee` and surface three frames later as something unrelated. For input a
@@ -186,9 +194,15 @@ export function parseUnits(value: string, decimals: number): bigint {
  * decimal point somewhere, so guessing which one somebody meant in "1,234" is a guess about
  * whether they want one dollar or a thousand, and a bridge does not get to guess that.
  */
-export function parseAmountInput(value: string, decimals: number): bigint {
+export function parseAmountInput(
+  value: string,
+  decimals: number,
+  limits?: Partial<CodecResourceLimits>,
+): bigint {
+  const resolved = resolveCodecLimits(limits);
+  assertCharBudget(value.length, resolved.maxAmountInputChars, "maxAmountInputChars");
   const tidied = value.trim().replace(/[\s\u202f\u00a0'_]/g, "");
-  return parseUnits(tidied, decimals);
+  return parseUnits(tidied, decimals, resolved);
 }
 
 function assertDecimals(decimals: number): void {

@@ -21,6 +21,9 @@
  * bundle to get it.
  */
 
+// Browser-safe input-size budgets for wire, hex, address, and amount codecs.
+export * from "./limits.js";
+
 // Bytes and hex, which everything else is built out of.
 export * from "./bytes.js";
 
