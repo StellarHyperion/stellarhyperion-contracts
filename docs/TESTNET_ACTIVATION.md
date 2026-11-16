@@ -64,3 +64,21 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Contract-to-registry verification
+
+Compare live token, provider, and domain observations against an explicitly pinned SDK registry revision with `script/stellar/verify-registry.mjs` (or by setting `HYPERION_REGISTRY_REVISION` and `HYPERION_REGISTRY_LIVE_JSON` when running `script/stellar/verify.sh`):
+
+```bash
+node script/stellar/verify-registry.mjs \
+  --revision 84a6ce3 \
+  --live /tmp/hyperion-live-observation.json \
+  --stellar-cctp /tmp/hyperion-stellar-cctp-ref.json
+```
+
+Compatibility and migration notes:
+
+- Primary-source verified registry entries (`confirmed: true`, such as Stellar Testnet Axelar ITS and Arc Testnet CCTP) report `primary-source-verified`, whereas inferred registry defaults (`confirmed: false`, such as Ethereum Sepolia and Base Sepolia CCTP/Axelar defaults) remain `inferred-default` until independently confirmed on chain.
+- Unreachable RPC reads, unsupported getters, or missing Stellar CCTP reference snapshots report `unknown` (`healthy: false`) rather than passing silently.
+- Existing `deployments/stellar-testnet-phase1.json` records require no schema migration; EVM and non-outbound rails remain explicitly gated until independently validated.
+

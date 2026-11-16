@@ -100,6 +100,17 @@ else
   check "token flow limit" "$(tfield flow_limit)" "$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const t=d.networks[process.argv[2]].tokens;process.stdout.write(t[Object.keys(t)[0]].flowLimit)' "$RECORD" "$CHAIN_KEY")"
 fi
 
+if [ -n "${HYPERION_REGISTRY_REVISION:-}" ] && [ -n "${HYPERION_REGISTRY_LIVE_JSON:-}" ]; then
+  note "the selected SDK registry revision ($HYPERION_REGISTRY_REVISION)"
+  reg_args=(--revision "$HYPERION_REGISTRY_REVISION" --live "$HYPERION_REGISTRY_LIVE_JSON")
+  if [ -n "${HYPERION_STELLAR_CCTP_REF_JSON:-}" ]; then
+    reg_args+=(--stellar-cctp "$HYPERION_STELLAR_CCTP_REF_JSON")
+  fi
+  if ! node "$(dirname "$0")/verify-registry.mjs" "${reg_args[@]}"; then
+    problems=$((problems + 1))
+  fi
+fi
+
 printf '\n'
 if [ "$problems" -eq 0 ]; then
   printf '\033[32mEverything on chain matches the record.\033[0m\n'
