@@ -14,7 +14,8 @@
 // the real contract.
 #![allow(clippy::too_many_arguments)]
 
-use soroban_sdk::{contractclient, Address, BytesN, Env, Map, U256};
+use hyperion_core::{HyperionError, RouteKind};
+use soroban_sdk::{contractclient, contracttype, Address, BytesN, Env, Map, String, U256};
 
 /// Allbridge's own numeric id for the Stellar network.
 ///
@@ -90,6 +91,28 @@ pub trait AllbridgeMessenger {
 #[contractclient(name = "AllbridgePoolClient")]
 pub trait AllbridgePool {
     fn swap_to_v_usd(env: Env, user: Address, amount: u128, zero_fee: bool) -> u128;
+}
+
+/// Parked claim record layout matching `HyperionRouter::get_claim` for read-only evidence audits.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RouterPendingClaim {
+    pub id: u64,
+    pub recipient: Address,
+    pub token: Address,
+    pub amount: i128,
+    pub route: RouteKind,
+    pub source_chain: String,
+    pub source_nonce: u64,
+    pub created_at: u64,
+    pub settled: bool,
+}
+
+/// Read-only slice of `HyperionRouter` used exclusively by `audit_inbound_evidence`.
+#[contractclient(name = "RouterAuditClient")]
+pub trait RouterAuditView {
+    fn was_processed(env: Env, route: RouteKind, message_id: BytesN<32>) -> bool;
+    fn get_claim(env: Env, id: u64) -> Result<RouterPendingClaim, HyperionError>;
 }
 
 /// Allbridge's message digest, byte for byte.

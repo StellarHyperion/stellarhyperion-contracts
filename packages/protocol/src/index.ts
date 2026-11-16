@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Read-only validator-independent Allbridge inbound evidence auditing.
+export * from "./allbridgeEvidenceAudit.js";

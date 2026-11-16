@@ -41,6 +41,7 @@
     "lint:fix": "eslint . --fix",
     "fmt": "prettier --write \"**/*.{ts,mts,mjs,json,md}\"",
     "fmt:check": "prettier --check \"**/*.{ts,mts,mjs,json,md}\"",
+    "allbridge:audit": "node ../../script/stellar/audit-allbridge-evidence.mjs",
     "check": "npm run fmt:check && npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {

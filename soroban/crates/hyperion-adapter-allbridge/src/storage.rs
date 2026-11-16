@@ -121,6 +121,12 @@ pub fn is_processed(env: &Env, message_id: &BytesN<32>) -> bool {
     found
 }
 
+pub fn peek_processed(env: &Env, message_id: &BytesN<32>) -> bool {
+    env.storage()
+        .persistent()
+        .has(&DataKey::Processed(message_id.clone()))
+}
+
 pub fn mark_processed(env: &Env, message_id: &BytesN<32>) {
     let key = DataKey::Processed(message_id.clone());
     env.storage().persistent().set(&key, &true);

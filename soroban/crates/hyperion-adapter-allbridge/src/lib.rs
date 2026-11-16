@@ -71,8 +71,11 @@ use soroban_sdk::{
     contract, contractimpl, token, vec, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, U256,
 };
 
-use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
-use types::{AssetLink, ChainLane, Config};
+use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, RouterAuditClient, STELLAR_CHAIN_ID};
+use types::{
+    AssetLink, ChainLane, Config, EvidenceAuditStatus, InboundEvidenceAudit, PayoutObservation,
+    SignedInboundIntent, SourceProviderEvidence,
+};
 
 #[contract]
 pub struct AllbridgeAdapter;
@@ -675,6 +678,231 @@ impl AllbridgeAdapter {
     pub fn is_processed(env: Env, message_id: BytesN<32>) -> Result<bool, HyperionError> {
         let _ = storage::config(&env)?;
         Ok(storage::is_processed(&env, &message_id))
+    }
+
+    /// Read-only audit comparing a signed inbound validator intent with independent source
+    /// provider evidence and on-chain router payout or parked-claim records.
+    ///
+    /// Never submits payouts, modifies replay state, or changes validator configuration.
+    pub fn audit_inbound_evidence(
+        env: Env,
+        intent: SignedInboundIntent,
+        source_evidence: Option<SourceProviderEvidence>,
+        payout: PayoutObservation,
+    ) -> Result<InboundEvidenceAudit, HyperionError> {
+        let cfg = storage::config(&env)?;
+        if intent.amount <= 0 {
+            return Err(HyperionError::InvalidAmount);
+        }
+        let source_chain =
+            storage::chain_of(&env, intent.source_chain_id).ok_or(HyperionError::UnknownChain)?;
+        let _ = storage::asset(&env, &intent.token, intent.source_chain_id)
+            .ok_or(HyperionError::TokenNotMapped)?;
+
+        let (kind, recipient_key) = codec::address_key(&env, &intent.recipient)?;
+        assert_route_supports(RouteKind::Allbridge, kind)?;
+
+        let amount_u128 =
+            u128::try_from(intent.amount).map_err(|_| HyperionError::InvalidAmount)?;
+        let recipient_bytes = BytesN::from_array(&env, &recipient_key);
+        let token_key = codec::contract_key(&env, &intent.token)?;
+        let receive_token = BytesN::from_array(&env, &token_key);
+
+        let expected_message_id = rail::hash_message(
+            &env,
+            amount_u128,
+            &recipient_bytes,
+            intent.source_chain_id,
+            STELLAR_CHAIN_ID,
+            &receive_token,
+            &intent.nonce,
+        );
+
+        let adapter_processed = storage::peek_processed(&env, &expected_message_id);
+        let router_audit = RouterAuditClient::new(&env, &cfg.router);
+        let router_processed =
+            router_audit.was_processed(&RouteKind::Allbridge, &expected_message_id);
+
+        let zero32 = BytesN::from_array(&env, &[0u8; 32]);
+        let zero64 = BytesN::from_array(&env, &[0u8; 64]);
+        let Some(validator) = storage::validator(&env) else {
+            return Ok(InboundEvidenceAudit {
+                status: EvidenceAuditStatus::InvalidValidatorIntent,
+                verified: false,
+                unresolved_validator_trust: true,
+                expected_message_id,
+                adapter_processed,
+                router_processed,
+                source_evidence_matches: false,
+                payout_matches: false,
+            });
+        };
+        if validator == zero32 || intent.signature == zero64 {
+            return Ok(InboundEvidenceAudit {
+                status: EvidenceAuditStatus::InvalidValidatorIntent,
+                verified: false,
+                unresolved_validator_trust: true,
+                expected_message_id,
+                adapter_processed,
+                router_processed,
+                source_evidence_matches: false,
+                payout_matches: false,
+            });
+        }
+
+        env.crypto().ed25519_verify(
+            &validator,
+            &expected_message_id.clone().into(),
+            &intent.signature,
+        );
+
+        let mut nonce_bytes = [0u8; 32];
+        intent.nonce.to_be_bytes().copy_into_slice(&mut nonce_bytes);
+        let mut tail = [0u8; 8];
+        tail.copy_from_slice(&nonce_bytes[24..32]);
+        let display_nonce = u64::from_be_bytes(tail);
+
+        // Evaluate payout record against intent first so amount/recipient mismatches always surface.
+        let payout_eval: Result<bool, EvidenceAuditStatus> = match payout {
+            PayoutObservation::Unobserved => Ok(false),
+            PayoutObservation::DirectPayout(paid_recipient, paid_token, paid_amount) => {
+                if paid_recipient != intent.recipient {
+                    Err(EvidenceAuditStatus::RecipientMismatch)
+                } else if paid_amount != intent.amount {
+                    Err(EvidenceAuditStatus::AmountMismatch)
+                } else if paid_token != intent.token || !adapter_processed || !router_processed {
+                    Err(EvidenceAuditStatus::MetadataMismatch)
+                } else {
+                    Ok(true)
+                }
+            }
+            PayoutObservation::ParkedClaim(claim_id) => {
+                if claim_id == 0 {
+                    Err(EvidenceAuditStatus::MetadataMismatch)
+                } else {
+                    match router_audit.try_get_claim(&claim_id) {
+                        Ok(Ok(claim)) => {
+                            if claim.recipient != intent.recipient {
+                                Err(EvidenceAuditStatus::RecipientMismatch)
+                            } else if claim.amount != intent.amount {
+                                Err(EvidenceAuditStatus::AmountMismatch)
+                            } else if claim.token != intent.token
+                                || claim.route != RouteKind::Allbridge
+                                || claim.source_chain != source_chain
+                                || claim.source_nonce != display_nonce
+                                || !adapter_processed
+                                || !router_processed
+                            {
+                                Err(EvidenceAuditStatus::MetadataMismatch)
+                            } else {
+                                Ok(true)
+                            }
+                        }
+                        _ => Err(EvidenceAuditStatus::MetadataMismatch),
+                    }
+                }
+            }
+        };
+
+        let Some(src) = source_evidence else {
+            return match payout_eval {
+                Err(mismatch) => Ok(InboundEvidenceAudit {
+                    status: mismatch,
+                    verified: false,
+                    unresolved_validator_trust: true,
+                    expected_message_id,
+                    adapter_processed,
+                    router_processed,
+                    source_evidence_matches: false,
+                    payout_matches: false,
+                }),
+                Ok(payout_ok) => Ok(InboundEvidenceAudit {
+                    status: EvidenceAuditStatus::UnresolvedTrustAssumption,
+                    verified: false,
+                    unresolved_validator_trust: true,
+                    expected_message_id,
+                    adapter_processed,
+                    router_processed,
+                    source_evidence_matches: false,
+                    payout_matches: payout_ok,
+                }),
+            };
+        };
+
+        if src.recipient != recipient_bytes {
+            return Ok(InboundEvidenceAudit {
+                status: EvidenceAuditStatus::RecipientMismatch,
+                verified: false,
+                unresolved_validator_trust: false,
+                expected_message_id,
+                adapter_processed,
+                router_processed,
+                source_evidence_matches: false,
+                payout_matches: matches!(payout_eval, Ok(true)),
+            });
+        }
+        if src.amount != amount_u128 {
+            return Ok(InboundEvidenceAudit {
+                status: EvidenceAuditStatus::AmountMismatch,
+                verified: false,
+                unresolved_validator_trust: false,
+                expected_message_id,
+                adapter_processed,
+                router_processed,
+                source_evidence_matches: false,
+                payout_matches: matches!(payout_eval, Ok(true)),
+            });
+        }
+        if src.source_chain_id != intent.source_chain_id
+            || src.destination_chain_id != STELLAR_CHAIN_ID
+            || src.receive_token != receive_token
+            || src.nonce != intent.nonce
+            || src.message_id != expected_message_id
+        {
+            return Ok(InboundEvidenceAudit {
+                status: EvidenceAuditStatus::MetadataMismatch,
+                verified: false,
+                unresolved_validator_trust: false,
+                expected_message_id,
+                adapter_processed,
+                router_processed,
+                source_evidence_matches: false,
+                payout_matches: matches!(payout_eval, Ok(true)),
+            });
+        }
+
+        match payout_eval {
+            Err(mismatch) => Ok(InboundEvidenceAudit {
+                status: mismatch,
+                verified: false,
+                unresolved_validator_trust: false,
+                expected_message_id,
+                adapter_processed,
+                router_processed,
+                source_evidence_matches: true,
+                payout_matches: false,
+            }),
+            Ok(false) => Ok(InboundEvidenceAudit {
+                status: EvidenceAuditStatus::MetadataMismatch,
+                verified: false,
+                unresolved_validator_trust: false,
+                expected_message_id,
+                adapter_processed,
+                router_processed,
+                source_evidence_matches: true,
+                payout_matches: false,
+            }),
+            Ok(true) => Ok(InboundEvidenceAudit {
+                status: EvidenceAuditStatus::Verified,
+                verified: true,
+                unresolved_validator_trust: false,
+                expected_message_id,
+                adapter_processed,
+                router_processed,
+                source_evidence_matches: true,
+                payout_matches: true,
+            }),
+        }
     }
 }
 
