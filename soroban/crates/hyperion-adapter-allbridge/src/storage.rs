@@ -3,7 +3,7 @@
 use hyperion_core::HyperionError;
 use soroban_sdk::{contracttype, Address, BytesN, Env, String};
 
-use crate::types::{AssetLink, ChainLane, Config};
+use crate::types::{AssetAdmission, AssetLink, ChainLane, Config};
 
 /// Extend when there is less than a day of life left, and extend to thirty days.
 pub const BUMP_THRESHOLD: u32 = 17_280;
@@ -19,6 +19,8 @@ pub enum DataKey {
     Chain(u32),
     /// A local asset plus a lane to the token it becomes at the far end.
     Asset(Address, u32),
+    /// Validated pool and precision admission metadata for `(token, allbridge_chain_id)`.
+    Admission(Address, u32),
     /// The validator public key that signs incoming messages from Allbridge Core.
     Validator,
     /// Inbound message digests that have already been delivered to prevent replays.
@@ -86,6 +88,34 @@ pub fn asset(env: &Env, token: &Address, allbridge_chain_id: u32) -> Option<Asse
 pub fn set_asset(env: &Env, link: &AssetLink) {
     let key = DataKey::Asset(link.token.clone(), link.allbridge_chain_id);
     env.storage().persistent().set(&key, link);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn remove_asset(env: &Env, token: &Address, allbridge_chain_id: u32) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Asset(token.clone(), allbridge_chain_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Admission(token.clone(), allbridge_chain_id));
+}
+
+pub fn admission(env: &Env, token: &Address, allbridge_chain_id: u32) -> Option<AssetAdmission> {
+    let key = DataKey::Admission(token.clone(), allbridge_chain_id);
+    let found: Option<AssetAdmission> = env.storage().persistent().get(&key);
+    if found.is_some() {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    }
+    found
+}
+
+pub fn set_admission(env: &Env, adm: &AssetAdmission) {
+    let key = DataKey::Admission(adm.token.clone(), adm.allbridge_chain_id);
+    env.storage().persistent().set(&key, adm);
     env.storage()
         .persistent()
         .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);

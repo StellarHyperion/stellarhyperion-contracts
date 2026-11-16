@@ -62,9 +62,10 @@ mod test;
 
 use hyperion_core::{
     address::{assert_route_supports, bytes32_to_evm},
+    amount::MAX_DECIMALS,
     codec,
     inbound::{Origin, Recipient, RouterClient},
-    HyperionError, RouteKind,
+    AddressKind, HyperionError, RouteKind, StellarDestination,
 };
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
@@ -72,7 +73,7 @@ use soroban_sdk::{
 };
 
 use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
-use types::{AssetLink, ChainLane, Config};
+use types::{AdmissionReport, AssetAdmission, AssetLink, ChainLane, Config};
 
 #[contract]
 pub struct AllbridgeAdapter;
@@ -141,13 +142,26 @@ impl AllbridgeAdapter {
         let _ = bytes32_to_evm(&env, &destination)?;
 
         let this = env.current_contract_address();
+        // Read live. The pool for an asset can be repointed by Allbridge's admin, and a stale
+        // copy here would authorise a transfer to the wrong contract. Validate live pool
+        // identity, token precision, and remote destination token acceptance before any user
+        // funds are sold into the pool.
+        let admitted = storage::admission(&env, &token, lane.allbridge_chain_id);
+        let expected_pool = admitted.as_ref().and_then(|a| a.pinned_pool.clone());
+        let expected_decimals = admitted.as_ref().map(|a| a.local_decimals);
+        let report = validate_admission_invariants(
+            &env,
+            &cfg,
+            &token,
+            &lane,
+            expected_pool.as_ref(),
+            expected_decimals,
+            &link.receive_token,
+            None,
+        )?;
+        let pool = report.pool;
         let bridge = AllbridgeBridgeClient::new(&env, &cfg.bridge);
         let bridge_cfg = bridge.get_config();
-
-        // Read live. The pool for an asset can be repointed by Allbridge's admin, and a stale
-        // copy here would authorise a transfer to the wrong contract.
-        let token_key = codec::contract_key(&env, &token)?;
-        let pool = bridge.get_pool_address(&BytesN::from_array(&env, &token_key));
 
         // The relay is billed in two pieces and the bridge checks the sum, so both have to be
         // asked for. Neither is stored.
@@ -552,32 +566,137 @@ impl AllbridgeAdapter {
     ) -> Result<(), HyperionError> {
         let cfg = require_admin(&env)?;
         let lane = storage::lane(&env, &chain).ok_or(HyperionError::UnknownChain)?;
-        let bridge = AllbridgeBridgeClient::new(&env, &cfg.bridge);
+        let report = validate_admission_invariants(
+            &env,
+            &cfg,
+            &token,
+            &lane,
+            None,
+            None,
+            &receive_token,
+            None,
+        )?;
 
-        let token_key = codec::contract_key(&env, &token)?;
-        bridge
-            .try_get_pool_address(&BytesN::from_array(&env, &token_key))
-            .map_err(|_| HyperionError::TokenNotMapped)?
-            .map_err(|_| HyperionError::TokenNotMapped)?;
-
-        let remote = bridge
-            .try_get_another_bridge(&lane.allbridge_chain_id)
-            .map_err(|_| HyperionError::UnknownChain)?
-            .map_err(|_| HyperionError::UnknownChain)?;
-        if remote.tokens.get(receive_token.clone()) != Some(true) {
-            return Err(HyperionError::TokenNotMapped);
+        if let Some(existing) = storage::asset(&env, &token, lane.allbridge_chain_id) {
+            if existing.receive_token != receive_token {
+                return Err(HyperionError::AlreadyConfigured);
+            }
+            if let Some(existing_adm) = storage::admission(&env, &token, lane.allbridge_chain_id) {
+                if existing_adm.local_decimals != report.local_decimals {
+                    return Err(HyperionError::InvalidDecimals);
+                }
+                if let Some(pinned) = &existing_adm.pinned_pool {
+                    if pinned != &report.pool {
+                        return Err(HyperionError::UnexpectedRailContract);
+                    }
+                }
+            }
+            return Ok(());
         }
 
         let link = AssetLink {
-            token,
+            token: token.clone(),
             allbridge_chain_id: lane.allbridge_chain_id,
-            receive_token,
+            receive_token: receive_token.clone(),
         };
         storage::set_asset(&env, &link);
+        storage::set_admission(
+            &env,
+            &AssetAdmission {
+                token,
+                allbridge_chain_id: lane.allbridge_chain_id,
+                local_decimals: report.local_decimals,
+                pinned_pool: None,
+                receive_token,
+            },
+        );
         events::AssetLinked {
             token: link.token,
             allbridge_chain_id: link.allbridge_chain_id,
             receive_token: link.receive_token,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
+    /// Admit an asset onto a lane with explicit expected pool identity and local decimal precision.
+    ///
+    /// Never silently overwrites an existing conflicting mapping; re-calling with identical
+    /// parameters revalidates live rail state without mutating live mappings.
+    pub fn admit_asset(
+        env: Env,
+        token: Address,
+        chain: String,
+        expected_pool: Address,
+        expected_decimals: u32,
+        receive_token: BytesN<32>,
+    ) -> Result<AdmissionReport, HyperionError> {
+        let cfg = require_admin(&env)?;
+        let lane = storage::lane(&env, &chain).ok_or(HyperionError::UnknownChain)?;
+        let report = validate_admission_invariants(
+            &env,
+            &cfg,
+            &token,
+            &lane,
+            Some(&expected_pool),
+            Some(expected_decimals),
+            &receive_token,
+            None,
+        )?;
+
+        if let Some(existing) = storage::asset(&env, &token, lane.allbridge_chain_id) {
+            if existing.receive_token != receive_token {
+                return Err(HyperionError::AlreadyConfigured);
+            }
+            if let Some(existing_adm) = storage::admission(&env, &token, lane.allbridge_chain_id) {
+                if existing_adm.local_decimals != expected_decimals {
+                    return Err(HyperionError::AlreadyConfigured);
+                }
+                if existing_adm.pinned_pool != Some(expected_pool) {
+                    return Err(HyperionError::AlreadyConfigured);
+                }
+            } else {
+                return Err(HyperionError::AlreadyConfigured);
+            }
+            return Ok(report);
+        }
+
+        let link = AssetLink {
+            token: token.clone(),
+            allbridge_chain_id: lane.allbridge_chain_id,
+            receive_token: receive_token.clone(),
+        };
+        storage::set_asset(&env, &link);
+        storage::set_admission(
+            &env,
+            &AssetAdmission {
+                token,
+                allbridge_chain_id: lane.allbridge_chain_id,
+                local_decimals: expected_decimals,
+                pinned_pool: Some(expected_pool),
+                receive_token,
+            },
+        );
+        events::AssetLinked {
+            token: link.token,
+            allbridge_chain_id: link.allbridge_chain_id,
+            receive_token: link.receive_token,
+        }
+        .publish(&env);
+        Ok(report)
+    }
+
+    /// Explicitly remove a mapped asset from a lane before configuring a replacement mapping.
+    pub fn unlink_asset(env: Env, token: Address, chain: String) -> Result<(), HyperionError> {
+        let _ = require_admin(&env)?;
+        let lane = storage::lane(&env, &chain).ok_or(HyperionError::UnknownChain)?;
+        if storage::asset(&env, &token, lane.allbridge_chain_id).is_none() {
+            return Err(HyperionError::TokenNotMapped);
+        }
+        storage::remove_asset(&env, &token, lane.allbridge_chain_id);
+        events::AssetUnlinked {
+            token,
+            allbridge_chain_id: lane.allbridge_chain_id,
         }
         .publish(&env);
         Ok(())
@@ -676,6 +795,160 @@ impl AllbridgeAdapter {
         let _ = storage::config(&env)?;
         Ok(storage::is_processed(&env, &message_id))
     }
+
+    /// Read stored admission metadata for `(token, chain)`.
+    pub fn get_admission(
+        env: Env,
+        token: Address,
+        chain: String,
+    ) -> Result<AssetAdmission, HyperionError> {
+        let lane = storage::lane(&env, &chain).ok_or(HyperionError::UnknownChain)?;
+        storage::admission(&env, &token, lane.allbridge_chain_id)
+            .ok_or(HyperionError::TokenNotMapped)
+    }
+
+    /// Revalidate a live `(token, chain)` mapping against Allbridge pool, precision, and remote
+    /// bridge state without mutating or overwriting stored mappings.
+    pub fn revalidate_asset(
+        env: Env,
+        token: Address,
+        chain: String,
+    ) -> Result<AdmissionReport, HyperionError> {
+        let cfg = storage::config(&env)?;
+        let lane = storage::lane(&env, &chain).ok_or(HyperionError::UnknownChain)?;
+        let link = storage::asset(&env, &token, lane.allbridge_chain_id)
+            .ok_or(HyperionError::TokenNotMapped)?;
+        let admitted = storage::admission(&env, &token, lane.allbridge_chain_id);
+        let expected_pool = admitted.as_ref().and_then(|a| a.pinned_pool.clone());
+        let expected_decimals = admitted.as_ref().map(|a| a.local_decimals);
+        validate_admission_invariants(
+            &env,
+            &cfg,
+            &token,
+            &lane,
+            expected_pool.as_ref(),
+            expected_decimals,
+            &link.receive_token,
+            None,
+        )
+    }
+
+    /// Dry-run token-pool admission validation before making a candidate lane eligible.
+    ///
+    /// Rejects muxed recipients (`AddressKind::MuxedAccount`) because Allbridge's 32-byte
+    /// recipient payload cannot carry a 64-bit muxed sub-account ID.
+    pub fn validate_asset_admission(
+        env: Env,
+        token: Address,
+        chain: String,
+        expected_pool: Option<Address>,
+        expected_decimals: Option<u32>,
+        receive_token: BytesN<32>,
+        recipient_kind: Option<AddressKind>,
+    ) -> Result<AdmissionReport, HyperionError> {
+        let cfg = storage::config(&env)?;
+        let lane = storage::lane(&env, &chain).ok_or(HyperionError::UnknownChain)?;
+        validate_admission_invariants(
+            &env,
+            &cfg,
+            &token,
+            &lane,
+            expected_pool.as_ref(),
+            expected_decimals,
+            &receive_token,
+            recipient_kind,
+        )
+    }
+
+    /// Validate a qualified Stellar recipient against Allbridge's 32-byte payload capacity.
+    pub fn validate_recipient_admission(
+        env: Env,
+        recipient: StellarDestination,
+    ) -> Result<(), HyperionError> {
+        let _ = storage::config(&env)?;
+        recipient.validate()?;
+        assert_route_supports(RouteKind::Allbridge, recipient.kind)
+    }
+}
+
+fn validate_admission_invariants(
+    env: &Env,
+    cfg: &Config,
+    token: &Address,
+    lane: &ChainLane,
+    expected_pool: Option<&Address>,
+    expected_decimals: Option<u32>,
+    receive_token: &BytesN<32>,
+    recipient_kind: Option<AddressKind>,
+) -> Result<AdmissionReport, HyperionError> {
+    if let Some(kind) = recipient_kind {
+        assert_route_supports(RouteKind::Allbridge, kind)?;
+    }
+
+    let this = env.current_contract_address();
+    if token == &cfg.native {
+        return Err(HyperionError::ProtectedAsset);
+    }
+    if token == &cfg.router || token == &cfg.bridge || token == &this {
+        return Err(HyperionError::UnexpectedRailContract);
+    }
+
+    let token_key = codec::contract_key(env, token)?;
+    let local_decimals = token::Client::new(env, token)
+        .try_decimals()
+        .map_err(|_| HyperionError::UnexpectedRailContract)?
+        .map_err(|_| HyperionError::UnexpectedRailContract)?;
+    if local_decimals > MAX_DECIMALS {
+        return Err(HyperionError::InvalidDecimals);
+    }
+    if let Some(exp_dec) = expected_decimals {
+        if exp_dec > MAX_DECIMALS || exp_dec != local_decimals {
+            return Err(HyperionError::InvalidDecimals);
+        }
+    }
+
+    if *receive_token == BytesN::from_array(env, &[0u8; 32]) {
+        return Err(HyperionError::ZeroAddressKey);
+    }
+
+    let bridge = AllbridgeBridgeClient::new(env, &cfg.bridge);
+    let pool = bridge
+        .try_get_pool_address(&BytesN::from_array(env, &token_key))
+        .map_err(|_| HyperionError::TokenNotMapped)?
+        .map_err(|_| HyperionError::TokenNotMapped)?;
+
+    let _ = codec::contract_key(env, &pool).map_err(|_| HyperionError::UnexpectedRailContract)?;
+    if &pool == token
+        || pool == cfg.bridge
+        || pool == cfg.router
+        || pool == cfg.native
+        || pool == this
+    {
+        return Err(HyperionError::UnexpectedRailContract);
+    }
+    if let Some(exp_pool) = expected_pool {
+        if &pool != exp_pool {
+            return Err(HyperionError::UnexpectedRailContract);
+        }
+    }
+
+    let remote = bridge
+        .try_get_another_bridge(&lane.allbridge_chain_id)
+        .map_err(|_| HyperionError::UnknownChain)?
+        .map_err(|_| HyperionError::UnknownChain)?;
+    if remote.tokens.get(receive_token.clone()) != Some(true) {
+        return Err(HyperionError::TokenNotMapped);
+    }
+
+    Ok(AdmissionReport {
+        token: token.clone(),
+        chain: lane.chain.clone(),
+        allbridge_chain_id: lane.allbridge_chain_id,
+        pool,
+        local_decimals,
+        receive_token: receive_token.clone(),
+        muxed_recipients_supported: false,
+    })
 }
 
 /// Read the config and insist the admin signed for whatever is about to happen.

@@ -72,6 +72,14 @@ pub struct AssetLinked {
 
 #[contractevent(topics = ["hyperion", "abr_cfg"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssetUnlinked {
+    #[topic]
+    pub token: Address,
+    pub allbridge_chain_id: u32,
+}
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminChanged {
     #[topic]
     pub old: Address,

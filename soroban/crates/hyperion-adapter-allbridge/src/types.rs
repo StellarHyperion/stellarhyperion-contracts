@@ -36,3 +36,28 @@ pub struct AssetLink {
     /// The destination token's address, left padded to thirty two bytes.
     pub receive_token: BytesN<32>,
 }
+
+/// Validated admission constraints persisted for a mapped `(token, allbridge_chain_id)` pair.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssetAdmission {
+    pub token: Address,
+    pub allbridge_chain_id: u32,
+    pub local_decimals: u32,
+    /// Optional pinned Allbridge pool contract enforced before user assets move.
+    pub pinned_pool: Option<Address>,
+    pub receive_token: BytesN<32>,
+}
+
+/// Result of validating token, pool identity, precision, and destination mapping eligibility.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdmissionReport {
+    pub token: Address,
+    pub chain: String,
+    pub allbridge_chain_id: u32,
+    pub pool: Address,
+    pub local_decimals: u32,
+    pub receive_token: BytesN<32>,
+    pub muxed_recipients_supported: bool,
+}
