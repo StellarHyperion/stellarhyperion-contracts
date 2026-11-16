@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Reusable hostile Soroban fixture specifications and rollback invariant checks.
+export * from "./hostileFixtures.js";
