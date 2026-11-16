@@ -98,6 +98,23 @@ with none at runtime, and `package-lock.json` is committed, so what CI installs 
 The flag lives in the repository rather than in somebody's shell history because an install flag
 that only exists on one machine is a build that only works on one machine.
 
+## Maximum-send planner and compatibility
+
+`planMaxSend` and `planMaxSendAllRails` compute the largest admissible outbound request from
+`walletBalance`, optional `feeReserve`, optional `routeAllowance`, router `flowAvailable`, and
+cross-chain decimal precision using exact `bigint` arithmetic:
+
+- **Balance and allowance safety**: `suggestedRequestAmount` and `quote.grossAmount` never exceed
+  `walletBalance - feeReserve` or `routeAllowance`, and `quote.netAmount` never exceeds
+  `snapshot.flowAvailable[route]`.
+- **Explicit precision dust**: When trailing source digits cannot cross a narrower destination
+  decimal boundary (for example, 7-decimal Stellar USDC to 6-decimal EVM USDC), `suggestedRequestAmount`
+  tightens down so `retainedPrecisionDust` stays explicitly in the sender's wallet.
+- **Diagnostic no-solution outputs**: When balance, allowance, or headroom cannot produce at least
+  one destination base unit, the planner returns `ok: false` (`available: false`, `quote: null`)
+  with a structured `diagnosticCode` rather than a zero executable quote. Active live deployment
+  remains Stellar Testnet outbound ITS/CCTP; EVM origin routers and unvalidated rails stay gated.
+
 ## Provenance
 
 Addresses in `registry/contracts.ts` and `registry/assets.ts` carry a `source` and a `confirmed`
