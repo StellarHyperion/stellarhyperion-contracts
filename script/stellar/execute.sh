@@ -41,6 +41,12 @@ say "caller           $CALLER"
 COUNT=$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(String((d.networks[process.argv[2]].queuedActionIds??[]).length))' "$RECORD" "$CHAIN_KEY")
 [ "$COUNT" -gt 0 ] || die "the record lists no queued actions"
 
+if [ -n "${HYPERION_PRECONDITIONS_JSON:-}" ]; then
+  note "verifying provider-link and precision preconditions"
+  node "$(dirname "$0")/verify-preconditions.mjs" --input "$HYPERION_PRECONDITIONS_JSON" \
+    || die "provider-link or destination-precision preconditions failed; refusing router execution"
+fi
+
 note "executing $COUNT queued actions"
 executed=0
 skipped=0

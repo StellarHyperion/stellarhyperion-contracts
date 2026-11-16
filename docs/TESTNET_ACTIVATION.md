@@ -64,3 +64,18 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Provider-link precondition verification before execution
+
+Validate local and remote TokenMessenger or ITS mappings and destination token precision immediately before running `execute_action` on queued router proposals (`script/stellar/verify-preconditions.mjs`, or via `HYPERION_PRECONDITIONS_JSON` in `script/stellar/execute.sh`):
+
+```bash
+HYPERION_PRECONDITIONS_JSON=/tmp/hyperion-preconditions.json script/stellar/execute.sh
+```
+
+Compatibility and migration notes:
+
+- Changed peer mappings (`axelarChainName`, `peerHex20`, ITS `tokenId`, CCTP `domain`, `remoteMessenger`, or `burnToken`) block dependent `SetAdapter`, `SetRailReceiver`, and `EnableRoute` proposals while leaving unrelated valid proposals distinguishable.
+- Destination precision is strictly checked (`6` decimals for native EVM USDC over CCTP, `6` or `7` decimals matching the expected ITS representation); unsupported precision such as `18` fails verification.
+- Active valid mappings produce a deterministic, idempotent `ready: true` result without modifying existing `deployments/stellar-testnet-phase1.json` records.
+
