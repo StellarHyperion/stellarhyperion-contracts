@@ -64,3 +64,21 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Operator timelock scheduling reports
+
+Before running `script/stellar/execute.sh`, operators can generate a read-only, deterministic schedule report over either a live phase-one deployment record or a saved evidence/schedule snapshot:
+
+```bash
+cd packages/protocol && npm run build && cd ../..
+node script/stellar/schedule-report.mjs --record deployments/stellar-testnet-phase1.json
+node script/stellar/schedule-report.mjs --input deployments/evidence/2026-10-28-paid-its.json --chain-time 1793196425 --json
+```
+
+Key guarantees and compatibility notes:
+
+- **Actual chain time semantics:** Window boundaries (`eta = queuedAt + timelockDelay`, `expiresAt = eta + 604800`) are evaluated strictly against the latest closed ledger/block timestamp (`ledger.timestamp` on Soroban or `block.timestamp` on EVM), never local wall-clock `Date.now()`. Both `eta` and `expiresAt` are inclusive (`eta <= chainTimestamp <= expiresAt`).
+- **Exclusion of expired, cancelled and executed actions:** Entries past `expiresAt`, marked `cancelled`, or already `executed` are placed in `excludedOperations` and omitted from `runnableOperations`. If a required prerequisite (`Upgrade`, `RegisterToken`, `SetAdapter` or `SetRailReceiver`) is still waiting, expired or cancelled, dependent steps such as `EnableRoute` and `SetAdmin` are also held out of `runnableOperations` with `blockingPrerequisiteIds` and `requeueRequired` flags.
+- **Required activation sequence:** Pending actions are ordered deterministically across phases (`upgrade` -> `token-registration` -> `token-limit` -> `route-adapter` -> `route-wiring` -> `route-enablement` -> `router-policy` -> `admin-handover` last) so routes are never enabled before their adapters and admin handover never strands earlier queued operations.
+- **Read-only determinism and scope gating:** Repeated invocations over the same chain state do not mutate inputs, sign transactions or drift with wall-clock time. Exact token and route ceilings remain decimal integer strings without floating-point conversion. Active production scope remains Stellar Testnet outbound ITS and CCTP; EVM routers and non-validated rails emit explicit planning-scope notices and remain gated until independently validated.
+- **Compatibility and migration:** `@hyperion/protocol` exports `buildTimelockScheduleReport`, `parseTimelockScheduleInput`, `parseQueuedAdminAction` and `formatTimelockScheduleReport` additively without altering existing deployment record schemas (`schemaVersion: 1`) or historical evidence files (`deployments/evidence/2026-10-28-paid-its.json` and `deployments/evidence/2026-10-29-cctp.json`).
