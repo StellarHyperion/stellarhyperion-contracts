@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Read-only reconciliation of encoded Axelar notes against candidate ITS receipts.
+export * from "./axelarReconciliation.js";
