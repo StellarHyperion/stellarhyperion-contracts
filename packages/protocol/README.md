@@ -98,6 +98,24 @@ with none at runtime, and `package-lock.json` is committed, so what CI installs 
 The flag lives in the repository rather than in somebody's shell history because an install flag
 that only exists on one machine is a build that only works on one machine.
 
+## Destination-minimum inversion and compatibility
+
+`invertDestinationMinimum` and `invertAllRoutesDestinationMinimum` solve in exact closed-form
+`bigint` arithmetic for the smallest source request that delivers at least
+`desiredDestinationMinimum` after protocol bps fees, cross-chain decimal representability flooring,
+and explicit `forwardingBudget` assumptions (`destination_base_units`, `source_base_units`, or
+`native_gas_units`):
+
+- **Verified forward parity**: Every `ok: true` result includes the verified `forwardQuote` from
+  `planQuote`, proves `netDestinationAfterBudget >= desiredDestinationMinimum` with bounded decimal
+  step rounding (`destinationRoundingExcess < maxRoundingStepDestination`), and echoes the resolved
+  provider budget units and assumption string.
+- **Actionable diagnostics**: Invalid or unattainable minima return structured `ok: false` results
+  (`InvalidMinimum`, `InvalidForwardingBudget`, `RouteBlocked`, `FlowLimitExceeded`,
+  `ExceedsMaxQuoteAmount`, `ExceedsMaxSourceSpend`) without changing existing `planQuote` behavior.
+  Active live deployment remains Stellar Testnet outbound ITS/CCTP; unvalidated EVM origin routers
+  and rails stay gated.
+
 ## Provenance
 
 Addresses in `registry/contracts.ts` and `registry/assets.ts` carry a `source` and a `confirmed`
