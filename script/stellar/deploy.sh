@@ -281,11 +281,16 @@ RECORD="$RECORD_DIR/stellar-$NETWORK-phase1.json"
 IDS_JSON=$(printf '%s\n' "${QUEUE_IDS[@]}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.stringify(s.trim().split("\n").filter(Boolean).map(Number))))')
 WHAT_JSON=$(printf '%s\n' "${QUEUE_WHAT[@]}" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.stringify(s.trim().split("\n").filter(Boolean))))')
 
+CCTP_ADMIN="${HYPERION_CCTP_ADMIN:-$ADMIN}"
+AXELAR_ADMIN="${HYPERION_AXELAR_ADMIN:-$ADMIN}"
+
 STELLAR_NETWORK="$NETWORK" \
 HYPERION_ROUTER="$ROUTER" \
 HYPERION_ROUTER_LEDGER="$ROUTER_LEDGER" \
 HYPERION_CCTP="$CCTP" \
 HYPERION_AXELAR="$AXELAR" \
+HYPERION_CCTP_ADMIN="$CCTP_ADMIN" \
+HYPERION_AXELAR_ADMIN="$AXELAR_ADMIN" \
 HYPERION_SAC="$SAC" \
 HYPERION_ASSET_CODE="$ASSET_CODE" \
 HYPERION_ASSET="$ASSET" \

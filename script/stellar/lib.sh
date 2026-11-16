@@ -67,9 +67,15 @@ invoke() {
 }
 
 # Invoke read only. No fee, no signature, no state change.
+# Uses STELLAR_PUBLIC_SOURCE (any public G-account) when set so verification needs no stored key.
 read_only() {
   local id="$1"; shift
-  stellar contract invoke --id "$id" --source-account "$IDENTITY" --network "$NETWORK" --is-view -- "$@" 2>/dev/null
+  local source_ref="${STELLAR_PUBLIC_SOURCE:-$IDENTITY}"
+  case "$source_ref" in
+    S???????????????????????????????????????????????????????)
+      die "refusing secret seed in read_only source reference" ;;
+  esac
+  stellar contract invoke --id "$id" --source-account "$source_ref" --network "$NETWORK" --is-view -- "$@" 2>/dev/null
 }
 
 # Read one top level key out of a JSON file. node rather than jq, because jq is not installed

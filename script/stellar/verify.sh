@@ -24,6 +24,17 @@ process.stdout.write(Object.keys(d.networks??{})[0]??"");
 
 ROUTER=$(json_get "$RECORD" "networks.$CHAIN_KEY.router")
 
+if [ -z "${STELLAR_PUBLIC_SOURCE:-}" ] && ! stellar keys address "$IDENTITY" >/dev/null 2>&1; then
+  STELLAR_PUBLIC_SOURCE=$(node -e '
+const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+const n = d.networks?.[process.argv[2]] ?? {};
+for (const v of [n.deployer, n.admin, n.treasury, n.guardian]) {
+  if (typeof v === "string" && v.startsWith("G")) { process.stdout.write(v); process.exit(0); }
+}
+' "$RECORD" "$CHAIN_KEY")
+  export STELLAR_PUBLIC_SOURCE
+fi
+
 note "the record"
 say "file             $RECORD"
 say "network key      $CHAIN_KEY"
@@ -98,6 +109,18 @@ else
   check "token enabled"    "$(tfield enabled)"    "true"
   check "token decimals"   "$(tfield decimals)"   "7"
   check "token flow limit" "$(tfield flow_limit)" "$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const t=d.networks[process.argv[2]].tokens;process.stdout.write(t[Object.keys(t)[0]].flowLimit)' "$RECORD" "$CHAIN_KEY")"
+fi
+
+note "the authority policy"
+POLICY_ARGS=(--record "$RECORD" --network "$NETWORK")
+if [ -n "${HYPERION_AUTHORITY_POLICY:-}" ]; then
+  POLICY_ARGS+=(--policy "$HYPERION_AUTHORITY_POLICY")
+fi
+if [ -n "${HYPERION_AUTHORITY_SNAPSHOT:-}" ]; then
+  POLICY_ARGS+=(--snapshot "$HYPERION_AUTHORITY_SNAPSHOT")
+fi
+if ! node "$(dirname "$0")/verify-authorities.mjs" "${POLICY_ARGS[@]}"; then
+  problems=$((problems + 1))
 fi
 
 printf '\n'

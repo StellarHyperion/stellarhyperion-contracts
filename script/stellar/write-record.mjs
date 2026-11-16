@@ -18,14 +18,17 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const contractsRoot = resolve(here, "..", "..");
 
 let protocol;
 try {
-  protocol = await import(resolve(contractsRoot, "packages/protocol/dist/index.js"));
+  protocol = await import(
+    pathToFileURL(resolve(contractsRoot, "packages/protocol/dist/index.js"))
+      .href
+  );
 } catch (cause) {
   throw new Error(
     "the protocol package is not built, so the record cannot be validated. Run:\n" +
@@ -33,20 +36,30 @@ try {
       `(${String(cause)})`,
   );
 }
-const { parseDeploymentSet, DEPLOYMENT_SCHEMA_VERSION, chain, isStellarChain } = protocol;
+const {
+  parseDeploymentSet,
+  deriveNetworkAuthorityPolicy,
+  assertNoSecretMaterial,
+  DEPLOYMENT_SCHEMA_VERSION,
+  chain,
+  isStellarChain,
+} = protocol;
 
 const out = process.argv[2];
 if (out === undefined) throw new Error("usage: write-record.mjs <path>");
 
 function need(name) {
   const value = process.env[name];
-  if (value === undefined || value === "") throw new Error(`${name} is not set`);
+  if (value === undefined || value === "")
+    throw new Error(`${name} is not set`);
+  assertNoSecretMaterial(value, name);
   return value;
 }
 
 /** Hyperion's key for the network the CLI was pointed at. */
 function chainKeyFor(network) {
-  if (network === "testnet" || network === "futurenet") return "stellar-testnet";
+  if (network === "testnet" || network === "futurenet")
+    return "stellar-testnet";
   if (network === "mainnet" || network === "public") return "stellar";
   throw new Error(`no Hyperion chain key for the network "${network}"`);
 }
@@ -54,7 +67,8 @@ function chainKeyFor(network) {
 const network = need("STELLAR_NETWORK");
 const chainKey = chainKeyFor(network);
 const entry = chain(chainKey);
-if (!isStellarChain(entry)) throw new Error(`${chainKey} is not a Stellar chain`);
+if (!isStellarChain(entry))
+  throw new Error(`${chainKey} is not a Stellar chain`);
 
 /**
  * The ledger the deployment landed in, asked of the network rather than guessed.
@@ -68,17 +82,24 @@ async function latestLedger() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getLatestLedger" }),
   });
-  if (!response.ok) throw new Error(`the rpc at ${entry.defaultRpcUrl} answered ${String(response.status)}`);
+  if (!response.ok)
+    throw new Error(
+      `the rpc at ${entry.defaultRpcUrl} answered ${String(response.status)}`,
+    );
   const body = await response.json();
   const sequence = body?.result?.sequence;
-  if (typeof sequence !== "number") throw new Error("the rpc did not return a ledger sequence");
+  if (typeof sequence !== "number")
+    throw new Error("the rpc did not return a ledger sequence");
   return sequence;
 }
 
 /** The commit the wasm was built from. The only thing tying a contract id to a source tree. */
 function commit() {
   try {
-    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: contractsRoot, encoding: "utf8" }).trim();
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: contractsRoot,
+      encoding: "utf8",
+    }).trim();
   } catch {
     return "unknown";
   }
@@ -92,16 +113,51 @@ if (code === undefined || issuer === undefined) {
 
 const adapters = {};
 if (process.env.HYPERION_CCTP) adapters.cctp = process.env.HYPERION_CCTP;
-if (process.env.HYPERION_AXELAR) adapters["axelar-its"] = process.env.HYPERION_AXELAR;
+if (process.env.HYPERION_AXELAR)
+  adapters["axelar-its"] = process.env.HYPERION_AXELAR;
 
 const routes = Object.keys(adapters);
 
 const wasmHashes = {};
 if (process.env.ROUTER_HASH) wasmHashes.router = process.env.ROUTER_HASH;
-if (process.env.CCTP_HASH && process.env.HYPERION_CCTP) wasmHashes["adapter-cctp"] = process.env.CCTP_HASH;
+if (process.env.CCTP_HASH && process.env.HYPERION_CCTP)
+  wasmHashes["adapter-cctp"] = process.env.CCTP_HASH;
 if (process.env.AXELAR_HASH && process.env.HYPERION_AXELAR) {
   wasmHashes["adapter-axelar"] = process.env.AXELAR_HASH;
 }
+
+const adapterAdmins = {};
+if (process.env.HYPERION_CCTP && process.env.HYPERION_CCTP_ADMIN) {
+  assertNoSecretMaterial(
+    process.env.HYPERION_CCTP_ADMIN,
+    "HYPERION_CCTP_ADMIN",
+  );
+  adapterAdmins.cctp = process.env.HYPERION_CCTP_ADMIN;
+}
+if (process.env.HYPERION_AXELAR && process.env.HYPERION_AXELAR_ADMIN) {
+  assertNoSecretMaterial(
+    process.env.HYPERION_AXELAR_ADMIN,
+    "HYPERION_AXELAR_ADMIN",
+  );
+  adapterAdmins["axelar-its"] = process.env.HYPERION_AXELAR_ADMIN;
+}
+
+const hasAuthorityPolicyOverrides =
+  Object.keys(adapterAdmins).length > 0 ||
+  process.env.HYPERION_ALLOW_SHARED_ADMIN_TREASURY !== undefined ||
+  process.env.HYPERION_REQUIRE_DISTINCT_GUARDIAN !== undefined;
+
+const authorityPolicy = hasAuthorityPolicyOverrides
+  ? {
+      ...(Object.keys(adapterAdmins).length > 0 ? { adapterAdmins } : {}),
+      roleSeparation: {
+        allowSharedAdminAndTreasury:
+          process.env.HYPERION_ALLOW_SHARED_ADMIN_TREASURY !== "false",
+        requireDistinctGuardian:
+          process.env.HYPERION_REQUIRE_DISTINCT_GUARDIAN === "true",
+      },
+    }
+  : undefined;
 
 const deployment = {
   family: "stellar",
@@ -130,7 +186,9 @@ const deployment = {
   wasmHashes,
   deployedAt: {
     ledger:
-      process.env.HYPERION_ROUTER_LEDGER || process.env.ROUTER_LEDGER || process.env.STELLAR_START_LEDGER
+      process.env.HYPERION_ROUTER_LEDGER ||
+      process.env.ROUTER_LEDGER ||
+      process.env.STELLAR_START_LEDGER
         ? Number(
             process.env.HYPERION_ROUTER_LEDGER ||
               process.env.ROUTER_LEDGER ||
@@ -140,6 +198,7 @@ const deployment = {
     timestamp: new Date().toISOString(),
   },
   commit: commit(),
+  ...(authorityPolicy !== undefined ? { authorityPolicy } : {}),
 
   // Phase two reads these, and a reviewer checks them against the chain. The validator ignores
   // fields it does not know about, which is what lets a record carry handover state as well as
@@ -157,7 +216,12 @@ const record = {
 };
 
 // The whole reason this file exists rather than a heredoc in the shell script.
-parseDeploymentSet(record);
+const validatedSet = parseDeploymentSet(record);
+deriveNetworkAuthorityPolicy(
+  validatedSet.networks[chainKey],
+  deployment.authorityPolicy,
+  `$.networks.${chainKey}.authorityPolicy`,
+);
 
 mkdirSync(dirname(resolve(out)), { recursive: true });
 writeFileSync(resolve(out), `${JSON.stringify(record, null, 2)}\n`);

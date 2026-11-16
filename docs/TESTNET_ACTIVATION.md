@@ -64,3 +64,20 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Activation authority and manifest policy checks
+
+Run `node script/stellar/verify-authorities.mjs` (also invoked automatically by `script/stellar/verify.sh`) to compare live on-chain `treasury`, `guardian`, router `admin`, and per-rail adapter `admin` / `router` bindings against a reviewed manifest policy:
+
+```bash
+cd packages/protocol && npm run build && cd ../..
+node script/stellar/verify-authorities.mjs --record deployments/stellar-testnet-phase1.json
+```
+
+Key guarantees and compatibility notes:
+
+- **No secret keys required**: Read-only `--is-view` simulation uses a public `G` account from the record (or `STELLAR_PUBLIC_SOURCE`), and any SEP-23 secret seed (`S...`) is refused. Offline snapshot fixtures can also be verified with `--snapshot <file.json>`.
+- **Independent role comparison**: Checks compare `treasury`, `guardian`, router `admin`, and per-adapter `admin` against their individual manifest policy fields and never assume `treasury` and `admin` share an address. Manifests that split custody across separate accounts or Soroban multisig contracts can enforce separation via `authorityPolicy.roleSeparation` (`allowSharedAdminAndTreasury: false`, `requireDistinctGuardian: true`) and per-rail `authorityPolicy.adapterAdmins`.
+- **Actionable mismatch diagnostics**: Unexpected live authority addresses, unexecuted phase-1 `deployer` handovers, adapter router back-pointer drift, or unexpected pending timelock authority actions (`SetAdmin`, `SetGuardian`, `SetTreasury`) fail the ready report (`ready: false`, exit status `1`) and print each mismatching scope, expected value, and observed value.
+- **Explicit rail and chain gating**: Only Stellar Testnet (`stellar-testnet`) outbound Axelar ITS and Circle CCTP are marked active by default. EVM chains and unvalidated rails (`axelar-gmp`, `allbridge`, or `stellar` mainnet without an explicit `validationGate.independentlyValidated: true` review) remain gated and fail readiness checks until independently validated.
+- **Backward compatibility and migration**: Existing schema v1 records (`deployments/stellar-testnet-phase1.json` and `deployments/archive/*`) work without modification by deriving baseline expectations from `treasury`, `admin`, `guardian`, and `adapters`, while optional `authorityPolicy` blocks allow reviewed overrides during custody migrations.
