@@ -64,3 +64,18 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Public transaction reconciliation for interrupted activation
+
+When a deployment, linking, or timelock execution session is interrupted, reconcile known transaction hashes against public RPC lookups and live contract state before signing any follow-up transaction:
+
+```bash
+node script/stellar/reconcile.mjs --input /tmp/hyperion-reconcile-bundle.json
+```
+
+Compatibility and migration notes:
+
+- `not-found` and `rpc-unreachable` lookups resolve to `unknown` (`proposal: "wait-and-query-never-duplicate"`, `allowDuplicateSubmission: false`), preventing duplicate irreversible queue, link, or token-mapping calls.
+- Confirmed transactions must match actual live router or adapter configuration (`confirmed-verified`); discrepancies surface as `confirmed-state-drift`.
+- Any hash whose `networkPassphrase`, `chainId`, `sender`, or target contract disagrees with the intended step is rejected as `provenance-mismatch` (`provesIntendedAction: false`). Existing `deployments/stellar-testnet-phase1.json` and `deployments/evidence/*.json` files remain compatible without schema changes.
+
