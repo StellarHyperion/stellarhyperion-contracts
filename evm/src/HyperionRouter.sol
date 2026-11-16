@@ -50,10 +50,13 @@ import {
     QuoteBlocker,
     RouteKind,
     RouteQuote,
+    TimelockActionStatus,
+    TimelockState,
     TokenConfig
 } from "./HyperionTypes.sol";
 import {IHyperionRouter} from "./interfaces/IHyperionRouter.sol";
 import {IRailAdapter} from "./interfaces/IRailAdapter.sol";
+import {ITimelockState} from "./interfaces/ITimelockState.sol";
 import {AmountMath} from "./libraries/AmountMath.sol";
 import {FlowGuard, FlowWindow} from "./libraries/FlowGuard.sol";
 import {RouteMeta} from "./libraries/RouteMeta.sol";
@@ -153,8 +156,20 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         address adapterAddress;
     }
 
+    struct ActionMeta {
+        ActionKind kind;
+        bytes32 payloadId;
+        uint64 queuedAt;
+        uint64 eta;
+        uint64 expiresAt;
+        uint64 resolvedAt;
+        bool cancelled;
+        bool recorded;
+    }
+
     mapping(uint64 claimId => PendingClaim claim) private _claims;
     mapping(uint64 actionId => QueuedAction queued) private _actions;
+    mapping(uint64 actionId => ActionMeta meta) private _actionMeta;
 
     /// @param admin Holds every privileged power, all of them behind the timelock.
     /// @notice Wires up the router with its roles, its treasury, and its fee and timing limits.
@@ -567,6 +582,16 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
             expiresAt: expiresAt,
             executed: false
         });
+        _actionMeta[id] = ActionMeta({
+            kind: action.kind,
+            payloadId: _hashAction(action),
+            queuedAt: uint64(block.timestamp),
+            eta: eta,
+            expiresAt: expiresAt,
+            resolvedAt: 0,
+            cancelled: false,
+            recorded: true
+        });
         emit ActionQueued(id, action.kind, eta, expiresAt);
     }
 
@@ -579,6 +604,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         if (block.timestamp > queued.expiresAt) revert TimelockExpired(queued.expiresAt);
 
         queued.executed = true;
+        _recordResolution(id, queued, false);
         AdminAction memory action = queued.action;
         // Re-checked on the way out as well as the way in. The bounds a change was measured
         // against can move while it waits, and an action queued under one ceiling should not land
@@ -598,6 +624,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         QueuedAction storage queued = _actions[id];
         if (queued.id == 0) revert TimelockNotQueued();
         if (queued.executed) revert TimelockAlreadyExecuted();
+        _recordResolution(id, queued, true);
         delete _actions[id];
         emit ActionCancelled(id, msg.sender);
     }
@@ -659,6 +686,76 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         return _actionCount;
     }
 
+    /// @inheritdoc ITimelockState
+    function actionPayloadId(AdminAction calldata action) external pure override returns (bytes32) {
+        return _hashAction(action);
+    }
+
+    /// @inheritdoc ITimelockState
+    function timelockStatus(uint64 id) external view override returns (TimelockActionStatus memory) {
+        return timelockStatusAt(id, uint64(block.timestamp));
+    }
+
+    /// @inheritdoc ITimelockState
+    function timelockStatusAt(uint64 id, uint64 timestamp)
+        public
+        view
+        override
+        returns (TimelockActionStatus memory status)
+    {
+        QueuedAction storage queued = _actions[id];
+        ActionMeta storage meta = _actionMeta[id];
+
+        if (meta.cancelled || queued.id == 0) {
+            return _inactiveTimelockStatus(id, meta);
+        }
+
+        AdminAction memory action = queued.action;
+        bytes32 digest = meta.recorded ? meta.payloadId : _hashAction(action);
+        if (queued.executed) {
+            return TimelockActionStatus({
+                id: id,
+                state: TimelockState.Executed,
+                kind: action.kind,
+                payloadId: digest,
+                queuedAt: queued.queuedAt,
+                eta: queued.eta,
+                expiresAt: queued.expiresAt,
+                resolvedAt: meta.resolvedAt,
+                payloadValid: false
+            });
+        }
+
+        TimelockState current = timestamp < queued.eta
+            ? TimelockState.Pending
+            : (timestamp <= queued.expiresAt ? TimelockState.Executable : TimelockState.Expired);
+        return TimelockActionStatus({
+            id: id,
+            state: current,
+            kind: action.kind,
+            payloadId: digest,
+            queuedAt: queued.queuedAt,
+            eta: queued.eta,
+            expiresAt: queued.expiresAt,
+            resolvedAt: 0,
+            payloadValid: _isActionValid(action)
+        });
+    }
+
+    /// @inheritdoc ITimelockState
+    function timelockStatuses(uint64[] calldata ids)
+        external
+        view
+        override
+        returns (TimelockActionStatus[] memory statuses)
+    {
+        statuses = new TimelockActionStatus[](ids.length);
+        uint64 nowTs = uint64(block.timestamp);
+        for (uint256 i = 0; i < ids.length; ++i) {
+            statuses[i] = timelockStatusAt(ids[i], nowTs);
+        }
+    }
+
     // -------------------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------------------
@@ -701,6 +798,94 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         q.available = false;
         q.reason = reason;
         return q;
+    }
+
+    function _hashAction(AdminAction memory a) private pure returns (bytes32) {
+        return keccak256(abi.encode(a.kind, a.route, a.subject, a.amount, a.decimals));
+    }
+
+    function _inactiveTimelockStatus(uint64 id, ActionMeta storage meta)
+        private
+        view
+        returns (TimelockActionStatus memory)
+    {
+        if (meta.cancelled) {
+            return TimelockActionStatus({
+                id: id,
+                state: TimelockState.Cancelled,
+                kind: meta.kind,
+                payloadId: meta.payloadId,
+                queuedAt: meta.queuedAt,
+                eta: meta.eta,
+                expiresAt: meta.expiresAt,
+                resolvedAt: meta.resolvedAt,
+                payloadValid: false
+            });
+        }
+        return TimelockActionStatus({
+            id: id,
+            state: TimelockState.Unqueued,
+            kind: ActionKind.SetFeeBps,
+            payloadId: bytes32(0),
+            queuedAt: 0,
+            eta: 0,
+            expiresAt: 0,
+            resolvedAt: 0,
+            payloadValid: false
+        });
+    }
+
+    function _recordResolution(uint64 id, QueuedAction storage queued, bool cancelled) private {
+        ActionMeta storage meta = _actionMeta[id];
+        if (!meta.recorded) {
+            meta.kind = queued.action.kind;
+            meta.payloadId = _hashAction(queued.action);
+            meta.queuedAt = queued.queuedAt;
+            meta.eta = queued.eta;
+            meta.expiresAt = queued.expiresAt;
+            meta.recorded = true;
+        }
+        meta.cancelled = cancelled;
+        meta.resolvedAt = uint64(block.timestamp);
+    }
+
+    function _isActionValid(AdminAction memory action) private view returns (bool) {
+        ActionKind kind = action.kind;
+        bool usesRoute = kind == ActionKind.SetAdapter || kind == ActionKind.SetRailReceiver
+            || kind == ActionKind.EnableRoute || kind == ActionKind.SetRouteFlowLimit;
+        bool usesSubject = kind == ActionKind.SetTreasury || kind == ActionKind.SetAdmin
+            || kind == ActionKind.SetGuardian || kind == ActionKind.SetAdapter
+            || kind == ActionKind.SetRailReceiver || kind == ActionKind.RegisterToken
+            || kind == ActionKind.RaiseTokenFlowLimit || kind == ActionKind.SetRouteFlowLimit
+            || kind == ActionKind.SetTokenEnabled;
+        bool usesAmount = kind == ActionKind.SetFeeBps || kind == ActionKind.EnableRoute
+            || kind == ActionKind.RegisterToken || kind == ActionKind.RaiseTokenFlowLimit
+            || kind == ActionKind.SetRouteFlowLimit || kind == ActionKind.SetTimelockDelay
+            || kind == ActionKind.SetFlowWindow || kind == ActionKind.SetTokenEnabled;
+        bool usesDecimals = kind == ActionKind.RegisterToken;
+
+        if (!usesRoute && action.route != RouteKind.Cctp) return false;
+        if (!usesSubject && action.subject != address(0)) return false;
+        if (!usesAmount && action.amount != 0) return false;
+        if (!usesDecimals && action.decimals != 0) return false;
+        if (usesSubject && action.subject == address(0)) return false;
+        if (kind == ActionKind.SetFeeBps && action.amount > AmountMath.MAX_FEE_BPS) return false;
+        if (kind == ActionKind.EnableRoute && action.amount > 1) return false;
+        if (kind == ActionKind.SetTokenEnabled) {
+            if (action.amount > 1 || !_tokens[action.subject].registered) return false;
+        }
+        if (kind == ActionKind.RegisterToken && action.decimals > AmountMath.MAX_DECIMALS) return false;
+        if (kind == ActionKind.RaiseTokenFlowLimit) {
+            TokenConfig memory cfg = _tokens[action.subject];
+            if (!cfg.registered || action.amount <= cfg.flowLimit) return false;
+        }
+        if (kind == ActionKind.SetTimelockDelay) {
+            if (action.amount < MIN_TIMELOCK_DELAY || action.amount > MAX_TIMELOCK_DELAY) return false;
+        }
+        if (kind == ActionKind.SetFlowWindow) {
+            if (action.amount < MIN_FLOW_WINDOW || action.amount > MAX_FLOW_WINDOW) return false;
+        }
+        return true;
     }
 
     /// @dev Every field a kind does not use has to be empty.

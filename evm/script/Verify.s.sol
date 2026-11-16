@@ -5,7 +5,7 @@ import {stdJson} from "forge-std/StdJson.sol";
 import {console} from "forge-std/console.sol";
 
 import {HyperionRouter} from "../src/HyperionRouter.sol";
-import {RouteKind} from "../src/HyperionTypes.sol";
+import {RouteKind, TimelockActionStatus, TimelockState} from "../src/HyperionTypes.sol";
 import {AxelarItsAdapter} from "../src/adapters/AxelarItsAdapter.sol";
 import {CctpAdapter} from "../src/adapters/CctpAdapter.sol";
 
@@ -71,6 +71,7 @@ contract Verify is DeployConfig {
         );
 
         _expectFalse("router paused", router.paused());
+        _verifyQueuedTimelockIds(record, router);
 
         if (vm.keyExistsJson(record, ".axelarAdapter")) {
             AxelarItsAdapter axelar = AxelarItsAdapter(payable(record.readAddress(".axelarAdapter")));
@@ -169,6 +170,21 @@ contract Verify is DeployConfig {
         } else {
             problems += 1;
             console.log("  BAD ", what, "is true and should be false");
+        }
+    }
+
+    function _verifyQueuedTimelockIds(string memory record, HyperionRouter router) private {
+        if (!vm.keyExistsJson(record, ".queuedActionIds")) return;
+        uint256[] memory ids = record.readUintArray(".queuedActionIds");
+        bool hasPayloads = vm.keyExistsJson(record, ".queuedActionPayloadIds");
+        bytes32[] memory payloads =
+            hasPayloads ? record.readBytes32Array(".queuedActionPayloadIds") : new bytes32[](0);
+        for (uint256 i = 0; i < ids.length; ++i) {
+            TimelockActionStatus memory st = router.timelockStatus(uint64(ids[i]));
+            _expectTrue("recorded action id tracked", st.state != TimelockState.Unqueued);
+            if (hasPayloads && i < payloads.length) {
+                _expectBytes32("recorded action payload", st.payloadId, payloads[i]);
+            }
         }
     }
 }

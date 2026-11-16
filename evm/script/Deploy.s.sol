@@ -36,6 +36,7 @@ contract Deploy is DeployConfig {
     /// @dev Written to disk so phase two, and any reviewer, works from the same list.
     struct Queued {
         uint64 id;
+        bytes32 payloadId;
         string what;
     }
 
@@ -168,7 +169,8 @@ contract Deploy is DeployConfig {
 
     function _queue(AdminAction memory action, string memory what) private {
         uint64 id = router.queueAction(action);
-        queued.push(Queued({id: id, what: what}));
+        bytes32 payloadId = router.actionPayloadId(action);
+        queued.push(Queued({id: id, payloadId: payloadId, what: what}));
         console.log("queued", id, what);
     }
 
@@ -217,12 +219,15 @@ contract Deploy is DeployConfig {
         vm.serializeUint(key, "tokenFlowLimit", token.flowLimit);
 
         uint256[] memory ids = new uint256[](queued.length);
+        bytes32[] memory payloadIds = new bytes32[](queued.length);
         string[] memory whats = new string[](queued.length);
         for (uint256 i = 0; i < queued.length; ++i) {
             ids[i] = queued[i].id;
+            payloadIds[i] = queued[i].payloadId;
             whats[i] = queued[i].what;
         }
         vm.serializeUint(key, "queuedActionIds", ids);
+        vm.serializeBytes32(key, "queuedActionPayloadIds", payloadIds);
         // The earliest any of them can run. They were all queued in one transaction, so they all
         // mature together.
         vm.serializeUint(key, "queuedEta", block.timestamp + params.timelockDelay);

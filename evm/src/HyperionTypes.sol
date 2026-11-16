@@ -188,3 +188,26 @@ enum QuoteBlocker {
     InvalidDestination,
     ChainNotSupported
 }
+
+/// @dev Lifecycle state of a timelocked governance action.
+enum TimelockState {
+    Unqueued,
+    Pending,
+    Executable,
+    Expired,
+    Cancelled,
+    Executed
+}
+
+/// @dev Stable read model for a timelocked action, including canonical payload identity.
+struct TimelockActionStatus {
+    uint64 id;
+    TimelockState state;
+    ActionKind kind;
+    bytes32 payloadId;
+    uint64 queuedAt;
+    uint64 eta;
+    uint64 expiresAt;
+    uint64 resolvedAt;
+    bool payloadValid;
+}

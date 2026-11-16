@@ -13,6 +13,7 @@ import {
     RouteQuote,
     TokenConfig
 } from "../HyperionTypes.sol";
+import {ITimelockState} from "./ITimelockState.sol";
 
 /// @title The router, as everything outside it sees it
 /// @notice Two entry points carry every transfer. `bridgeOut` is what a person calls, and
@@ -22,7 +23,7 @@ import {
 ///
 /// Everything else here is either a question you can ask before committing money, or an admin
 /// action that has to sit in a timelock first.
-interface IHyperionRouter {
+interface IHyperionRouter is ITimelockState {
     /// @notice A transfer left for another chain.
     /// @dev The Soroban router writes a `TransferRecord` to storage as well as emitting, because
     /// Soroban events age out after about a week and an indexer that fell behind has nowhere else

@@ -127,6 +127,12 @@ contract Fixture is Test {
         vm.warp(block.timestamp + TIMELOCK + 1);
     }
 
+    /// @dev Queue a change without advancing time, returning its action id.
+    function _queueOnly(AdminAction memory action) internal returns (uint64 id) {
+        vm.prank(admin);
+        id = router.queueAction(action);
+    }
+
     function _empty(ActionKind kind) internal pure returns (AdminAction memory) {
         return AdminAction({kind: kind, route: RouteKind.Cctp, subject: address(0), amount: 0, decimals: 0});
     }

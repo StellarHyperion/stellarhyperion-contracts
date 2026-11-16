@@ -61,6 +61,52 @@ export const hyperionRouterAbi = [
   },
   {
     "type": "function",
+    "name": "actionPayloadId",
+    "inputs": [
+      {
+        "name": "action",
+        "type": "tuple",
+        "internalType": "struct AdminAction",
+        "components": [
+          {
+            "name": "kind",
+            "type": "uint8",
+            "internalType": "enum ActionKind"
+          },
+          {
+            "name": "route",
+            "type": "uint8",
+            "internalType": "enum RouteKind"
+          },
+          {
+            "name": "subject",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "decimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "adapter",
     "inputs": [
       {
@@ -1080,6 +1126,209 @@ export const hyperionRouterAbi = [
         "name": "",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "timelockStatus",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct TimelockActionStatus",
+        "components": [
+          {
+            "name": "id",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "state",
+            "type": "uint8",
+            "internalType": "enum TimelockState"
+          },
+          {
+            "name": "kind",
+            "type": "uint8",
+            "internalType": "enum ActionKind"
+          },
+          {
+            "name": "payloadId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "queuedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "eta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "expiresAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "resolvedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "payloadValid",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "timelockStatusAt",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "status",
+        "type": "tuple",
+        "internalType": "struct TimelockActionStatus",
+        "components": [
+          {
+            "name": "id",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "state",
+            "type": "uint8",
+            "internalType": "enum TimelockState"
+          },
+          {
+            "name": "kind",
+            "type": "uint8",
+            "internalType": "enum ActionKind"
+          },
+          {
+            "name": "payloadId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "queuedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "eta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "expiresAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "resolvedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "payloadValid",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "timelockStatuses",
+    "inputs": [
+      {
+        "name": "ids",
+        "type": "uint64[]",
+        "internalType": "uint64[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "statuses",
+        "type": "tuple[]",
+        "internalType": "struct TimelockActionStatus[]",
+        "components": [
+          {
+            "name": "id",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "state",
+            "type": "uint8",
+            "internalType": "enum TimelockState"
+          },
+          {
+            "name": "kind",
+            "type": "uint8",
+            "internalType": "enum ActionKind"
+          },
+          {
+            "name": "payloadId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "queuedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "eta",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "expiresAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "resolvedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "payloadValid",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
       }
     ],
     "stateMutability": "view"
