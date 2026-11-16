@@ -56,3 +56,6 @@ export * from "./deployments.js";
 
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";
+
+// Versioned bigint-safe persistence serializers for router snapshots and quote bundles.
+export * from "./snapshots.js";

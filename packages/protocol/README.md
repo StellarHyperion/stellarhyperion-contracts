@@ -30,6 +30,7 @@ against itself.
 | `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
 | `deployments` | Deployment records, and a loader that checks them instead of casting them              |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
+| `snapshots`   | Versioned bigint-safe snapshot and quote-bundle serializers for persistence            |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
 
 ```ts
@@ -107,3 +108,18 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Bigint-safe snapshot persistence
+
+`serializeRouterSnapshot`, `deserializeRouterSnapshot`, `serializePersistedQuoteBundle`,
+`deserializePersistedQuoteBundle`, `stringifyRouterSnapshot`, and `parseRouterSnapshotJson` provide
+versioned (`schemaVersion: 1`) JSON persistence for `RouterSnapshot` and `RouteQuote` records:
+
+- Every `bigint` up to `2^256 - 1` round-trips losslessly as a validated unsigned base-10 integer
+  string alongside explicit `units` (`amountEncoding: "base_unit_uint_string"`, `tokenDecimals`,
+  `feeUnit: "bps"`).
+- Unknown `schemaVersion` values, raw JSON numbers, negative values, decimals, scientific notation,
+  and leading-zero strings fail at the exact field path with `SnapshotSerializationError`.
+- Persisted records carry `freshnessClass: "persisted_historical_snapshot"`,
+  `impliesLivePrice: false`, and `requiresChainReconfirmation: true` on restore so stored snapshots
+  can never imply fresh live prices.
