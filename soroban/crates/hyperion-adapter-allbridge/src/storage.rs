@@ -3,7 +3,7 @@
 use hyperion_core::HyperionError;
 use soroban_sdk::{contracttype, Address, BytesN, Env, String};
 
-use crate::types::{AssetLink, ChainLane, Config};
+use crate::types::{AssetLink, ChainLane, Config, InitAuthorityRecord};
 
 /// Extend when there is less than a day of life left, and extend to thirty days.
 pub const BUMP_THRESHOLD: u32 = 17_280;
@@ -13,6 +13,8 @@ pub const BUMP_TO: u32 = 518_400;
 #[derive(Clone)]
 pub enum DataKey {
     Config,
+    /// Deployment-time initialization provenance record.
+    InitAuthority,
     /// Hyperion's chain name to Allbridge's chain id.
     Lane(String),
     /// Allbridge's chain id back to Hyperion's chain name.
@@ -39,6 +41,15 @@ pub fn set_config(env: &Env, cfg: &Config) {
 
 pub fn is_initialized(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Config)
+}
+
+pub fn init_authority(env: &Env) -> Option<InitAuthorityRecord> {
+    env.storage().instance().get(&DataKey::InitAuthority)
+}
+
+pub fn set_init_authority(env: &Env, rec: &InitAuthorityRecord) {
+    env.storage().instance().set(&DataKey::InitAuthority, rec);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
 }
 
 pub fn lane(env: &Env, chain: &String) -> Option<ChainLane> {

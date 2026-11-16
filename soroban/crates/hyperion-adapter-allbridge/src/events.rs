@@ -97,6 +97,16 @@ pub struct Received {
 
 #[contractevent(topics = ["hyperion", "abr_cfg"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Initialized {
+    #[topic]
+    pub admin: Address,
+    pub router: Address,
+    pub bridge: Address,
+    pub native: Address,
+}
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidatorSet {
     pub validator: BytesN<32>,
 }

@@ -36,3 +36,15 @@ pub struct AssetLink {
     /// The destination token's address, left padded to thirty two bytes.
     pub receive_token: BytesN<32>,
 }
+
+/// Immutable deployment-time record of who initialized the adapter and when.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InitAuthorityRecord {
+    pub admin: Address,
+    pub router: Address,
+    pub bridge: Address,
+    pub native: Address,
+    pub initialized_ledger: u32,
+    pub initialized_timestamp: u64,
+}

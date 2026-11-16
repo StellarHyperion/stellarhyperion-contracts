@@ -72,7 +72,7 @@ use soroban_sdk::{
 };
 
 use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
-use types::{AssetLink, ChainLane, Config};
+use types::{AssetLink, ChainLane, Config, InitAuthorityRecord};
 
 #[contract]
 pub struct AllbridgeAdapter;
@@ -81,8 +81,10 @@ pub struct AllbridgeAdapter;
 impl AllbridgeAdapter {
     /// Wire the adapter up.
     ///
-    /// Starts with no lane and no asset, so a deploy script that stops halfway leaves something
-    /// that refuses every transfer rather than something that guesses.
+    /// Requires the configured `admin` to authorize initialization so an unauthenticated caller
+    /// cannot bind `admin` to attacker-chosen router, bridge, or native contracts. Starts with no
+    /// lane and no asset, so a deploy script that stops halfway leaves something that refuses
+    /// every transfer rather than something that guesses.
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -93,15 +95,49 @@ impl AllbridgeAdapter {
         if storage::is_initialized(&env) {
             return Err(HyperionError::AlreadyInitialized);
         }
+        admin.require_auth();
+
+        let _ = codec::contract_key(&env, &router)?;
+        let _ = codec::contract_key(&env, &bridge)?;
+        let _ = codec::contract_key(&env, &native)?;
+        let this = env.current_contract_address();
+        if router == this
+            || bridge == this
+            || native == this
+            || router == bridge
+            || router == native
+            || bridge == native
+        {
+            return Err(HyperionError::UnexpectedRailContract);
+        }
+
         storage::set_config(
             &env,
             &Config {
-                admin,
-                router,
-                bridge,
-                native,
+                admin: admin.clone(),
+                router: router.clone(),
+                bridge: bridge.clone(),
+                native: native.clone(),
             },
         );
+        storage::set_init_authority(
+            &env,
+            &InitAuthorityRecord {
+                admin: admin.clone(),
+                router: router.clone(),
+                bridge: bridge.clone(),
+                native: native.clone(),
+                initialized_ledger: env.ledger().sequence(),
+                initialized_timestamp: env.ledger().timestamp(),
+            },
+        );
+        events::Initialized {
+            admin,
+            router,
+            bridge,
+            native,
+        }
+        .publish(&env);
         Ok(())
     }
 
@@ -623,6 +659,57 @@ impl AllbridgeAdapter {
 
     pub fn get_config(env: Env) -> Result<Config, HyperionError> {
         storage::config(&env)
+    }
+
+    /// Read-only deployment-time authority check verifying that the live administrator and wired
+    /// contracts match the expected deployment manifest before activating the adapter on the
+    /// router.
+    pub fn verify_admin_authority(
+        env: Env,
+        expected_admin: Address,
+        expected_router: Address,
+        expected_bridge: Address,
+        expected_native: Address,
+    ) -> Result<InitAuthorityRecord, HyperionError> {
+        let cfg = storage::config(&env)?;
+        if cfg.admin != expected_admin {
+            return Err(HyperionError::Unauthorized);
+        }
+        if cfg.router != expected_router
+            || cfg.bridge != expected_bridge
+            || cfg.native != expected_native
+        {
+            return Err(HyperionError::UnexpectedRailContract);
+        }
+        Ok(
+            storage::init_authority(&env).unwrap_or(InitAuthorityRecord {
+                admin: cfg.admin,
+                router: cfg.router,
+                bridge: cfg.bridge,
+                native: cfg.native,
+                initialized_ledger: 0,
+                initialized_timestamp: 0,
+            }),
+        )
+    }
+
+    /// Deployment-rehearsal check that requires `expected_admin` to sign and verifies live admin
+    /// and contract wiring match the expected manifest.
+    pub fn confirm_admin_authority(
+        env: Env,
+        expected_admin: Address,
+        expected_router: Address,
+        expected_bridge: Address,
+        expected_native: Address,
+    ) -> Result<InitAuthorityRecord, HyperionError> {
+        expected_admin.require_auth();
+        Self::verify_admin_authority(
+            env,
+            expected_admin,
+            expected_router,
+            expected_bridge,
+            expected_native,
+        )
     }
 
     /// The route this adapter serves, which is only ever the one.
