@@ -9,6 +9,7 @@ import {
     OutboundRequest,
     PendingClaim,
     QueuedAction,
+    RefundMode,
     RouteKind,
     RouteQuote,
     TokenConfig
@@ -167,6 +168,27 @@ interface IHyperionRouter {
     /// @param flowWindow How long a flow window now runs, in seconds.
     event ConfigChanged(address treasury, uint16 feeBps, uint64 timelockDelay, uint64 flowWindow);
 
+    /// @notice Opt-in native refund credit policy was enabled or disabled through the timelock.
+    /// @param enabled True when senders may opt into sender-bound credit recovery.
+    event CreditRefundPolicyChanged(bool enabled);
+
+    /// @notice A sender updated its default native refund handling mode for `bridgeOut`.
+    /// @param sender The sender account whose default refund mode changed.
+    /// @param mode Selected refund behavior (`RevertOnFailure` or `CreditOnFailure`).
+    event SenderRefundModeConfigured(address indexed sender, RefundMode mode);
+
+    /// @notice Leftover native currency could not be returned inline and was credited to the sender.
+    /// @param beneficiary The original `msg.sender` entitled to withdraw the native credit.
+    /// @param nonce The outbound transfer nonce that produced the leftover refund.
+    /// @param amount The exact leftover native currency recorded for `beneficiary`.
+    event NativeRefundCredited(address indexed beneficiary, uint64 indexed nonce, uint256 amount);
+
+    /// @notice A sender withdrew its accumulated native refund credit.
+    /// @param beneficiary The original refund beneficiary whose credit was cleared.
+    /// @param recipient The payable destination chosen by `beneficiary`.
+    /// @param amount The native currency amount paid out.
+    event NativeRefundWithdrawn(address indexed beneficiary, address indexed recipient, uint256 amount);
+
     /// @notice Send `request.amount` of a token to another chain.
     /// @dev Pull, then fee, then floor, then hand off. The fee comes off the raw amount and the
     /// remainder is floored to what the destination can actually represent, in that order, so the
@@ -179,6 +201,28 @@ interface IHyperionRouter {
     /// @return nonce This router's own counter for the transfer, which is also what appears in the
     /// note the far side reads.
     function bridgeOut(OutboundRequest calldata request) external payable returns (uint64 nonce);
+
+    /// @notice Send `request.amount` of a token with an explicit native-refund failure mode.
+    /// @param request Unchanged outbound token transfer intent.
+    /// @param refundMode Whether failed native change refunds revert or record sender-bound credit.
+    /// @return nonce This router's sequence counter for the transfer.
+    function bridgeOutWithRefundMode(OutboundRequest calldata request, RefundMode refundMode)
+        external
+        payable
+        returns (uint64 nonce);
+
+    /// @notice Configure the caller's default native-refund mode used by `bridgeOut`.
+    /// @param mode Explicit refund behavior (`RevertOnFailure` or `CreditOnFailure`).
+    function setSenderRefundMode(RefundMode mode) external;
+
+    /// @notice Withdraw the caller's accumulated native refund credit to `msg.sender`.
+    /// @return amount Exact native credit withdrawn.
+    function withdrawNativeRefund() external returns (uint256 amount);
+
+    /// @notice Withdraw the caller's accumulated native refund credit to an explicit address.
+    /// @param recipient Payable address designated by the original refund beneficiary.
+    /// @return amount Exact native credit withdrawn.
+    function withdrawNativeRefundTo(address payable recipient) external returns (uint256 amount);
 
     /// @notice Pay out a transfer that arrived over a rail.
     /// @dev Callable only by the contract registered as that rail's receiver, and only after the
@@ -297,4 +341,22 @@ interface IHyperionRouter {
     /// @param route The rail to check.
     /// @return True if the rail is paused.
     function routePaused(RouteKind route) external view returns (bool);
+
+    /// @notice Whether reviewed opt-in native refund credit mode is currently enabled.
+    /// @return True when callers may select `RefundMode.CreditOnFailure`.
+    function creditRefundEnabled() external view returns (bool);
+
+    /// @notice Read the default native refund mode configured by `sender`.
+    /// @param sender The sender address to query.
+    /// @return Configured `RefundMode`, defaulting to `RevertOnFailure`.
+    function senderRefundMode(address sender) external view returns (RefundMode);
+
+    /// @notice Read the sender-bound native refund credit held for `beneficiary`.
+    /// @param beneficiary The original sender address to query.
+    /// @return Pending native currency credit in wei.
+    function nativeRefundCredit(address beneficiary) external view returns (uint256);
+
+    /// @notice Total pending sender-bound native refund credits held by the router.
+    /// @return Aggregate native refund liability in wei.
+    function totalNativeRefundCredits() external view returns (uint256);
 }

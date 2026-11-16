@@ -204,6 +204,74 @@ export const hyperionRouterAbi = [
   },
   {
     "type": "function",
+    "name": "bridgeOutWithRefundMode",
+    "inputs": [
+      {
+        "name": "request",
+        "type": "tuple",
+        "internalType": "struct OutboundRequest",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "route",
+            "type": "uint8",
+            "internalType": "enum RouteKind"
+          },
+          {
+            "name": "destination",
+            "type": "tuple",
+            "internalType": "struct Destination",
+            "components": [
+              {
+                "name": "chain",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "strkey",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
+          },
+          {
+            "name": "destinationDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "minDestinationAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "refundMode",
+        "type": "uint8",
+        "internalType": "enum RefundMode"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "nonce",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
     "name": "cancelAction",
     "inputs": [
       {
@@ -253,6 +321,19 @@ export const hyperionRouterAbi = [
         "name": "",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "creditRefundEnabled",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -486,6 +567,25 @@ export const hyperionRouterAbi = [
         "name": "",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nativeRefundCredit",
+    "inputs": [
+      {
+        "name": "beneficiary",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -1041,6 +1141,38 @@ export const hyperionRouterAbi = [
   },
   {
     "type": "function",
+    "name": "senderRefundMode",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum RefundMode"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setSenderRefundMode",
+    "inputs": [
+      {
+        "name": "mode",
+        "type": "uint8",
+        "internalType": "enum RefundMode"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "settleClaim",
     "inputs": [
       {
@@ -1127,6 +1259,19 @@ export const hyperionRouterAbi = [
   },
   {
     "type": "function",
+    "name": "totalNativeRefundCredits",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "treasury",
     "inputs": [],
     "outputs": [
@@ -1156,6 +1301,38 @@ export const hyperionRouterAbi = [
       }
     ],
     "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "withdrawNativeRefund",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "withdrawNativeRefundTo",
+    "inputs": [
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address payable"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {
@@ -1481,6 +1658,19 @@ export const hyperionRouterAbi = [
   },
   {
     "type": "event",
+    "name": "CreditRefundPolicyChanged",
+    "inputs": [
+      {
+        "name": "enabled",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "FlowLimitLowered",
     "inputs": [
       {
@@ -1497,6 +1687,56 @@ export const hyperionRouterAbi = [
       },
       {
         "name": "limit",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "NativeRefundCredited",
+    "inputs": [
+      {
+        "name": "beneficiary",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "NativeRefundWithdrawn",
+    "inputs": [
+      {
+        "name": "beneficiary",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1670,6 +1910,25 @@ export const hyperionRouterAbi = [
   },
   {
     "type": "event",
+    "name": "SenderRefundModeConfigured",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "mode",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum RefundMode"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "TokenRegistered",
     "inputs": [
       {
@@ -1770,6 +2029,11 @@ export const hyperionRouterAbi = [
   },
   {
     "type": "error",
+    "name": "CreditRefundDisabled",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "DecimalOverflow",
     "inputs": []
   },
@@ -1837,6 +2101,11 @@ export const hyperionRouterAbi = [
   {
     "type": "error",
     "name": "MuxedNotSupported",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoRefundCredit",
     "inputs": []
   },
   {

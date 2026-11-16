@@ -71,6 +71,14 @@ contract Verify is DeployConfig {
         );
 
         _expectFalse("router paused", router.paused());
+        if (vm.keyExistsJson(record, ".creditRefundEnabled")) {
+            bool wantCredit = record.readBool(".creditRefundEnabled");
+            if (wantCredit) {
+                _expectTrue("credit refund enabled", router.creditRefundEnabled());
+            } else {
+                _expectFalse("credit refund enabled", router.creditRefundEnabled());
+            }
+        }
 
         if (vm.keyExistsJson(record, ".axelarAdapter")) {
             AxelarItsAdapter axelar = AxelarItsAdapter(payable(record.readAddress(".axelarAdapter")));

@@ -181,6 +181,12 @@ contract Fixture is Test {
         _run(action);
     }
 
+    function _setCreditRefundEnabled(bool on) internal {
+        AdminAction memory action = _empty(ActionKind.SetCreditRefundEnabled);
+        action.amount = on ? 1 : 0;
+        _run(action);
+    }
+
     // -------------------------------------------------------------------------------------
     // Request shorthand
     // -------------------------------------------------------------------------------------

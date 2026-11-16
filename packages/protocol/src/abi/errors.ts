@@ -60,6 +60,8 @@ export const GENERATED_EVM_ERROR_NAMES = [
   "ProtectedAsset",
   "ZeroAddress",
   "RefundFailed",
+  "CreditRefundDisabled",
+  "NoRefundCredit",
 ] as const;
 
 /** Four byte selector to error, for every error the compiled contracts can actually revert with. */
@@ -71,7 +73,9 @@ export const EVM_ERROR_SELECTORS = {
   "0x16509b9a": { name: "MalformedMessage", signature: "MalformedMessage()" },
   "0x17d0b6db": { name: "RouteDisabled", signature: "RouteDisabled()" },
   "0x1931ea85": { name: "TokenDisabled", signature: "TokenDisabled()" },
+  "0x1d59da8e": { name: "NoRefundCredit", signature: "NoRefundCredit()" },
   "0x1e4fbdf7": { name: "OwnableInvalidOwner", signature: "OwnableInvalidOwner(address)" },
+  "0x24ca6992": { name: "CreditRefundDisabled", signature: "CreditRefundDisabled()" },
   "0x259ba1ad": { name: "TokenNotRegistered", signature: "TokenNotRegistered()" },
   "0x276f9a65": { name: "ZeroAddressKey", signature: "ZeroAddressKey()" },
   "0x2c5211c6": { name: "InvalidAmount", signature: "InvalidAmount()" },

@@ -122,6 +122,8 @@ export const EVM_ERROR_NAMES = [
   "ProtectedAsset",
   "ZeroAddress",
   "RefundFailed",
+  "CreditRefundDisabled",
+  "NoRefundCredit",
 ] as const;
 
 export type EvmErrorName = (typeof EVM_ERROR_NAMES)[number];
@@ -437,6 +439,17 @@ const HELP: Record<HyperionErrorName, Omit<ErrorHelp, "sorobanCode">> = {
   ExceedsRouteLimit: {
     summary: "That transfer exceeds the maximum single transfer limit configured for this route.",
     fault: "limit",
+    retryable: false,
+  },
+  CreditRefundDisabled: {
+    summary:
+      "Sender credit recovery for failed native gas refunds is not enabled on this deployment.",
+    fault: "config",
+    retryable: false,
+  },
+  NoRefundCredit: {
+    summary: "There is no pending native gas refund credit recorded for this caller.",
+    fault: "input",
     retryable: false,
   },
 };

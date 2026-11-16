@@ -97,7 +97,7 @@ contract Deploy is DeployConfig {
             console.log("axelar peer         ", axelarStellarChain());
         }
 
-        _queueRouterSetup(token, axelarToo, params.admin, deployer);
+        _queueRouterSetup(token, axelarToo, params.creditRefundEnabled, params.admin, deployer);
 
         vm.stopBroadcast();
 
@@ -108,9 +108,13 @@ contract Deploy is DeployConfig {
     /// @dev Order matters here in one place only: the handover is last, because an admin change
     /// that landed first would leave every action after it queued by an account that can no longer
     /// execute anything.
-    function _queueRouterSetup(TokenParams memory token, bool axelarToo, address admin, address deployer)
-        private
-    {
+    function _queueRouterSetup(
+        TokenParams memory token,
+        bool axelarToo,
+        bool creditRefundEnabled,
+        address admin,
+        address deployer
+    ) private {
         _queue(
             AdminAction({
                 kind: ActionKind.RegisterToken,
@@ -139,6 +143,13 @@ contract Deploy is DeployConfig {
             );
             _queue(
                 _routeAction(ActionKind.EnableRoute, RouteKind.AxelarIts, address(0), 1), "enable axelar its"
+            );
+        }
+
+        if (creditRefundEnabled) {
+            _queue(
+                _routeAction(ActionKind.SetCreditRefundEnabled, RouteKind.Cctp, address(0), 1),
+                "enable credit refund recovery"
             );
         }
 
@@ -194,6 +205,7 @@ contract Deploy is DeployConfig {
         vm.serializeUint(key, "feeBps", params.feeBps);
         vm.serializeUint(key, "timelockDelay", params.timelockDelay);
         vm.serializeUint(key, "flowWindow", params.flowWindow);
+        vm.serializeBool(key, "creditRefundEnabled", params.creditRefundEnabled);
         vm.serializeUint(key, "deployedAtBlock", block.number);
         vm.serializeUint(key, "deployedAtTimestamp", block.timestamp);
         vm.serializeString(key, "stellarChain", stellarChain());

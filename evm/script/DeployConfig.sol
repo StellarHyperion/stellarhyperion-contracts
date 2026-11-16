@@ -33,6 +33,7 @@ abstract contract DeployConfig is Script {
         uint16 feeBps;
         uint64 timelockDelay;
         uint64 flowWindow;
+        bool creditRefundEnabled;
     }
 
     struct RailParams {
@@ -71,7 +72,8 @@ abstract contract DeployConfig is Script {
             timelockDelay: uint64(vm.envOr("HYPERION_TIMELOCK_DELAY", uint256(24 hours))),
             // One hour of flow accounting. Sliding, not calendar, so this is a window length
             // rather than a reset time.
-            flowWindow: uint64(vm.envOr("HYPERION_FLOW_WINDOW", uint256(1 hours)))
+            flowWindow: uint64(vm.envOr("HYPERION_FLOW_WINDOW", uint256(1 hours))),
+            creditRefundEnabled: vm.envOr("HYPERION_CREDIT_REFUND_ENABLED", false)
         });
     }
 

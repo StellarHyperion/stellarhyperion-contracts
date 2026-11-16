@@ -13,6 +13,7 @@ import {
     AmountNotRepresentable,
     ClaimAlreadySettled,
     ClaimNotFound,
+    CreditRefundDisabled,
     FeeTooHigh,
     InvalidAmount,
     InvalidDecimals,
@@ -20,6 +21,7 @@ import {
     InvalidWindow,
     LimitNotRaised,
     MuxedNotSupported,
+    NoRefundCredit,
     NotRailReceiver,
     RecipientNotReady,
     RefundFailed,
@@ -48,6 +50,7 @@ import {
     PendingClaim,
     QueuedAction,
     QuoteBlocker,
+    RefundMode,
     RouteKind,
     RouteQuote,
     TokenConfig
@@ -155,6 +158,14 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
 
     mapping(uint64 claimId => PendingClaim claim) private _claims;
     mapping(uint64 actionId => QueuedAction queued) private _actions;
+    mapping(address beneficiary => uint256 credit) private _refundCredits;
+    mapping(address sender => RefundMode mode) private _senderRefundMode;
+
+    /// @notice Whether reviewed opt-in native refund credit recovery is active.
+    bool public override creditRefundEnabled;
+
+    /// @notice Total pending sender-bound native refund credits held by the router.
+    uint256 public override totalNativeRefundCredits;
 
     /// @param admin Holds every privileged power, all of them behind the timelock.
     /// @notice Wires up the router with its roles, its treasury, and its fee and timing limits.
@@ -215,6 +226,53 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         whenNotPaused
         returns (uint64 nonce)
     {
+        return _bridgeOut(request, _senderRefundMode[msg.sender]);
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function bridgeOutWithRefundMode(OutboundRequest calldata request, RefundMode refundMode)
+        external
+        payable
+        override
+        nonReentrant
+        whenNotPaused
+        returns (uint64 nonce)
+    {
+        return _bridgeOut(request, refundMode);
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function setSenderRefundMode(RefundMode mode) external override {
+        if (mode == RefundMode.CreditOnFailure && !creditRefundEnabled) {
+            revert CreditRefundDisabled();
+        }
+        _senderRefundMode[msg.sender] = mode;
+        emit SenderRefundModeConfigured(msg.sender, mode);
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function withdrawNativeRefund() external override nonReentrant returns (uint256 amount) {
+        return _withdrawNativeRefund(payable(msg.sender));
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function withdrawNativeRefundTo(address payable recipient)
+        external
+        override
+        nonReentrant
+        returns (uint256 amount)
+    {
+        return _withdrawNativeRefund(recipient);
+    }
+
+    function _bridgeOut(OutboundRequest calldata request, RefundMode refundMode)
+        private
+        returns (uint64 nonce)
+    {
+        if (refundMode == RefundMode.CreditOnFailure && !creditRefundEnabled) {
+            revert CreditRefundDisabled();
+        }
+
         OutboundPlan memory plan = _planOutbound(request);
 
         IERC20 token = IERC20(request.token);
@@ -231,13 +289,33 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
 
         _announceOutbound(request, plan, nonce, railRef);
 
-        // Rails quote destination gas optimistically and refund the difference. Keeping it would
-        // be a second, undeclared fee that moves with a gas market the sender never looked at.
         uint256 leftover = address(this).balance - balanceBefore;
-        if (leftover != 0) {
-            (bool sent,) = payable(msg.sender).call{value: leftover}("");
-            if (!sent) revert RefundFailed();
-        }
+        _handleNativeRefund(leftover, nonce, refundMode);
+    }
+
+    function _handleNativeRefund(uint256 leftover, uint64 nonce, RefundMode refundMode) private {
+        if (leftover == 0) return;
+        (bool sent,) = payable(msg.sender).call{value: leftover}("");
+        if (sent) return;
+        if (refundMode == RefundMode.RevertOnFailure) revert RefundFailed();
+
+        _refundCredits[msg.sender] += leftover;
+        totalNativeRefundCredits += leftover;
+        emit NativeRefundCredited(msg.sender, nonce, leftover);
+    }
+
+    function _withdrawNativeRefund(address payable recipient) private returns (uint256 amount) {
+        if (recipient == address(0)) revert ZeroAddress();
+        amount = _refundCredits[msg.sender];
+        if (amount == 0) revert NoRefundCredit();
+
+        _refundCredits[msg.sender] = 0;
+        totalNativeRefundCredits -= amount;
+
+        (bool sent,) = recipient.call{value: amount}("");
+        if (!sent) revert RefundFailed();
+
+        emit NativeRefundWithdrawn(msg.sender, recipient, amount);
     }
 
     /// @dev Everything that has to be true before any money moves, and the numbers that come out
@@ -659,6 +737,16 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         return _actionCount;
     }
 
+    /// @inheritdoc IHyperionRouter
+    function senderRefundMode(address sender) external view override returns (RefundMode) {
+        return _senderRefundMode[sender];
+    }
+
+    /// @inheritdoc IHyperionRouter
+    function nativeRefundCredit(address beneficiary) external view override returns (uint256) {
+        return _refundCredits[beneficiary];
+    }
+
     // -------------------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------------------
@@ -723,7 +811,8 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
         bool usesAmount = kind == ActionKind.SetFeeBps || kind == ActionKind.EnableRoute
             || kind == ActionKind.RegisterToken || kind == ActionKind.RaiseTokenFlowLimit
             || kind == ActionKind.SetRouteFlowLimit || kind == ActionKind.SetTimelockDelay
-            || kind == ActionKind.SetFlowWindow || kind == ActionKind.SetTokenEnabled;
+            || kind == ActionKind.SetFlowWindow || kind == ActionKind.SetTokenEnabled
+            || kind == ActionKind.SetCreditRefundEnabled;
         bool usesDecimals = kind == ActionKind.RegisterToken;
 
         if (!usesRoute && action.route != RouteKind.Cctp) revert ActionFieldNotEmpty();
@@ -734,6 +823,7 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
 
         if (kind == ActionKind.SetFeeBps && action.amount > AmountMath.MAX_FEE_BPS) revert FeeTooHigh();
         if (kind == ActionKind.EnableRoute && action.amount > 1) revert InvalidLimit();
+        if (kind == ActionKind.SetCreditRefundEnabled && action.amount > 1) revert InvalidLimit();
         if (kind == ActionKind.SetTokenEnabled) {
             if (action.amount > 1) revert InvalidLimit();
             if (!_tokens[action.subject].registered) revert TokenNotRegistered();
@@ -758,6 +848,12 @@ contract HyperionRouter is IHyperionRouter, AccessControl, Pausable, ReentrancyG
 
     function _applyAction(AdminAction memory action) private {
         ActionKind kind = action.kind;
+        if (kind == ActionKind.SetCreditRefundEnabled) {
+            bool on = action.amount == 1;
+            creditRefundEnabled = on;
+            emit CreditRefundPolicyChanged(on);
+            return;
+        }
 
         if (kind == ActionKind.SetFeeBps) {
             feeBps = uint16(action.amount);

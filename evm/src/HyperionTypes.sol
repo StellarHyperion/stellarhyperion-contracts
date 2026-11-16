@@ -122,7 +122,9 @@ enum ActionKind {
     /// while an incident is running. Retiring an asset for good is a different decision, it
     /// waits out the timelock like every other one, and it should say so plainly to anybody
     /// reading a failed quote.
-    SetTokenEnabled
+    SetTokenEnabled,
+    /// Enable or disable opt-in sender-bound credit recovery for failed native gas refunds.
+    SetCreditRefundEnabled
 }
 
 /// @dev One administrative change, in a shape a reviewer can read as fast as the contract can.
@@ -187,4 +189,10 @@ enum QuoteBlocker {
     MuxedNotSupported,
     InvalidDestination,
     ChainNotSupported
+}
+
+/// @dev How `bridgeOut` handles leftover native currency when returning change to `msg.sender`.
+enum RefundMode {
+    RevertOnFailure,
+    CreditOnFailure
 }
