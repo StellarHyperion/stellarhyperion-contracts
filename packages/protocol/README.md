@@ -28,7 +28,7 @@ against itself.
 | `cctp`        | Reading CCTP V2 messages, which is all this side ever does with them                   |
 | `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
 | `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
-| `deployments` | Deployment records, and a loader that checks them instead of casting them              |
+| `deployments` | Deployment records, loader validation, and provider contract overrides                 |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
 
@@ -107,3 +107,20 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Validated provider-contract overrides
+
+`parseDeploymentSet(value, { providerOverrides })`, `applyProviderOverrides`, and
+`providerContractsFor` attach endpoint-independent external provider contract addresses (`cctp`,
+`axelar`, `gateway`, `allbridge`) onto deployed network records:
+
+- Canonical deployment records without overrides (`deployments/stellar-testnet-phase1.json`) parse
+  unchanged with no altered fields.
+- Overrides cannot mutate declared chain identity (`chain`, `chainId`, `family`,
+  `networkPassphrase`), token precision (`tokens`, `decimals`), or inject RPC URLs; attempts fail
+  with `DeploymentFormatError` at the offending field path.
+- Required provider contract pairs (`tokenMessengerV2`/`messageTransmitterV2`/`tokenMinterV2` on
+  EVM CCTP, `tokenMessengerMinter`/`messageTransmitter` on Stellar CCTP,
+  `chainName`/`interchainTokenService`/`gasService` on Axelar, `gatewayWallet`/`gatewayMinter` on
+  Circle Gateway, `bridge`/`messenger` on Allbridge) and chain capability rules are enforced with
+  field-specific error paths.

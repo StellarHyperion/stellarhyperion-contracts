@@ -12,10 +12,10 @@
  * an incident.
  */
 import type { Hex } from "./bytes.js";
+import { bytesToBigInt, fromHex } from "./bytes.js";
 import type { ChainKey } from "./chains.js";
-import { isChainKey } from "./chains.js";
-import type { RouteKind } from "./routes.js";
-import { ROUTE_KINDS, ROUTE_SLUGS, tryRouteFromSlug } from "./routes.js";
+import { CHAINS, isChainKey } from "./chains.js";
+import { RouteKind, ROUTE_KINDS, ROUTE_SLUGS, tryRouteFromSlug } from "./routes.js";
 import { isStellarAddress } from "./addresses.js";
 
 /** The schema version of a deployment file, so an old file fails loudly rather than oddly. */
@@ -53,6 +53,73 @@ export interface StellarTokenDeployment {
   readonly routes: readonly RouteKind[];
 }
 
+export interface EvmCctpProviderContracts {
+  readonly tokenMessengerV2: Hex;
+  readonly messageTransmitterV2: Hex;
+  readonly tokenMinterV2: Hex;
+  readonly tokenMessengerWithFees: Hex | null;
+  readonly messageV2: Hex | null;
+  readonly crossChainTokenService: Hex | null;
+}
+
+export interface EvmGatewayProviderContracts {
+  readonly gatewayWallet: Hex;
+  readonly gatewayMinter: Hex;
+}
+
+export interface EvmAxelarProviderContracts {
+  readonly chainName: string;
+  readonly interchainTokenService: Hex;
+  readonly gasService: Hex;
+  readonly gateway: Hex | null;
+}
+
+export interface EvmAllbridgeProviderContracts {
+  readonly bridge: Hex;
+  readonly messenger: Hex;
+}
+
+export interface EvmProviderContracts {
+  readonly cctp?: EvmCctpProviderContracts;
+  readonly gateway?: EvmGatewayProviderContracts;
+  readonly axelar?: EvmAxelarProviderContracts;
+  readonly allbridge?: EvmAllbridgeProviderContracts;
+}
+
+export interface StellarCctpProviderContracts {
+  readonly tokenMessengerMinter: string;
+  readonly messageTransmitter: string;
+}
+
+export interface StellarAxelarProviderContracts {
+  readonly chainName: string;
+  readonly interchainTokenService: string;
+  readonly gasService: string;
+  readonly gateway: string | null;
+}
+
+export interface StellarAllbridgeProviderContracts {
+  readonly bridge: string;
+  readonly messenger: string;
+}
+
+export interface StellarProviderContracts {
+  readonly cctp?: StellarCctpProviderContracts;
+  readonly axelar?: StellarAxelarProviderContracts;
+  readonly allbridge?: StellarAllbridgeProviderContracts;
+}
+
+export type ProviderContracts = EvmProviderContracts | StellarProviderContracts;
+
+export interface ParseDeploymentOptions {
+  /**
+   * Explicit endpoint-independent provider contract overrides keyed by `ChainKey`.
+   * Validated against the target network's chain family, rail capabilities, and required contract
+   * pairs without allowing overrides to alter declared chain identity or token precision.
+   */
+  readonly providerOverrides?: Readonly<Record<string, unknown>>;
+}
+
 export interface EvmDeployment {
   readonly family: "evm";
   readonly chain: ChainKey;
@@ -71,6 +138,7 @@ export interface EvmDeployment {
   readonly deployedAt: DeployedAtEvm;
   /** The commit the bytecode was built from. The only thing tying an address to a source tree. */
   readonly commit: string;
+  readonly providerContracts?: EvmProviderContracts;
 }
 
 export interface StellarDeployment {
@@ -91,6 +159,7 @@ export interface StellarDeployment {
   readonly wasmHashes: Readonly<Record<string, string>>;
   readonly deployedAt: DeployedAtStellar;
   readonly commit: string;
+  readonly providerContracts?: StellarProviderContracts;
 }
 
 export type Deployment = EvmDeployment | StellarDeployment;
@@ -211,6 +280,336 @@ function asAdapters<T>(
   return out;
 }
 
+const ALLBRIDGE_UNSUPPORTED_CHAINS: ReadonlySet<ChainKey> = new Set([
+  "arc",
+  "arc-testnet",
+  "local",
+]);
+
+const IMMUTABLE_IDENTITY_KEYS: ReadonlySet<string> = new Set([
+  "chain",
+  "chainId",
+  "family",
+  "networkPassphrase",
+]);
+
+const IMMUTABLE_TOKEN_KEYS: ReadonlySet<string> = new Set([
+  "tokens",
+  "decimals",
+  "tokenDecimals",
+  "precision",
+]);
+
+const ENDPOINT_KEYS: ReadonlySet<string> = new Set([
+  "rpcUrl",
+  "defaultRpcUrl",
+  "horizonUrl",
+  "wsUrl",
+  "endpoint",
+  "endpoints",
+]);
+
+function asNonZeroEvmAddress(value: unknown, path: string): Hex {
+  const addr = asEvmAddress(value, path);
+  if (bytesToBigInt(fromHex(addr)) === 0n) {
+    fail(path, "provider contract address cannot be the zero address");
+  }
+  return addr;
+}
+
+function asOptionalNonZeroEvmAddress(value: unknown, path: string): Hex | null {
+  if (value === undefined || value === null) return null;
+  return asNonZeroEvmAddress(value, path);
+}
+
+function asOptionalStellarContract(value: unknown, path: string): string | null {
+  if (value === undefined || value === null) return null;
+  return asStellarContract(value, path);
+}
+
+function assertAllowedKeys(
+  record: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  path: string,
+): void {
+  for (const key of Object.keys(record)) {
+    if (IMMUTABLE_IDENTITY_KEYS.has(key)) {
+      fail(`${path}.${key}`, "provider overrides cannot implicitly alter declared chain identity");
+    }
+    if (IMMUTABLE_TOKEN_KEYS.has(key)) {
+      fail(
+        `${path}.${key}`,
+        "provider overrides cannot implicitly alter declared token precision or token configs",
+      );
+    }
+    if (ENDPOINT_KEYS.has(key)) {
+      fail(`${path}.${key}`, "provider overrides must remain endpoint-independent");
+    }
+    if (!allowed.has(key)) {
+      fail(`${path}.${key}`, `unexpected provider override field "${key}"`);
+    }
+  }
+}
+
+function deploymentUsesRoute(
+  adapters: Readonly<Partial<Record<RouteKind, string>>>,
+  tokens: Readonly<Record<string, { readonly routes: readonly RouteKind[] }>>,
+  route: RouteKind,
+): boolean {
+  if (adapters[route] !== undefined) return true;
+  for (const token of Object.values(tokens)) {
+    if (token.routes.includes(route)) return true;
+  }
+  return false;
+}
+
+const EVM_OVERRIDE_TOP_KEYS: ReadonlySet<string> = new Set([
+  "cctp",
+  "gateway",
+  "axelar",
+  "allbridge",
+]);
+const STELLAR_OVERRIDE_TOP_KEYS: ReadonlySet<string> = new Set(["cctp", "axelar", "allbridge"]);
+const EVM_CCTP_KEYS: ReadonlySet<string> = new Set([
+  "tokenMessengerV2",
+  "messageTransmitterV2",
+  "tokenMinterV2",
+  "tokenMessengerWithFees",
+  "messageV2",
+  "crossChainTokenService",
+]);
+const STELLAR_CCTP_KEYS: ReadonlySet<string> = new Set([
+  "tokenMessengerMinter",
+  "messageTransmitter",
+]);
+const AXELAR_KEYS: ReadonlySet<string> = new Set([
+  "chainName",
+  "interchainTokenService",
+  "gasService",
+  "gateway",
+]);
+const GATEWAY_KEYS: ReadonlySet<string> = new Set(["gatewayWallet", "gatewayMinter"]);
+const ALLBRIDGE_KEYS: ReadonlySet<string> = new Set(["bridge", "messenger"]);
+
+function asAxelarChainIdentifier(value: unknown, path: string): string {
+  const name = asString(value, path);
+  if (/^(?:https?|wss?):\/\//i.test(name)) {
+    fail(path, "expected an endpoint-independent Axelar chain identifier, not a URL");
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) {
+    fail(path, "expected an ASCII Axelar chain identifier");
+  }
+  return name;
+}
+
+function parseEvmProviderContracts(
+  raw: unknown,
+  deployment: EvmDeployment,
+  path: string,
+): EvmProviderContracts {
+  const obj = asRecord(raw, path);
+  assertAllowedKeys(obj, EVM_OVERRIDE_TOP_KEYS, path);
+  const chainMeta = CHAINS[deployment.chain];
+  let cctp: EvmCctpProviderContracts | undefined;
+  let gateway: EvmGatewayProviderContracts | undefined;
+  let axelar: EvmAxelarProviderContracts | undefined;
+  let allbridge: EvmAllbridgeProviderContracts | undefined;
+
+  if (obj.cctp !== undefined) {
+    const cctpPath = `${path}.cctp`;
+    if (chainMeta.cctpDomain === null) {
+      fail(cctpPath, `chain "${deployment.chain}" has no CCTP V2 capability`);
+    }
+    const cctpObj = asRecord(obj.cctp, cctpPath);
+    assertAllowedKeys(cctpObj, EVM_CCTP_KEYS, cctpPath);
+    cctp = {
+      tokenMessengerV2: asNonZeroEvmAddress(
+        cctpObj.tokenMessengerV2,
+        `${cctpPath}.tokenMessengerV2`,
+      ),
+      messageTransmitterV2: asNonZeroEvmAddress(
+        cctpObj.messageTransmitterV2,
+        `${cctpPath}.messageTransmitterV2`,
+      ),
+      tokenMinterV2: asNonZeroEvmAddress(cctpObj.tokenMinterV2, `${cctpPath}.tokenMinterV2`),
+      tokenMessengerWithFees: asOptionalNonZeroEvmAddress(
+        cctpObj.tokenMessengerWithFees,
+        `${cctpPath}.tokenMessengerWithFees`,
+      ),
+      messageV2: asOptionalNonZeroEvmAddress(cctpObj.messageV2, `${cctpPath}.messageV2`),
+      crossChainTokenService: asOptionalNonZeroEvmAddress(
+        cctpObj.crossChainTokenService,
+        `${cctpPath}.crossChainTokenService`,
+      ),
+    };
+  }
+
+  if (obj.gateway !== undefined) {
+    const gwPath = `${path}.gateway`;
+    const gwObj = asRecord(obj.gateway, gwPath);
+    assertAllowedKeys(gwObj, GATEWAY_KEYS, gwPath);
+    gateway = {
+      gatewayWallet: asNonZeroEvmAddress(gwObj.gatewayWallet, `${gwPath}.gatewayWallet`),
+      gatewayMinter: asNonZeroEvmAddress(gwObj.gatewayMinter, `${gwPath}.gatewayMinter`),
+    };
+  }
+
+  if (obj.axelar !== undefined) {
+    const axPath = `${path}.axelar`;
+    if (chainMeta.axelarName === null) {
+      fail(axPath, `chain "${deployment.chain}" has no Axelar capability`);
+    }
+    const axObj = asRecord(obj.axelar, axPath);
+    assertAllowedKeys(axObj, AXELAR_KEYS, axPath);
+    const requiresGateway = deploymentUsesRoute(
+      deployment.adapters,
+      deployment.tokens,
+      RouteKind.AxelarGmp,
+    );
+    const gwAddr = requiresGateway
+      ? asNonZeroEvmAddress(axObj.gateway, `${axPath}.gateway`)
+      : asOptionalNonZeroEvmAddress(axObj.gateway, `${axPath}.gateway`);
+    axelar = {
+      chainName: asAxelarChainIdentifier(axObj.chainName, `${axPath}.chainName`),
+      interchainTokenService: asNonZeroEvmAddress(
+        axObj.interchainTokenService,
+        `${axPath}.interchainTokenService`,
+      ),
+      gasService: asNonZeroEvmAddress(axObj.gasService, `${axPath}.gasService`),
+      gateway: gwAddr,
+    };
+  }
+
+  if (obj.allbridge !== undefined) {
+    const abPath = `${path}.allbridge`;
+    if (ALLBRIDGE_UNSUPPORTED_CHAINS.has(deployment.chain)) {
+      fail(abPath, `chain "${deployment.chain}" has no Allbridge Core capability`);
+    }
+    const abObj = asRecord(obj.allbridge, abPath);
+    assertAllowedKeys(abObj, ALLBRIDGE_KEYS, abPath);
+    allbridge = {
+      bridge: asNonZeroEvmAddress(abObj.bridge, `${abPath}.bridge`),
+      messenger: asNonZeroEvmAddress(abObj.messenger, `${abPath}.messenger`),
+    };
+  }
+
+  const resolved: EvmProviderContracts = {
+    ...(cctp !== undefined ? { cctp } : {}),
+    ...(gateway !== undefined ? { gateway } : {}),
+    ...(axelar !== undefined ? { axelar } : {}),
+    ...(allbridge !== undefined ? { allbridge } : {}),
+  };
+  return resolved;
+}
+
+function parseStellarProviderContracts(
+  raw: unknown,
+  deployment: StellarDeployment,
+  path: string,
+): StellarProviderContracts {
+  const obj = asRecord(raw, path);
+  if (obj.gateway !== undefined) {
+    fail(`${path}.gateway`, "Circle Gateway provider contracts are only supported on EVM chains");
+  }
+  assertAllowedKeys(obj, STELLAR_OVERRIDE_TOP_KEYS, path);
+  const chainMeta = CHAINS[deployment.chain];
+  let cctp: StellarCctpProviderContracts | undefined;
+  let axelar: StellarAxelarProviderContracts | undefined;
+  let allbridge: StellarAllbridgeProviderContracts | undefined;
+
+  if (obj.cctp !== undefined) {
+    const cctpPath = `${path}.cctp`;
+    if (chainMeta.cctpDomain === null) {
+      fail(cctpPath, `chain "${deployment.chain}" has no CCTP V2 capability`);
+    }
+    const cctpObj = asRecord(obj.cctp, cctpPath);
+    assertAllowedKeys(cctpObj, STELLAR_CCTP_KEYS, cctpPath);
+    cctp = {
+      tokenMessengerMinter: asStellarContract(
+        cctpObj.tokenMessengerMinter,
+        `${cctpPath}.tokenMessengerMinter`,
+      ),
+      messageTransmitter: asStellarContract(
+        cctpObj.messageTransmitter,
+        `${cctpPath}.messageTransmitter`,
+      ),
+    };
+  }
+
+  if (obj.axelar !== undefined) {
+    const axPath = `${path}.axelar`;
+    if (chainMeta.axelarName === null) {
+      fail(axPath, `chain "${deployment.chain}" has no Axelar capability`);
+    }
+    const axObj = asRecord(obj.axelar, axPath);
+    assertAllowedKeys(axObj, AXELAR_KEYS, axPath);
+    const requiresGateway = deploymentUsesRoute(
+      deployment.adapters,
+      deployment.tokens,
+      RouteKind.AxelarGmp,
+    );
+    const gwContract = requiresGateway
+      ? asStellarContract(axObj.gateway, `${axPath}.gateway`)
+      : asOptionalStellarContract(axObj.gateway, `${axPath}.gateway`);
+    axelar = {
+      chainName: asAxelarChainIdentifier(axObj.chainName, `${axPath}.chainName`),
+      interchainTokenService: asStellarContract(
+        axObj.interchainTokenService,
+        `${axPath}.interchainTokenService`,
+      ),
+      gasService: asStellarContract(axObj.gasService, `${axPath}.gasService`),
+      gateway: gwContract,
+    };
+  }
+
+  if (obj.allbridge !== undefined) {
+    const abPath = `${path}.allbridge`;
+    if (ALLBRIDGE_UNSUPPORTED_CHAINS.has(deployment.chain)) {
+      fail(abPath, `chain "${deployment.chain}" has no Allbridge Core capability`);
+    }
+    const abObj = asRecord(obj.allbridge, abPath);
+    assertAllowedKeys(abObj, ALLBRIDGE_KEYS, abPath);
+    allbridge = {
+      bridge: asStellarContract(abObj.bridge, `${abPath}.bridge`),
+      messenger: asStellarContract(abObj.messenger, `${abPath}.messenger`),
+    };
+  }
+
+  const resolved: StellarProviderContracts = {
+    ...(cctp !== undefined ? { cctp } : {}),
+    ...(axelar !== undefined ? { axelar } : {}),
+    ...(allbridge !== undefined ? { allbridge } : {}),
+  };
+  return resolved;
+}
+
+function attachProviderContractsToDeployment(
+  deployment: Deployment,
+  rawProviderContracts: unknown,
+  path: string,
+): Deployment {
+  if (deployment.family === "evm") {
+    const parsed = parseEvmProviderContracts(rawProviderContracts, deployment, path);
+    const merged: EvmProviderContracts = {
+      ...(deployment.providerContracts ?? {}),
+      ...parsed,
+    };
+    return {
+      ...deployment,
+      providerContracts: merged,
+    };
+  }
+  const parsed = parseStellarProviderContracts(rawProviderContracts, deployment, path);
+  const merged: StellarProviderContracts = {
+    ...(deployment.providerContracts ?? {}),
+    ...parsed,
+  };
+  return {
+    ...deployment,
+    providerContracts: merged,
+  };
+}
+
 function readEvmDeployment(
   raw: Record<string, unknown>,
   chain: ChainKey,
@@ -230,7 +629,7 @@ function readEvmDeployment(
   }
 
   const deployedAt = asRecord(raw.deployedAt, `${path}.deployedAt`);
-  return {
+  const base: EvmDeployment = {
     family: "evm",
     chain,
     chainId: asInteger(raw.chainId, `${path}.chainId`, 1),
@@ -250,6 +649,15 @@ function readEvmDeployment(
     },
     commit: asString(raw.commit, `${path}.commit`),
   };
+
+  if (raw.providerContracts !== undefined) {
+    return attachProviderContractsToDeployment(
+      base,
+      raw.providerContracts,
+      `${path}.providerContracts`,
+    ) as EvmDeployment;
+  }
+  return base;
 }
 
 function readStellarDeployment(
@@ -283,7 +691,7 @@ function readStellarDeployment(
   }
 
   const deployedAt = asRecord(raw.deployedAt, `${path}.deployedAt`);
-  return {
+  const base: StellarDeployment = {
     family: "stellar",
     chain,
     networkPassphrase: asString(raw.networkPassphrase, `${path}.networkPassphrase`),
@@ -303,15 +711,58 @@ function readStellarDeployment(
     },
     commit: asString(raw.commit, `${path}.commit`),
   };
+
+  if (raw.providerContracts !== undefined) {
+    return attachProviderContractsToDeployment(
+      base,
+      raw.providerContracts,
+      `${path}.providerContracts`,
+    ) as StellarDeployment;
+  }
+  return base;
 }
 
 /**
- * Read a deployment set, checking every field.
+ * Apply explicit endpoint-independent provider contract overrides onto a validated `DeploymentSet`
+ * without mutating the input set or altering declared chain/token precision metadata.
+ */
+export function applyProviderOverrides(
+  set: DeploymentSet,
+  overridesRaw: unknown,
+  rootPath = "$.providerOverrides",
+): DeploymentSet {
+  const overridesRecord = asRecord(overridesRaw, rootPath);
+  const nextNetworks: Partial<Record<ChainKey, Deployment>> = { ...set.networks };
+
+  for (const [key, entry] of Object.entries(overridesRecord)) {
+    const chainPath = `${rootPath}.${key}`;
+    if (!isChainKey(key)) {
+      fail(chainPath, "unknown chain key");
+    }
+    const target = nextNetworks[key];
+    if (target === undefined) {
+      fail(chainPath, `cannot attach provider overrides to undeployed network "${key}"`);
+    }
+    nextNetworks[key] = attachProviderContractsToDeployment(target, entry, chainPath);
+  }
+
+  return {
+    schemaVersion: set.schemaVersion,
+    generatedAt: set.generatedAt,
+    networks: nextNetworks,
+  };
+}
+
+/**
+ * Read a deployment set, checking every field and applying optional validated provider overrides.
  *
  * Takes `unknown` on purpose. The input is a parsed JSON file or an HTTP response body, and both
  * of those are somebody else's output no matter how much this repository wrote them.
  */
-export function parseDeploymentSet(value: unknown): DeploymentSet {
+export function parseDeploymentSet(
+  value: unknown,
+  options?: ParseDeploymentOptions,
+): DeploymentSet {
   const raw = asRecord(value, "$");
   const schemaVersion = asInteger(raw.schemaVersion, "$.schemaVersion", 1);
   if (schemaVersion !== DEPLOYMENT_SCHEMA_VERSION) {
@@ -337,11 +788,16 @@ export function parseDeploymentSet(value: unknown): DeploymentSet {
     }
   }
 
-  return {
+  const parsedSet: DeploymentSet = {
     schemaVersion,
     generatedAt: asTimestamp(raw.generatedAt, "$.generatedAt"),
     networks,
   };
+
+  if (options?.providerOverrides !== undefined) {
+    return applyProviderOverrides(parsedSet, options.providerOverrides, "$.providerOverrides");
+  }
+  return parsedSet;
 }
 
 export function isEvmDeployment(deployment: Deployment): deployment is EvmDeployment {
@@ -371,6 +827,16 @@ export function tokenFor(
   const deployment = set.networks[chain];
   if (deployment === undefined) return null;
   return deployment.tokens[symbol] ?? null;
+}
+
+/** Validated provider contract overrides attached to a deployed network, or null if none. */
+export function providerContractsFor(
+  set: DeploymentSet,
+  chain: ChainKey,
+): ProviderContracts | null {
+  const deployment = set.networks[chain];
+  if (deployment === undefined) return null;
+  return deployment.providerContracts ?? null;
 }
 
 /** Every chain in a set that has a router, which is the list a chain picker should offer. */
