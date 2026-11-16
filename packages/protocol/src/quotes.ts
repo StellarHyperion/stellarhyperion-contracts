@@ -11,7 +11,14 @@
  * agree, and `quote.test.ts` walks the same cases through both. Where they ever disagree the
  * chain is right and this file is a bug.
  */
-import { BPS_DENOMINATOR, MAX_DECIMALS, convertDecimals, floorToRepresentable } from "./amounts.js";
+import {
+  BPS_DENOMINATOR,
+  MAX_DECIMALS,
+  MAX_FEE_BPS,
+  convertDecimals,
+  floorToRepresentable,
+  planSourceForTarget,
+} from "./amounts.js";
 import { tryParseStellarAddress, AddressKind } from "./addresses.js";
 import type { RouteKind } from "./routes.js";
 import { ROUTE_KINDS, carriesPayload, isCanonical, waitsOnAttestation } from "./routes.js";
@@ -318,6 +325,93 @@ export function minimumFromTolerance(quote: RouteQuote, toleranceBps: number): b
   }
   const keep = BPS_DENOMINATOR - BigInt(toleranceBps);
   return (quote.destinationAmount * keep) / BPS_DENOMINATOR;
+}
+
+export interface InverseQuoteRequest {
+  readonly route: RouteKind;
+  /** Desired net arrival amount in destination base units. */
+  readonly targetDestinationAmount: bigint;
+  /** The destination address, exactly as it was pasted. */
+  readonly strkey: string;
+  readonly destinationDecimals: number;
+}
+
+/**
+ * Inverse quote planner: compute the minimal source input and resulting `RouteQuote` that lands at
+ * least `targetDestinationAmount` in destination base units without throwing.
+ */
+export function planInverseQuote(
+  request: InverseQuoteRequest,
+  snapshot: RouterSnapshot,
+): RouteQuote {
+  const { route, targetDestinationAmount, destinationDecimals } = request;
+  const base: RouteQuote = {
+    route,
+    available: false,
+    reason: QuoteBlocker.None,
+    grossAmount: 0n,
+    fee: 0n,
+    netAmount: 0n,
+    destinationAmount: 0n,
+    flowAvailable: 0n,
+    waitsOnAttestation: waitsOnAttestation(route),
+    isCanonical: isCanonical(route),
+  };
+
+  if (snapshot.paused) return blocked(base, QuoteBlocker.Paused);
+  if (snapshot.routeEnabled[route] !== true) return blocked(base, QuoteBlocker.RouteDisabled);
+  if (snapshot.adapterSet[route] !== true) return blocked(base, QuoteBlocker.AdapterNotSet);
+
+  const parsed = tryParseStellarAddress(request.strkey);
+  if (!parsed.ok) return blocked(base, QuoteBlocker.InvalidDestination);
+  if (parsed.parts.kind === AddressKind.MuxedAccount && !carriesPayload(route)) {
+    return blocked(base, QuoteBlocker.MuxedNotSupported);
+  }
+  if (snapshot.chainSupported[route] !== true) return blocked(base, QuoteBlocker.ChainNotSupported);
+
+  if (!snapshot.tokenRegistered) return blocked(base, QuoteBlocker.TokenNotRegistered);
+  if (!snapshot.tokenEnabled) return blocked(base, QuoteBlocker.TokenDisabled);
+
+  if (targetDestinationAmount <= 0n) return blocked(base, QuoteBlocker.AmountTooSmall);
+  if (
+    !Number.isInteger(snapshot.tokenDecimals) ||
+    snapshot.tokenDecimals < 0 ||
+    snapshot.tokenDecimals > MAX_DECIMALS ||
+    !Number.isInteger(destinationDecimals) ||
+    destinationDecimals < 0 ||
+    destinationDecimals > MAX_DECIMALS ||
+    !Number.isInteger(snapshot.feeBps) ||
+    snapshot.feeBps < 0 ||
+    snapshot.feeBps > MAX_FEE_BPS
+  ) {
+    return blocked(base, QuoteBlocker.NotRepresentable);
+  }
+
+  let inverse;
+  try {
+    inverse = planSourceForTarget(
+      targetDestinationAmount,
+      snapshot.tokenDecimals,
+      destinationDecimals,
+      snapshot.feeBps,
+    );
+  } catch {
+    return blocked(base, QuoteBlocker.NotRepresentable);
+  }
+
+  if (inverse.requiredInput > MAX_QUOTE_AMOUNT) {
+    return blocked(base, QuoteBlocker.NotRepresentable);
+  }
+
+  return planQuote(
+    {
+      route,
+      amount: inverse.requiredInput,
+      strkey: request.strkey,
+      destinationDecimals,
+    },
+    snapshot,
+  );
 }
 
 /** Convenience alias for single rail quote planning. */

@@ -115,6 +115,76 @@ export function applyFee(amount: bigint, feeBps: number): FeeSplit {
   return { net, fee };
 }
 
+export interface InversePlan {
+  /** Minimal source input amount whose forward transfer delivers at least `targetDestinationAmount`. */
+  readonly requiredInput: bigint;
+  /** Actual gross amount debited from the sender (`fee + net`). */
+  readonly grossAmount: bigint;
+  /** Protocol fee in source base units. */
+  readonly fee: bigint;
+  /** Floored net amount crossing the rail in source base units. */
+  readonly net: bigint;
+  /** Unpulled source precision dust (`requiredInput - grossAmount`), in source base units. */
+  readonly dust: bigint;
+  /** Actual amount arriving on the destination chain in destination base units. */
+  readonly destinationAmount: bigint;
+}
+
+/**
+ * Compute the minimal source base-unit input required so that after subtracting the floored
+ * protocol fee and flooring to destination precision, at least `targetDestinationAmount` arrives
+ * in destination base units.
+ */
+export function planSourceForTarget(
+  targetDestinationAmount: bigint,
+  sourceDecimals: number,
+  destinationDecimals: number,
+  feeBps: number,
+): InversePlan {
+  assertDecimals(sourceDecimals);
+  assertDecimals(destinationDecimals);
+  if (targetDestinationAmount <= 0n) {
+    fail("InvalidAmount", "target destination amount must be positive");
+  }
+  if (!Number.isInteger(feeBps) || feeBps < 0 || feeBps > MAX_FEE_BPS) {
+    fail("FeeTooHigh", `${String(feeBps)} basis points is past the cap of ${String(MAX_FEE_BPS)}`);
+  }
+
+  let requiredNetSource: bigint;
+  if (sourceDecimals >= destinationDecimals) {
+    const scale = pow10(sourceDecimals - destinationDecimals);
+    if (targetDestinationAmount > MAX_UINT256 / scale) {
+      fail("DecimalOverflow", "target destination amount overflows uint256 in source units");
+    }
+    requiredNetSource = targetDestinationAmount * scale;
+  } else {
+    const factor = pow10(destinationDecimals - sourceDecimals);
+    requiredNetSource = (targetDestinationAmount + factor - 1n) / factor;
+  }
+
+  // `netRaw(A) = A - floor(A * feeBps / 10_000) = ceil(A * keep / 10_000)`.
+  // `ceil(A * keep / 10_000) >= R` iff `A * keep >= (R - 1) * 10_000 + 1`, so the minimal integer
+  // `A` is `ceil(((R - 1) * 10_000 + 1) / keep) = ((R - 1) * 10_000 + keep) / keep`.
+  const keep = BPS_DENOMINATOR - BigInt(feeBps);
+  const requiredInput = ((requiredNetSource - 1n) * BPS_DENOMINATOR + keep) / keep;
+  if (requiredInput > MAX_UINT256) {
+    fail("DecimalOverflow", "required source input overflows uint256");
+  }
+
+  const { fee, net: netRaw } = applyFee(requiredInput, feeBps);
+  const net = floorToRepresentable(netRaw, sourceDecimals, destinationDecimals);
+  const destinationAmount = convertDecimalsExact(net, sourceDecimals, destinationDecimals);
+  const grossAmount = fee + net;
+  return {
+    requiredInput,
+    grossAmount,
+    fee,
+    net,
+    dust: requiredInput - grossAmount,
+    destinationAmount,
+  };
+}
+
 /**
  * Format a base unit amount as a canonical decimal string, without a rounding surprise.
  *
