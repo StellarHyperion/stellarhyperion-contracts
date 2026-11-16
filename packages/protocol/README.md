@@ -27,7 +27,7 @@ against itself.
 | `flow`        | Sliding flow windows, the same arithmetic both routers run                             |
 | `cctp`        | Reading CCTP V2 messages, which is all this side ever does with them                   |
 | `chains`      | Chains, rpc endpoints, explorers, CCTP domains, finality                               |
-| `quotes`      | Pricing a rail locally, so an app can render four of them while somebody types         |
+| `quotes`      | Local rail pricing, fee ladders, and shared-flow batch simulation                      |
 | `deployments` | Deployment records, and a loader that checks them instead of casting them              |
 | `registry`    | Assets and rail contracts per chain, with provenance attached                          |
 | `abi`         | Generated from the Foundry build, behind its own entry point                           |
@@ -107,3 +107,16 @@ and Sepolia entries ship as defaults and are marked `confirmed: false`, because 
 everywhere else" is a reasonable inference and not a reading. Stellar's CCTP addresses are absent
 entirely rather than guessed; they come from the deployment record. Shipping a plausible address as
 if it were verified is how somebody loses money to a deploy script that looked fine.
+
+## Batch planning against shared flow budgets
+
+`planSharedFlowBatch` extends local simulation so sequential transfers consume a shared virtual
+`flowAvailable` budget (plus optional `sharedTokenFlowCeiling` and `sharedSenderAllowance`) without
+mutating the caller's `RouterSnapshot`:
+
+- Earlier planned transfers deduct `netAmount` from the chosen route's remaining headroom,
+  preventing later items from reusing the same window allowance and automatically routing overflow
+  onto remaining eligible rails when unpinned.
+- Failed items follow explicit `failurePolicy` semantics (`exclude_failed`, `rollback_all`, or
+  `halt_after_failure`) and expose aggregate consumed and remaining budgets per route.
+- Single-transfer outputs remain field-for-field compatible with `planQuotes` and `quoteBatch`.
