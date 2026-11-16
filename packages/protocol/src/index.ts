@@ -54,5 +54,8 @@ export * from "./quotes.js";
 // Deployment records, and a loader that checks them instead of casting them.
 export * from "./deployments.js";
 
+// Read-only cross-repository deployment-copy consistency checks.
+export * from "./deployment-consistency.js";
+
 // Assets and rail contracts per chain, with provenance attached.
 export * from "./registry/index.js";

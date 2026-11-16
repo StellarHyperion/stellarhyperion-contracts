@@ -64,3 +64,21 @@ npx vitest run test/live-transfer.test.ts
 Preserve the proof file across interrupted runs. Never delete a pending source hash and blindly send again. A confirmed Stellar transaction alone does not establish destination delivery. Require the indexer's matching confirmed bridge/token payment and the recipient's actual received-token balance. The additional opt-in `test/live-routes.test.ts` covers native XLM conversion and CCTP destination payouts; see the frontend README for its explicit route/proof settings.
 
 For future contract changes, use the router's existing queue/execute upgrade path with its current admin and timelock. Adapter upgrades require the adapter admin. Mapping/link setters can overwrite configuration; read current values and confirm the intended token/network before signing.
+
+## Cross-repository deployment-copy consistency checks
+
+Because `stellarhyperion-contracts`, `stellarhyperion-backend`, and `stellarhyperion-frontend` each carry a pinned deployment manifest, verify that all consumer copies match the canonical active record at explicit Git revisions before releasing or verifying an activation:
+
+```bash
+node script/stellar/check-copies.mjs \
+  --canonical deployments/stellar-testnet-phase1.json --canonical-rev b91c6ca \
+  --backend ../stellarhyperion-backend --backend-rev <backend-sha> \
+  --frontend ../stellarhyperion-frontend --frontend-rev <frontend-sha> \
+  --archive-dir deployments/archive
+```
+
+Consistency rules and operational guarantees:
+
+1. **Field-path and repository attribution**: Every mismatch reports the exact JSON field path (for example `$.networks.stellar-testnet.router`, `$.networks.stellar-testnet.tokens.USDC.flowLimit`, or `$.networks.stellar-testnet.wasmHashes.adapter-cctp`), the canonical vs consumer value, and the owning repository and revision (`stellarhyperion-backend@<rev>` or `stellarhyperion-frontend@<rev>`).
+2. **Archived vs active separation**: Records in `deployments/archive/*` (such as `stellar-testnet-2026-10-01.json`) are cataloged explicitly as `archived` and rejected if supplied as the active canonical source. If a backend or frontend copy matches an archived router or `archive/` path, the checker emits a dedicated `archived-manifest-in-consumer` finding naming the archive ID.
+3. **Strictly read-only**: Repository targets are inspected via `git -C <repo> show <rev>:<path>` without checking out or modifying consumer working trees, and rewrite/sync flags (`--write`, `--sync`, `--fix`, `--update`) are refused. Consumer updates always require a separate reviewed commit. EVM networks and unvalidated rails remain gated (`gated-unvalidated`).

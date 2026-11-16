@@ -100,6 +100,23 @@ else
   check "token flow limit" "$(tfield flow_limit)" "$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const t=d.networks[process.argv[2]].tokens;process.stdout.write(t[Object.keys(t)[0]].flowLimit)' "$RECORD" "$CHAIN_KEY")"
 fi
 
+if [ -n "${HYPERION_BACKEND_COPY:-}" ] || [ -n "${HYPERION_FRONTEND_COPY:-}" ]; then
+  note "cross-repository deployment copies (read-only)"
+  COPY_ARGS=(--canonical "$RECORD")
+  if [ -n "${HYPERION_CANONICAL_REV:-}" ]; then
+    COPY_ARGS+=(--canonical-rev "$HYPERION_CANONICAL_REV")
+  fi
+  if [ -n "${HYPERION_BACKEND_COPY:-}" ]; then
+    COPY_ARGS+=(--backend "$HYPERION_BACKEND_COPY" --backend-rev "${HYPERION_BACKEND_REV:-working-tree}")
+  fi
+  if [ -n "${HYPERION_FRONTEND_COPY:-}" ]; then
+    COPY_ARGS+=(--frontend "$HYPERION_FRONTEND_COPY" --frontend-rev "${HYPERION_FRONTEND_REV:-working-tree}")
+  fi
+  if ! node "$SCRIPT_DIR/check-copies.mjs" "${COPY_ARGS[@]}"; then
+    problems=$((problems + 1))
+  fi
+fi
+
 printf '\n'
 if [ "$problems" -eq 0 ]; then
   printf '\033[32mEverything on chain matches the record.\033[0m\n'
