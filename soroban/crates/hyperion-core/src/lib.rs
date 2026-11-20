@@ -28,8 +28,8 @@ pub mod strkey;
 
 pub use address::{AddressKind, StellarDestination};
 pub use amount::{
-    convert_decimals, convert_decimals_exact, floor_to_representable, scale_amount, Conversion,
-    FeeSplit,
+    compute_quote_fingerprint, convert_decimals, convert_decimals_exact, floor_to_representable,
+    scale_amount, Conversion, FeeSplit,
 };
 pub use axelar::{
     verify_inbound_reconciliation, verify_outbound_reconciliation, CandidateInboundPayment,

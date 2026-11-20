@@ -1,11 +1,11 @@
 //! The outbound leg: money leaving Stellar.
 
 use hyperion_core::{HyperionError, RouteKind};
-use soroban_sdk::{testutils::Address as _, Address, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, String};
 
 use super::doubles::{evm_destination, not_an_evm_address};
 use super::setup::{World, EVM_DECIMALS, FLOW_LIMIT, HUNDRED};
-use crate::types::{AdminAction, Destination, OutboundRequest, RouteConfig};
+use crate::types::{AdminAction, Destination, OutboundPreconditions, OutboundRequest, RouteConfig};
 
 fn dest(world: &World) -> Destination {
     Destination {
@@ -692,6 +692,264 @@ fn hostile_fee_adapter_credit_and_extra_sender_debit_are_atomic_refusals() {
         Err(Ok(HyperionError::InvalidAmount))
     );
     assert_eq!(fot.balance(&w.user), HUNDRED);
+}
+
+#[test]
+fn quote_fingerprint_binds_configuration_and_rejection_is_before_debit() {
+    let w = World::new();
+    let fp = w
+        .router()
+        .quote_fingerprint(&RouteKind::Cctp, &w.token_id, &EVM_DECIMALS);
+
+    let req = OutboundRequest {
+        token: w.token_id.clone(),
+        amount: HUNDRED,
+        route: RouteKind::Cctp,
+        destination: dest(&w),
+        destination_decimals: EVM_DECIMALS,
+        min_destination_amount: 0,
+    };
+
+    // Correct fingerprint succeeds
+    let pre = OutboundPreconditions {
+        quote_fingerprint: Some(fp.clone()),
+        deadline: None,
+    };
+    let nonce = w
+        .router()
+        .bridge_out_with_preconditions(&w.user, &req, &pre);
+    assert_eq!(nonce, 1);
+
+    // Legacy / absent fingerprint succeeds
+    let legacy_pre = OutboundPreconditions::default();
+    let nonce_legacy = w
+        .router()
+        .bridge_out_with_preconditions(&w.user, &req, &legacy_pre);
+    assert_eq!(nonce_legacy, 2);
+
+    // Mismatched fingerprint fails BEFORE any token debit
+    let user_before = w.token().balance(&w.user);
+    let wrong_fp = BytesN::from_array(&w.env, &[42u8; 32]);
+    let wrong_pre = OutboundPreconditions {
+        quote_fingerprint: Some(wrong_fp),
+        deadline: None,
+    };
+    let res = w
+        .router()
+        .try_bridge_out_with_preconditions(&w.user, &req, &wrong_pre);
+    assert_eq!(res, Err(Ok(HyperionError::FingerprintMismatch)));
+    assert_eq!(w.token().balance(&w.user), user_before);
+    assert_eq!(w.router().last_out_nonce(), 2);
+
+    // Changing fee changes the fingerprint so original fp now fails
+    w.run_action(AdminAction::SetFeeBps(20));
+    let res_stale = w
+        .router()
+        .try_bridge_out_with_preconditions(&w.user, &req, &pre);
+    assert_eq!(res_stale, Err(Ok(HyperionError::FingerprintMismatch)));
+    assert_eq!(w.token().balance(&w.user), user_before);
+}
+
+#[test]
+fn sender_specified_expiry_refuses_expired_requests_before_nonce_or_flow_changes() {
+    let w = World::new();
+    let req = OutboundRequest {
+        token: w.token_id.clone(),
+        amount: HUNDRED,
+        route: RouteKind::Cctp,
+        destination: dest(&w),
+        destination_decimals: EVM_DECIMALS,
+        min_destination_amount: 0,
+    };
+
+    let user_before = w.token().balance(&w.user);
+
+    // Future ledger deadline succeeds
+    let future_ledger = (w.env.ledger().sequence() + 10) as u64;
+    let pre_valid = OutboundPreconditions {
+        quote_fingerprint: None,
+        deadline: Some(future_ledger),
+    };
+    let nonce = w
+        .router()
+        .bridge_out_with_preconditions(&w.user, &req, &pre_valid);
+    assert_eq!(nonce, 1);
+
+    // Expired ledger deadline (< current ledger sequence) fails before nonce or flow change
+    let past_ledger = (w.env.ledger().sequence() - 1) as u64;
+    let pre_expired_ledger = OutboundPreconditions {
+        quote_fingerprint: None,
+        deadline: Some(past_ledger),
+    };
+    let res = w
+        .router()
+        .try_bridge_out_with_preconditions(&w.user, &req, &pre_expired_ledger);
+    assert_eq!(res, Err(Ok(HyperionError::RequestExpired)));
+    assert_eq!(w.router().last_out_nonce(), 1);
+    assert_eq!(w.token().balance(&w.user), user_before - HUNDRED);
+
+    // Future timestamp deadline succeeds
+    let future_ts = w.env.ledger().timestamp() + 300;
+    let pre_ts_valid = OutboundPreconditions {
+        quote_fingerprint: None,
+        deadline: Some(future_ts),
+    };
+    let nonce_ts = w
+        .router()
+        .bridge_out_with_preconditions(&w.user, &req, &pre_ts_valid);
+    assert_eq!(nonce_ts, 2);
+
+    // Expired timestamp deadline fails before nonce or flow changes
+    let flow_after_valid = w.router().flow_available(&w.token_id, &RouteKind::Cctp);
+    let past_ts = w.env.ledger().timestamp() - 1;
+    let pre_expired_ts = OutboundPreconditions {
+        quote_fingerprint: None,
+        deadline: Some(past_ts),
+    };
+    let res_ts = w
+        .router()
+        .try_bridge_out_with_preconditions(&w.user, &req, &pre_expired_ts);
+    assert_eq!(res_ts, Err(Ok(HyperionError::RequestExpired)));
+    assert_eq!(w.router().last_out_nonce(), 2);
+    assert_eq!(
+        w.router().flow_available(&w.token_id, &RouteKind::Cctp),
+        flow_after_valid
+    );
+}
+
+#[test]
+fn bounded_batch_dispatch_issues_unique_nonces_and_is_atomic() {
+    let w = World::new();
+    let req1 = OutboundRequest {
+        token: w.token_id.clone(),
+        amount: HUNDRED,
+        route: RouteKind::Cctp,
+        destination: dest(&w),
+        destination_decimals: EVM_DECIMALS,
+        min_destination_amount: 0,
+    };
+    let req2 = OutboundRequest {
+        token: w.token_id.clone(),
+        amount: HUNDRED * 2,
+        route: RouteKind::Cctp,
+        destination: dest(&w),
+        destination_decimals: EVM_DECIMALS,
+        min_destination_amount: 0,
+    };
+
+    let mut requests = soroban_sdk::vec![&w.env];
+    requests.push_back(req1.clone());
+    requests.push_back(req2.clone());
+
+    // Exceeding max_total_amount fails before any dispatch
+    let res_exceed = w
+        .router()
+        .try_bridge_out_batch(&w.user, &requests, &(HUNDRED * 2));
+    assert_eq!(res_exceed, Err(Ok(HyperionError::BatchLimitExceeded)));
+    assert_eq!(w.router().last_out_nonce(), 0);
+
+    // Valid batch dispatches and assigns unique nonces 1 and 2
+    let nonces = w
+        .router()
+        .bridge_out_batch(&w.user, &requests, &(HUNDRED * 5));
+    assert_eq!(nonces.len(), 2);
+    assert_eq!(nonces.get(0).unwrap(), 1);
+    assert_eq!(nonces.get(1).unwrap(), 2);
+    assert_eq!(w.router().last_out_nonce(), 2);
+
+    // Atomicity test: second item fails slippage, entire batch rolls back
+    let user_before = w.token().balance(&w.user);
+    let mut bad_batch = soroban_sdk::vec![&w.env];
+    bad_batch.push_back(req1.clone());
+    let mut impossible_req = req2.clone();
+    impossible_req.min_destination_amount = 1_000_000_000_000; // impossible minimum
+    bad_batch.push_back(impossible_req);
+
+    let res_fail = w
+        .router()
+        .try_bridge_out_batch(&w.user, &bad_batch, &(HUNDRED * 5));
+    assert_eq!(res_fail, Err(Ok(HyperionError::SlippageExceeded)));
+    assert_eq!(w.router().last_out_nonce(), 2);
+    assert_eq!(w.token().balance(&w.user), user_before);
+}
+
+#[test]
+fn per_destination_flow_policy_respects_global_bounds_and_quotes_agree() {
+    let w = World::bare();
+    w.enable_every_route();
+    w.register_token(w.token_id.clone(), 7, FLOW_LIMIT);
+    w.fund_user(FLOW_LIMIT * 2);
+
+    let eth_chain = w.ethereum();
+    let dest_limit = HUNDRED; // 1 unit destination limit
+
+    // Destination limit initially None
+    assert_eq!(
+        w.router()
+            .destination_flow_limit(&w.token_id, &RouteKind::Cctp, &eth_chain),
+        None
+    );
+
+    // Set destination flow limit via timelock
+    w.run_action(AdminAction::SetDestinationFlowLimit(
+        w.token_id.clone(),
+        RouteKind::Cctp,
+        eth_chain.clone(),
+        dest_limit,
+    ));
+
+    assert_eq!(
+        w.router()
+            .destination_flow_limit(&w.token_id, &RouteKind::Cctp, &eth_chain),
+        Some(dest_limit)
+    );
+    assert_eq!(
+        w.router()
+            .effective_destination_flow_limit(&w.token_id, &RouteKind::Cctp, &eth_chain),
+        dest_limit
+    );
+
+    // Quotes and dispatch report same binding limit
+    // Sending HUNDRED * 2 exceeds the dest limit (HUNDRED)
+    let quotes = w.router().quote_routes_for_destination(
+        &w.token_id,
+        &(HUNDRED * 2),
+        &EVM_DECIMALS,
+        &Some(eth_chain.clone()),
+    );
+    let cctp_quote = quotes.get(0).unwrap();
+    assert!(!cctp_quote.available);
+    assert_eq!(
+        cctp_quote.reason,
+        HyperionError::DestinationFlowLimitExceeded as u32
+    );
+    assert_eq!(cctp_quote.flow_available, dest_limit);
+
+    // Dispatch also fails with DestinationFlowLimitExceeded
+    let req = OutboundRequest {
+        token: w.token_id.clone(),
+        amount: HUNDRED * 2,
+        route: RouteKind::Cctp,
+        destination: dest(&w),
+        destination_decimals: EVM_DECIMALS,
+        min_destination_amount: 0,
+    };
+    let res = w.router().try_bridge_out(&w.user, &req);
+    assert_eq!(res, Err(Ok(HyperionError::DestinationFlowLimitExceeded)));
+
+    // Lowering destination limit immediately without timelock
+    w.router().lower_destination_flow_limit(
+        &w.admin,
+        &w.token_id,
+        &RouteKind::Cctp,
+        &eth_chain,
+        &(dest_limit / 2),
+    );
+    assert_eq!(
+        w.router()
+            .effective_destination_flow_limit(&w.token_id, &RouteKind::Cctp, &eth_chain),
+        dest_limit / 2
+    );
 }
 
 #[test]

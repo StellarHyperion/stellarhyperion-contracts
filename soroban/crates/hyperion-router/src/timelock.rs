@@ -138,6 +138,7 @@ fn validate(action: &AdminAction) -> Result<(), HyperionError> {
         AdminAction::RaiseTokenFlowLimit(_, limit)
         | AdminAction::SetRouteFlowLimit(_, _, limit)
         | AdminAction::SetRouteMaxSingleTransfer(_, limit)
+        | AdminAction::SetDestinationFlowLimit(_, _, _, limit)
             if *limit < 0 =>
         {
             return Err(HyperionError::InvalidLimit)
@@ -297,6 +298,12 @@ pub fn apply(env: &Env, action: &AdminAction) -> Result<(), HyperionError> {
                 max_single_transfer: *limit,
             };
             storage::set_route_config(env, *route, &route_cfg);
+        }
+        AdminAction::SetDestinationFlowLimit(token, route, chain, limit) => {
+            if *limit < 0 {
+                return Err(HyperionError::InvalidLimit);
+            }
+            storage::set_destination_flow_limit(env, token, *route, chain, *limit);
         }
     }
     Ok(())

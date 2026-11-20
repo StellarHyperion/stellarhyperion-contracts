@@ -194,6 +194,7 @@ pub enum AdminAction {
     Upgrade(BytesN<32>),
     SetRouteConfig(RouteKind, RouteConfig),
     SetRouteMaxSingleTransfer(RouteKind, i128),
+    SetDestinationFlowLimit(Address, RouteKind, String, i128),
     // Authorize a fixed, bounded migration only after the ordinary review delay.
     BeginStorageMigration(u32),
 }
@@ -285,6 +286,26 @@ pub struct OutboundRequest {
     // Floor on what the recipient must end up with, in the destination base. Zero accepts
     // whatever the rate gives.
     pub min_destination_amount: i128,
+}
+
+/// Optional preconditions validated before dispatch.
+#[contracttype]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct OutboundPreconditions {
+    /// Expected 32-byte hash binding route, adapter, fee, and precision. If present and mismatched,
+    /// the transfer is refused before any token debit or state change.
+    pub quote_fingerprint: Option<BytesN<32>>,
+    /// Ledger sequence or timestamp boundary after which the request is refused as expired.
+    pub deadline: Option<u64>,
+}
+
+/// A single transfer request within an atomic batch operation.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchOutboundItem {
+    pub request: OutboundRequest,
+    pub preconditions: OutboundPreconditions,
+    pub gas_amount: Option<i128>,
 }
 
 // Where an outbound transfer is going, in the form the caller supplies it.

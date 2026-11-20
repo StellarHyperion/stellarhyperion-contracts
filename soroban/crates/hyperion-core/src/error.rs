@@ -104,4 +104,12 @@ pub enum HyperionError {
     ProviderBudgetExceeded = 48,
     // The configured adapter has no supported read-only dispatch validation interface.
     AdapterMethodUnavailable = 49,
+    /// The quote configuration (adapter, fee, precision) changed since reviewed.
+    FingerprintMismatch = 50,
+    /// The request expired before execution.
+    RequestExpired = 51,
+    /// The batch size or aggregate transfer amount exceeds configured bounds.
+    BatchLimitExceeded = 52,
+    /// The transfer amount exceeds the destination-specific flow limit for this window.
+    DestinationFlowLimitExceeded = 53,
 }

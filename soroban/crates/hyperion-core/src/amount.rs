@@ -1,5 +1,6 @@
 use crate::error::HyperionError;
 use crate::{BPS_DENOMINATOR, MAX_FEE_BPS};
+use soroban_sdk::xdr::ToXdr;
 
 /// Largest decimal exponent we will scale by. i128 tops out a little above 1.7e38, so 38 is
 /// the point past which no useful amount survives a scale-up anyway.
@@ -223,6 +224,30 @@ pub fn assert_exact_transfer(
         return Err(HyperionError::InvalidAmount);
     }
     Ok(())
+}
+
+/// Compute a 32-byte deterministic fingerprint binding an outbound quote to its exact
+/// route, adapter contract, fee rate, source decimals, and destination decimals.
+pub fn compute_quote_fingerprint(
+    env: &soroban_sdk::Env,
+    route: crate::RouteKind,
+    adapter: &soroban_sdk::Address,
+    fee_bps: u32,
+    source_decimals: u32,
+    destination_decimals: u32,
+) -> soroban_sdk::BytesN<32> {
+    env.crypto()
+        .sha256(
+            &(
+                route as u32,
+                adapter.clone(),
+                fee_bps,
+                source_decimals,
+                destination_decimals,
+            )
+                .to_xdr(env),
+        )
+        .into()
 }
 
 #[cfg(test)]

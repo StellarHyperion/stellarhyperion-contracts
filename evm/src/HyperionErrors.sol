@@ -87,3 +87,9 @@ error ProviderBudgetExceeded();
 
 /// @notice The adapter lacks a usable local dispatch validation method.
 error AdapterMethodUnavailable();
+
+// Outbound preconditions, batching, and destination flow controls.
+error FingerprintMismatch();
+error RequestExpired();
+error BatchLimitExceeded();
+error DestinationFlowLimitExceeded();

@@ -34,6 +34,9 @@ pub enum DataKey {
     /// Per-route ceiling, overriding the token-wide one when present.
     RouteFlowLimit(Address, RouteKind),
     Flow(Address, RouteKind),
+    /// Per-destination ceiling within a token and route.
+    DestinationFlowLimit(Address, RouteKind, soroban_sdk::String),
+    DestinationFlow(Address, RouteKind, soroban_sdk::String),
     Transfer(u64),
     /// Replay guard. Presence means this message has already been acted on.
     ///
@@ -286,6 +289,86 @@ pub fn flow_window(env: &Env, token: &Address, route: RouteKind) -> FlowWindow {
 
 pub fn set_flow_window(env: &Env, token: &Address, route: RouteKind, window: &FlowWindow) {
     let key = DataKey::Flow(token.clone(), route);
+    env.storage().persistent().set(&key, window);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn destination_flow_limit(
+    env: &Env,
+    token: &Address,
+    route: RouteKind,
+    chain: &soroban_sdk::String,
+) -> Option<i128> {
+    let key = DataKey::DestinationFlowLimit(token.clone(), route, chain.clone());
+    let limit = env.storage().persistent().get(&key);
+    if limit.is_some() {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    }
+    limit
+}
+
+pub fn set_destination_flow_limit(
+    env: &Env,
+    token: &Address,
+    route: RouteKind,
+    chain: &soroban_sdk::String,
+    limit: i128,
+) {
+    let key = DataKey::DestinationFlowLimit(token.clone(), route, chain.clone());
+    env.storage().persistent().set(&key, &limit);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn effective_destination_flow_limit(
+    env: &Env,
+    token: &Address,
+    route: RouteKind,
+    chain: &soroban_sdk::String,
+) -> Result<i128, HyperionError> {
+    let route_limit = effective_flow_limit(env, token, route)?;
+    match destination_flow_limit(env, token, route, chain) {
+        Some(dest_limit) => {
+            // A destination limit cannot bypass existing token-route limits
+            Ok(route_limit.min(dest_limit))
+        }
+        None => Ok(route_limit),
+    }
+}
+
+pub fn destination_flow_window(
+    env: &Env,
+    token: &Address,
+    route: RouteKind,
+    chain: &soroban_sdk::String,
+) -> FlowWindow {
+    let key = DataKey::DestinationFlow(token.clone(), route, chain.clone());
+    let window = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or_else(FlowWindow::empty);
+    if env.storage().persistent().has(&key) {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    }
+    window
+}
+
+pub fn set_destination_flow_window(
+    env: &Env,
+    token: &Address,
+    route: RouteKind,
+    chain: &soroban_sdk::String,
+    window: &FlowWindow,
+) {
+    let key = DataKey::DestinationFlow(token.clone(), route, chain.clone());
     env.storage().persistent().set(&key, window);
     env.storage()
         .persistent()

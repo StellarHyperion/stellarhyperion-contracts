@@ -62,6 +62,10 @@ export const GENERATED_EVM_ERROR_NAMES = [
   "RefundFailed",
   "ProviderBudgetExceeded",
   "AdapterMethodUnavailable",
+  "FingerprintMismatch",
+  "RequestExpired",
+  "BatchLimitExceeded",
+  "DestinationFlowLimitExceeded",
 ] as const;
 
 /** Four byte selector to error, for every error the compiled contracts can actually revert with. */
