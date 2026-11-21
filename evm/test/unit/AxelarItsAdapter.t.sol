@@ -30,6 +30,8 @@ import {
 import {
     AddressKind,
     Destination,
+    OutboundRequest,
+    PendingClaim,
     RouteKind,
     TokenMappingConflict,
     TokenMappingReport
@@ -1094,6 +1096,62 @@ contract AxelarItsAdapterTest is Fixture {
     function test_a_delivery_leaves_no_standing_allowance_behind() public {
         _deliver(COMMAND_ID, bob, DELIVERY);
         assertEq(usdc.allowance(address(adapter), address(router)), 0);
+    }
+
+    /// @dev This is the local GMP rehearsal: a router-funded dispatch crosses the real adapter
+    /// boundary, a forged source peer is rejected by ITS delivery, and an authenticated callback
+    /// still succeeds when the recipient is temporarily unable to receive the token. The router
+    /// parks that delivery as a recipient-bound claim, which can be settled after the recipient
+    /// becomes available. Keeping all three stages in one fixture prevents a mock callback from
+    /// accidentally proving only the adapter in isolation.
+    function test_authenticated_gmp_rehearsal_preserves_custody_and_parks_a_claim() public {
+        _setAdapter(RouteKind.AxelarIts, address(adapter));
+        _setRailReceiver(RouteKind.AxelarIts, address(adapter));
+
+        OutboundRequest memory request = _request(AMOUNT, RouteKind.AxelarIts);
+        request.token = address(usdc);
+        request.destinationDecimals = USDC_DECIMALS;
+
+        uint256 itsBefore = usdc.balanceOf(address(its));
+        vm.prank(alice);
+        router.bridgeOut(request);
+
+        assertEq(its.sentCount(), 1, "the authenticated adapter handed custody to ITS");
+        assertGt(usdc.balanceOf(address(its)), itsBefore);
+
+        bytes memory forgedPeer = bytes(G_ADDR);
+        vm.expectRevert(UnexpectedRailContract.selector);
+        its.deliver(
+            address(adapter),
+            COMMAND_ID,
+            AXELAR_STELLAR,
+            forgedPeer,
+            _outboundNote(bob, SOURCE_NONCE),
+            TOKEN_ID,
+            address(usdc),
+            DELIVERY
+        );
+
+        usdc.setBlocked(bob, true);
+        _deliver(COMMAND_ID, bob, DELIVERY);
+
+        assertEq(router.claimCount(), 1);
+        PendingClaim memory claim = router.pendingClaim(1);
+        assertEq(claim.recipient, bob);
+        assertEq(claim.amount, DELIVERY);
+        assertEq(uint8(claim.route), uint8(RouteKind.AxelarIts));
+        assertEq(claim.sourceChain, STELLAR);
+        assertEq(claim.sourceNonce, SOURCE_NONCE);
+        assertFalse(claim.settled);
+
+        usdc.setBlocked(bob, false);
+        router.settleClaim(1);
+
+        assertTrue(router.pendingClaim(1).settled);
+        assertEq(usdc.balanceOf(bob), DELIVERY);
+
+        vm.expectRevert(ReplayedMessage.selector);
+        _deliver(COMMAND_ID, bob, DELIVERY);
     }
 
     /// @dev Axelar's command id is unique per delivery and is what its own replay protection is
