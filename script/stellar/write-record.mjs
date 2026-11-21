@@ -92,6 +92,54 @@ function commit() {
 }
 
 /**
+ * Storage migration status for rollback feasibility.
+ *
+ * Written into the record so rollback-report.mjs can reason about schema compatibility without
+ * a live RPC call. The live chain value always takes precedence when --rpc is supplied; this
+ * field is the best available static evidence.
+ *
+ * HYPERION_SCHEMA_VERSION: integer (0–N) from get_migration_status.current_version after the
+ *   deployment has completed and been verified. Leave unset during initial deployment; the record
+ *   will carry an unknown schema version and rollback-report.mjs will request an --rpc fetch.
+ *
+ * HYPERION_ROLLBACK_SUPPORTED: "true" / "false" / unset. Set to "false" with
+ *   HYPERION_ROLLBACK_REASON when recording a one-way migration. If unset, the report tool
+ *   determines feasibility from the schema version. Explicit "false" always wins.
+ *
+ * HYPERION_ROLLBACK_REASON: required when HYPERION_ROLLBACK_SUPPORTED=false. Must describe
+ *   why rollback is not supported (e.g. "v3 storage migration completed").
+ */
+function storageMigration() {
+  const rawVersion = process.env.HYPERION_SCHEMA_VERSION;
+  const rawSupported = process.env.HYPERION_ROLLBACK_SUPPORTED;
+  const reason = process.env.HYPERION_ROLLBACK_REASON ?? null;
+
+  const schemaVersion = rawVersion !== undefined && rawVersion !== "" ? Number(rawVersion) : null;
+  if (schemaVersion !== null && (!Number.isInteger(schemaVersion) || schemaVersion < 0)) {
+    throw new Error(`HYPERION_SCHEMA_VERSION must be a non-negative integer, got "${rawVersion}"`);
+  }
+
+  if (rawSupported === "false") {
+    if (!reason) {
+      throw new Error(
+        "HYPERION_ROLLBACK_REASON is required when HYPERION_ROLLBACK_SUPPORTED=false",
+      );
+    }
+    return { schemaVersion, rollbackSupported: false, reason };
+  }
+  if (rawSupported === "true") {
+    return { schemaVersion, rollbackSupported: true };
+  }
+  if (rawSupported !== undefined && rawSupported !== "") {
+    throw new Error(
+      `HYPERION_ROLLBACK_SUPPORTED must be "true", "false", or unset, got "${rawSupported}"`,
+    );
+  }
+  // Not set — omit the boolean so rollback-report.mjs derives it from the schema version.
+  return schemaVersion !== null ? { schemaVersion } : null;
+}
+
+/**
  * Lifecycle status of the record. Only two values exist on purpose: a record is either the live
  * deployment or a retired one that points at its successor. Anything else is a typo we refuse.
  */
@@ -176,6 +224,7 @@ const deployment = {
   },
   commit: commit(),
   ...lifecycle(),
+  ...(storageMigration() !== null ? { storageMigration: storageMigration() } : {}),
 
   // Phase two reads these, and a reviewer checks them against the chain. The validator ignores
   // fields it does not know about, which is what lets a record carry handover state as well as
