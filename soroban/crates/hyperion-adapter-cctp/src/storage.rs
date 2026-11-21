@@ -21,6 +21,8 @@ pub enum DataKey {
     Chain(u32),
     /// Per destination, who is allowed to broadcast the message over there.
     Caller(u32),
+    /// Per source domain, the explicitly configured remote CCTP peer that may emit messages.
+    RemoteSender(u32),
     /// `(source domain, the remote token that was burned)` to the local asset Circle mints.
     ///
     /// This doubles as the inbound allowlist. An unmapped pair is refused, which is the correct
@@ -123,6 +125,25 @@ pub fn set_link(env: &Env, chain: &String, domain: u32, caller: &BytesN<32>) {
     env.storage()
         .persistent()
         .extend_ttl(&caller_key, BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn remote_sender(env: &Env, domain: u32) -> Option<BytesN<32>> {
+    let key = DataKey::RemoteSender(domain);
+    let found: Option<BytesN<32>> = env.storage().persistent().get(&key);
+    if found.is_some() {
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
+    }
+    found
+}
+
+pub fn set_remote_sender(env: &Env, domain: u32, remote_sender: &BytesN<32>) {
+    let key = DataKey::RemoteSender(domain);
+    env.storage().persistent().set(&key, remote_sender);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
 }
 
 pub fn asset(env: &Env, domain: u32, burn_token: &BytesN<32>) -> Option<Address> {

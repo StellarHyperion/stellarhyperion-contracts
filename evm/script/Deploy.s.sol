@@ -80,7 +80,9 @@ contract Deploy is DeployConfig {
         );
         console.log("router              ", address(router));
 
-        cctp = new CctpAdapter(address(router), rails.cctpTokenMessenger, token.token, deployer);
+        cctp = new CctpAdapter(
+            address(router), rails.cctpTokenMessenger, rails.cctpMessageTransmitter, token.token, deployer
+        );
         console.log("cctp adapter        ", address(cctp));
 
         // Once only, and the one that matters most. The mint recipient is who Circle credits on

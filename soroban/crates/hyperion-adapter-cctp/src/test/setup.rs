@@ -209,6 +209,10 @@ impl World {
             &ETHEREUM_DOMAIN,
             &BytesN::from_array(&self.env, &[0u8; 32]),
         );
+        self.adapter().set_remote_sender(
+            &ETHEREUM_DOMAIN,
+            &BytesN::from_array(&self.env, &[0xE1u8; 32]),
+        );
     }
 
     pub fn fund_user(&self, amount: i128) {

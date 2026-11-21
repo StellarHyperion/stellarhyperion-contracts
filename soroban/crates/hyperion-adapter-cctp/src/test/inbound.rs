@@ -245,6 +245,27 @@ fn a_source_domain_the_admin_never_linked_is_refused() {
 }
 
 #[test]
+fn forged_header_or_burn_sender_is_refused() {
+    let w = World::new();
+
+    let mut header = w.spec(ARRIVING, 34, w.hook_to_recipient());
+    header.sender = [0xDEu8; 32];
+    assert_eq!(
+        w.adapter()
+            .try_receive(&w.relayer, &header.encode(&w.env), &w.attestation()),
+        Err(Ok(HyperionError::UnexpectedRailContract))
+    );
+
+    let mut body = w.spec(ARRIVING, 35, w.hook_to_recipient());
+    body.message_sender = [0xDEu8; 32];
+    assert_eq!(
+        w.adapter()
+            .try_receive(&w.relayer, &body.encode(&w.env), &w.attestation()),
+        Err(Ok(HyperionError::UnexpectedRailContract))
+    );
+}
+
+#[test]
 fn a_burn_token_nobody_mapped_is_refused() {
     let w = World::new();
     let mut spec = w.spec(ARRIVING, 34, w.hook_to_recipient());

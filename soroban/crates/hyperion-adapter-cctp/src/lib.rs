@@ -367,6 +367,9 @@ impl CctpAdapter {
 
         let source_chain =
             storage::chain_of(&env, msg.source_domain).ok_or(HyperionError::UnknownChain)?;
+        let remote_sender = storage::remote_sender(&env, msg.source_domain)
+            .ok_or(HyperionError::RailNotConfigured)?;
+        cctp::verify_remote_sender(&remote_sender, &msg.sender, &burn.message_sender)?;
         let token = storage::asset(&env, msg.source_domain, &burn.burn_token)
             .ok_or(HyperionError::TokenNotMapped)?;
 
@@ -610,6 +613,25 @@ impl CctpAdapter {
     }
 
     /// Record which local asset Circle mints for a given remote token.
+    /// Configure the remote CCTP peer allowed to emit inbound messages for a linked domain.
+    /// This is independent from destination-caller configuration and must be commissioned
+    /// explicitly before inbound receive is enabled.
+    pub fn set_remote_sender(
+        env: Env,
+        domain: u32,
+        remote_sender: BytesN<32>,
+    ) -> Result<(), HyperionError> {
+        require_admin(&env)?;
+        if storage::chain_of(&env, domain).is_none() {
+            return Err(HyperionError::UnknownChain);
+        }
+        if remote_sender == BytesN::from_array(&env, &[0u8; 32]) {
+            return Err(HyperionError::ZeroAddressKey);
+        }
+        storage::set_remote_sender(&env, domain, &remote_sender);
+        Ok(())
+    }
+
     pub fn map_asset(
         env: Env,
         domain: u32,
