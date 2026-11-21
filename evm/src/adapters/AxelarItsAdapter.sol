@@ -270,11 +270,10 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
     /// the call that paid. Without this the refund bounces and the money is gone, so the door has
     /// to be open even though nothing here ever wants native currency.
     ///
-    /// What arrives this way is swept to the router by the next `dispatch`, where it leaves as
-    /// change to that transfer's sender. That is not the person who overpaid, and pretending
-    /// otherwise would mean keeping a ledger of gas refunds per transfer, off a rail that does
-    /// not tell us which transfer a refund belongs to. Approximately returned beats precisely
-    /// stranded.
+    /// What arrives this way is kept separate from the next dispatch. Axelar does not identify
+    /// the transfer that a later refund belongs to, so forwarding the whole balance would let a
+    /// subsequent sender receive somebody else's refund. Only the refund created by the current
+    /// provider call is returned to its current router caller.
     /// @notice Accepts the gas Axelar refunds after a delivery cost less than it was paid for.
     receive() external payable {}
 
@@ -391,6 +390,7 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
         emit TransferIntentRecorded(intentId, destinationBinding, tokenId, token, amount, nonce, sender);
 
         IERC20(token).forceApprove(address(ITS), amount);
+        uint256 balanceBeforeProvider = address(this).balance - msg.value;
         ITS.interchainTransfer{value: msg.value}(
             tokenId,
             peer.axelarChain,
@@ -400,9 +400,11 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
             msg.value
         );
 
-        // ITS refunds what the destination gas market did not want, and none of it is this
-        // contract's to keep.
-        _refund();
+        // ITS refunds what the destination gas market did not want. Measure from the balance
+        // after accepting this call's value so a late, unattributed refund already held by the
+        // adapter cannot be redirected to this dispatch's sender.
+        uint256 providerRefund = address(this).balance - balanceBeforeProvider;
+        _refund(providerRefund);
 
         // ITS does not hand back a message id. The delivery is identified by the log Axelar's
         // gateway writes in this same transaction, which the indexer reads, so inventing a value
@@ -930,10 +932,9 @@ contract AxelarItsAdapter is IRailAdapter, IInterchainTokenExecutable, Ownable2S
         return (address(ITS), address(GAS_SERVICE));
     }
 
-    function _refund() private {
-        uint256 balance = address(this).balance;
-        if (balance == 0) return;
-        (bool sent,) = payable(ROUTER).call{value: balance}("");
+    function _refund(uint256 amount) private {
+        if (amount == 0) return;
+        (bool sent,) = payable(ROUTER).call{value: amount}("");
         if (!sent) revert RefundFailed();
     }
 

@@ -1275,10 +1275,9 @@ contract AxelarItsAdapterTest is Fixture {
         assertEq(address(adapter).balance, 0.05 ether);
     }
 
-    /// @dev And then it leaves. The next transfer sweeps it to the router, which pays it out as
-    /// change. Not to the person who overpaid, which is the honest cost of a rail that does not
-    /// say which transfer a refund belongs to.
-    function test_a_late_gas_refund_leaves_on_the_next_transfer() public {
+    /// @dev A late refund has no transfer binding. The next dispatch must not sweep it to an
+    /// unrelated sender as change.
+    function test_a_late_gas_refund_is_not_redirected_to_the_next_sender() public {
         vm.deal(address(adapter), 0.05 ether);
         _fund(AMOUNT);
         uint256 before = address(router).balance;
@@ -1286,8 +1285,8 @@ contract AxelarItsAdapterTest is Fixture {
         vm.prank(address(router));
         adapter.dispatch(address(usdc), AMOUNT, _dest(G_ADDR), NONCE);
 
-        assertEq(address(adapter).balance, 0);
-        assertEq(address(router).balance, before + 0.05 ether);
+        assertEq(address(adapter).balance, 0.05 ether);
+        assertEq(address(router).balance, before);
     }
 
     function test_a_top_up_of_nothing_is_refused() public {
