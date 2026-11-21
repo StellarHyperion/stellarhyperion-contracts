@@ -96,6 +96,21 @@ deployments/          deployment records, written by the scripts and validated o
 docs/                 the architecture document this was built from
 ```
 
+## CCTP message compatibility inspection
+
+Before a provider message is considered for execution, inspect its raw bytes without signing or
+broadcasting anything:
+
+```bash
+node script/stellar/inspect-cctp-message.mjs --message 0x...
+```
+
+The JSON report preserves the full 32-byte message nonce and complete hook bytes. It reports the
+message, burn, and Hyperion hook versions, domains, burn fields, destination kind, finality
+requirements, and byte offsets for truncated, oversized, or shape-incompatible fields. Unknown
+versions remain inspectable, but always set `executable` to `false`; the report is not an
+attestation verifier and does not replace Circle's transmitter.
+
 ## The test suites
 
 | Tree             | Tests | Run it with                               |
