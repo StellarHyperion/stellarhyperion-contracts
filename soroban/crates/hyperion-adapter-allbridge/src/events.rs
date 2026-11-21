@@ -100,3 +100,24 @@ pub struct Received {
 pub struct ValidatorSet {
     pub validator: BytesN<32>,
 }
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorRotationQueued {
+    pub epoch: u32,
+    pub activate_after: u64,
+    pub validator: BytesN<32>,
+}
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorRotationActivated {
+    pub epoch: u32,
+    pub validator: BytesN<32>,
+}
+
+#[contractevent(topics = ["hyperion", "abr_cfg"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmergencyStateChanged {
+    pub disabled: bool,
+}

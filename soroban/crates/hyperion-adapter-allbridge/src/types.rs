@@ -36,3 +36,47 @@ pub struct AssetLink {
     /// The destination token's address, left padded to thirty two bytes.
     pub receive_token: BytesN<32>,
 }
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ValidatorEpoch {
+    pub epoch: u32,
+    pub validator: BytesN<32>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingValidator {
+    pub epoch: u32,
+    pub validator: BytesN<32>,
+    pub activate_after: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OutboundRecord {
+    pub nonce: u64,
+    pub token: Address,
+    pub amount: i128,
+    pub destination_chain: String,
+    pub destination: BytesN<32>,
+    pub receive_token: BytesN<32>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProviderStatus {
+    Unknown,
+    Submitted,
+    Failed,
+    Unsupported,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecoveryDecision {
+    pub nonce: u64,
+    pub retry_allowed: bool,
+    pub reason: u32,
+    pub record: OutboundRecord,
+}

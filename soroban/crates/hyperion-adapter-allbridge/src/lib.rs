@@ -87,7 +87,7 @@ use soroban_sdk::{
 };
 
 use rail::{AllbridgeBridgeClient, AllbridgeMessengerClient, STELLAR_CHAIN_ID};
-use types::{AssetLink, ChainLane, Config};
+use types::{AssetLink, ChainLane, Config, OutboundRecord, PendingValidator, ProviderStatus, RecoveryDecision, ValidatorEpoch};
 
 #[contract]
 pub struct AllbridgeAdapter;
@@ -142,6 +142,9 @@ impl AllbridgeAdapter {
     ) -> Result<(), HyperionError> {
         caller.require_auth();
         let cfg = storage::config(&env)?;
+        if storage::emergency_disabled(&env) {
+            return Err(HyperionError::Unauthorized);
+        }
         if caller != cfg.router {
             return Err(HyperionError::Unauthorized);
         }
@@ -195,6 +198,18 @@ impl AllbridgeAdapter {
         // rather than assumed false, because an authorisation that disagrees by one boolean
         // fails at the bottom of somebody's transfer.
         let zero_fee = bridge_cfg.rebalancer == this;
+
+        storage::set_outbound(
+            &env,
+            &OutboundRecord {
+                nonce,
+                token: token.clone(),
+                amount,
+                destination_chain: destination_chain.clone(),
+                destination: destination.clone(),
+                receive_token: link.receive_token.clone(),
+            },
+        );
 
         env.authorize_as_current_contract(vec![
             &env,
@@ -277,10 +292,16 @@ impl AllbridgeAdapter {
     ) -> Result<u64, HyperionError> {
         caller.require_auth();
         let cfg = storage::config(&env)?;
+        if storage::emergency_disabled(&env) {
+            return Err(HyperionError::Unauthorized);
+        }
         if amount <= 0 {
             return Err(HyperionError::InvalidAmount);
         }
-        let validator = storage::validator(&env).ok_or(HyperionError::RailNotConfigured)?;
+        let validator = storage::validator_epoch(&env)
+            .map(|v| v.validator)
+            .or_else(|| storage::validator(&env))
+            .ok_or(HyperionError::RailNotConfigured)?;
         let source_chain =
             storage::chain_of(&env, source_chain_id).ok_or(HyperionError::UnknownChain)?;
         let _link =
@@ -694,7 +715,48 @@ impl AllbridgeAdapter {
     pub fn set_validator(env: Env, validator: BytesN<32>) -> Result<(), HyperionError> {
         let _ = require_admin(&env)?;
         storage::set_validator(&env, &validator);
+        if storage::validator_epoch(&env).is_none() {
+            storage::set_validator_epoch(&env, &ValidatorEpoch { epoch: 0, validator: validator.clone() });
+        }
         events::ValidatorSet { validator }.publish(&env);
+        Ok(())
+    }
+
+    pub fn queue_validator_rotation(env: Env, validator: BytesN<32>) -> Result<u64, HyperionError> {
+        let _ = require_admin(&env)?;
+        let current = storage::validator_epoch(&env).ok_or(HyperionError::RailNotConfigured)?;
+        if validator == current.validator || storage::pending_validator(&env).is_some() {
+            return Err(HyperionError::AlreadyConfigured);
+        }
+        let pending = PendingValidator {
+            epoch: current.epoch.saturating_add(1),
+            validator,
+            activate_after: env.ledger().timestamp().saturating_add(storage::VALIDATOR_ROTATION_DELAY),
+        };
+        let at = pending.activate_after;
+        events::ValidatorRotationQueued { epoch: pending.epoch, activate_after: at, validator: pending.validator.clone() }.publish(&env);
+        storage::set_pending_validator(&env, &pending);
+        Ok(at)
+    }
+
+    pub fn activate_validator_rotation(env: Env) -> Result<u32, HyperionError> {
+        let _ = require_admin(&env)?;
+        let pending = storage::pending_validator(&env).ok_or(HyperionError::RailNotConfigured)?;
+        if env.ledger().timestamp() < pending.activate_after {
+            return Err(HyperionError::TimelockNotReady);
+        }
+        let epoch = ValidatorEpoch { epoch: pending.epoch, validator: pending.validator.clone() };
+        storage::set_validator(&env, &pending.validator);
+        storage::set_validator_epoch(&env, &epoch);
+        storage::clear_pending_validator(&env);
+        events::ValidatorRotationActivated { epoch: epoch.epoch, validator: epoch.validator }.publish(&env);
+        Ok(epoch.epoch)
+    }
+
+    pub fn set_emergency_disabled(env: Env, disabled: bool) -> Result<(), HyperionError> {
+        let _ = require_admin(&env)?;
+        storage::set_emergency_disabled(&env, disabled);
+        events::EmergencyStateChanged { disabled }.publish(&env);
         Ok(())
     }
 
@@ -793,14 +855,29 @@ impl AllbridgeAdapter {
     /// would keep offering a rail that reverts on every attempt.
     pub fn rail_open(env: Env) -> Result<bool, HyperionError> {
         let cfg = storage::config(&env)?;
-        Ok(AllbridgeBridgeClient::new(&env, &cfg.bridge)
+        Ok(!storage::emergency_disabled(&env) && AllbridgeBridgeClient::new(&env, &cfg.bridge)
             .get_config()
             .can_swap)
     }
 
     /// Read the registered Allbridge validator public key.
     pub fn get_validator(env: Env) -> Result<BytesN<32>, HyperionError> {
-        storage::validator(&env).ok_or(HyperionError::RailNotConfigured)
+        storage::validator_epoch(&env).map(|v| v.validator).or_else(|| storage::validator(&env)).ok_or(HyperionError::RailNotConfigured)
+    }
+
+    pub fn validator_epoch(env: Env) -> Result<ValidatorEpoch, HyperionError> {
+        storage::validator_epoch(&env).ok_or(HyperionError::RailNotConfigured)
+    }
+
+    pub fn reconcile_outbound(env: Env, nonce: u64, status: ProviderStatus) -> Result<RecoveryDecision, HyperionError> {
+        let record = storage::outbound(&env, nonce).ok_or(HyperionError::UnknownChain)?;
+        let (retry_allowed, reason) = match status {
+            ProviderStatus::Failed => (true, 1),
+            ProviderStatus::Unknown => (false, 2),
+            ProviderStatus::Submitted => (false, 3),
+            ProviderStatus::Unsupported => (false, 4),
+        };
+        Ok(RecoveryDecision { nonce, retry_allowed, reason, record })
     }
 
     /// Check if an inbound message has already been processed.

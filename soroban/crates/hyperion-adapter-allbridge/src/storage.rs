@@ -3,11 +3,12 @@
 use hyperion_core::HyperionError;
 use soroban_sdk::{contracttype, Address, BytesN, Env, String};
 
-use crate::types::{AssetLink, ChainLane, Config};
+use crate::types::{AssetLink, ChainLane, Config, OutboundRecord, PendingValidator, ValidatorEpoch};
 
 /// Extend when there is less than a day of life left, and extend to thirty days.
 pub const BUMP_THRESHOLD: u32 = 17_280;
 pub const BUMP_TO: u32 = 518_400;
+pub const VALIDATOR_ROTATION_DELAY: u64 = 3_600;
 
 #[contracttype]
 #[derive(Clone)]
@@ -23,6 +24,10 @@ pub enum DataKey {
     Validator,
     /// Inbound message digests that have already been delivered to prevent replays.
     Processed(BytesN<32>),
+    ValidatorEpoch,
+    PendingValidator,
+    EmergencyDisabled,
+    Outbound(u64),
 }
 
 pub fn config(env: &Env) -> Result<Config, HyperionError> {
@@ -184,6 +189,47 @@ pub fn validator(env: &Env) -> Option<BytesN<32>> {
 pub fn set_validator(env: &Env, val: &BytesN<32>) {
     env.storage().instance().set(&DataKey::Validator, val);
     env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn validator_epoch(env: &Env) -> Option<ValidatorEpoch> {
+    env.storage().instance().get(&DataKey::ValidatorEpoch)
+}
+
+pub fn set_validator_epoch(env: &Env, value: &ValidatorEpoch) {
+    env.storage().instance().set(&DataKey::ValidatorEpoch, value);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn pending_validator(env: &Env) -> Option<PendingValidator> {
+    env.storage().instance().get(&DataKey::PendingValidator)
+}
+
+pub fn set_pending_validator(env: &Env, value: &PendingValidator) {
+    env.storage().instance().set(&DataKey::PendingValidator, value);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn clear_pending_validator(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingValidator);
+}
+
+pub fn emergency_disabled(env: &Env) -> bool {
+    env.storage().instance().get(&DataKey::EmergencyDisabled).unwrap_or(false)
+}
+
+pub fn set_emergency_disabled(env: &Env, value: bool) {
+    env.storage().instance().set(&DataKey::EmergencyDisabled, &value);
+    env.storage().instance().extend_ttl(BUMP_THRESHOLD, BUMP_TO);
+}
+
+pub fn outbound(env: &Env, nonce: u64) -> Option<OutboundRecord> {
+    env.storage().persistent().get(&DataKey::Outbound(nonce))
+}
+
+pub fn set_outbound(env: &Env, record: &OutboundRecord) {
+    let key = DataKey::Outbound(record.nonce);
+    env.storage().persistent().set(&key, record);
+    env.storage().persistent().extend_ttl(&key, BUMP_THRESHOLD, BUMP_TO);
 }
 
 pub fn is_processed(env: &Env, message_id: &BytesN<32>) -> bool {

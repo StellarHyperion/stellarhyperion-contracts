@@ -433,3 +433,16 @@ A disagreement is refused with an existing `HyperionError`; no new error numbers
 ---
 
 *This is a v0.1 planning document, not a security review. Treat every contract address, chain ID, and audit status above as something to re-verify against the linked sources at implementation time — this is a fast-moving part of the ecosystem, and Arc in particular is days old as of this writing.*
+### Allbridge validator epochs and recovery
+
+The development-only Allbridge adapter stores an explicit validator epoch. A replacement key is
+queued for a fixed delay and becomes active only through the separate activation call; signatures
+are always checked against the currently active epoch, so an old signature cannot be reinterpreted
+under a new validator. Emergency disable blocks both inbound and outbound acceptance while
+preserving already parked claims.
+
+Every outbound nonce records its original token, amount, destination, and receive token before the
+provider call. `reconcile_outbound` is a bounded read-only operator preflight: only a provider
+response explicitly marked failed permits a retry; unknown, submitted, and unsupported outcomes
+never authorize a second debit. This is local/development adapter behavior and does not activate
+Allbridge on the Stellar Testnet deployment.
