@@ -48,11 +48,19 @@ export * from "./flow.js";
 // Reading CCTP V2 messages, which is all this side ever does with them.
 export * from "./cctp.js";
 
+// Turning one raw router event (Soroban RPC XDR or an EVM log) into a typed, versioned record.
+export * from "./events.js";
+
+// The wire layouts and error tables as data, and a breaking-versus-compatible report between two sets.
+export * from "./wire-compat.js";
+
 // Chains, their rpc endpoints, their explorers and their CCTP domains.
 export * from "./chains.js";
 
 // Pricing a route locally so an app can render four of them while somebody types.
 export * from "./quotes.js";
+// Why a local quote came out the way it did: checks with their owning policy, and exact derivations.
+export * from "./quotes/explain.js";
 export * from "./route-health.js";
 
 // Reading a token registration diagnostic, which both chains answer in the same shape.

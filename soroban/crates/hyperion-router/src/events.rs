@@ -1,5 +1,5 @@
 use hyperion_core::RouteKind;
-use soroban_sdk::{contractevent, Address, BytesN, Env};
+use soroban_sdk::{contractevent, Address, BytesN, Env, EnvBase, IntoVal, Val};
 
 use crate::types::{
     ActionAuditStatus, AdminAction, CancelReason, Config, InboundRecord, MigrationStatus,
@@ -176,98 +176,170 @@ pub struct FlowLimitLowered {
     pub limit: i128,
 }
 
+#[cfg(test)]
 pub fn bridge_out(env: &Env, record: &TransferRecord) {
-    BridgeOut {
-        route: record.route,
-        sender: record.sender.clone(),
-        transfer: record.clone(),
-    }
-    .publish(env);
+    bridge_out_encoded(env, record.route, &record.sender, record.into_val(env));
+}
+
+pub(crate) fn bridge_out_encoded(env: &Env, route: RouteKind, sender: &Address, encoded: Val) {
+    <BridgeOut as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("out").into_val(env),
+        route.into_val(env),
+        sender.into_val(env),
+    ];
+    const KEYS: &[&str] = &["transfer"];
+    let values = [encoded];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn bridge_in(env: &Env, record: &InboundRecord) {
-    BridgeIn {
-        route: record.route,
-        recipient: record.recipient.clone(),
-        inbound: record.clone(),
-    }
-    .publish(env);
+    <BridgeIn as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("in").into_val(env),
+        (record.route).into_val(env),
+        (record.recipient).into_val(env),
+    ];
+    const KEYS: &[&str] = &["inbound"];
+    let values = [(record).into_val(env)];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
+#[cfg(test)]
 pub fn claim_parked(env: &Env, claim: &PendingClaim) {
-    ClaimParked {
-        recipient: claim.recipient.clone(),
-        token: claim.token.clone(),
-        claim: claim.clone(),
-    }
-    .publish(env);
+    claim_parked_encoded(env, &claim.recipient, &claim.token, claim.into_val(env));
+}
+
+pub(crate) fn claim_parked_encoded(env: &Env, recipient: &Address, token: &Address, encoded: Val) {
+    <ClaimParked as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("park").into_val(env),
+        recipient.into_val(env),
+        token.into_val(env),
+    ];
+    const KEYS: &[&str] = &["claim"];
+    let values = [encoded];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn claim_settled(env: &Env, claim: &PendingClaim, settled_by: &Address) {
-    ClaimSettled {
-        recipient: claim.recipient.clone(),
-        token: claim.token.clone(),
-        claim_id: claim.id,
-        amount: claim.amount,
-        settled_by: settled_by.clone(),
-    }
-    .publish(env);
+    <ClaimSettled as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("settled").into_val(env),
+        (claim.recipient).into_val(env),
+    ];
+    const KEYS: &[&str] = &["amount", "claim_id", "settled_by", "token"];
+    let values = [
+        (claim.amount).into_val(env),
+        (claim.id).into_val(env),
+        (settled_by).into_val(env),
+        (claim.token).into_val(env),
+    ];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn claim_payout_failure_v1(env: &Env, claim: &PendingClaim, reason: u32) {
-    ClaimPayoutFailureV1 {
-        claim_id: claim.id,
-        reason,
-        outstanding_amount: claim.amount,
-        recipient: claim.recipient.clone(),
-    }
-    .publish(env);
+    <ClaimPayoutFailureV1 as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::Symbol::new(env, "claim_failure_v1").into_val(env),
+        (claim.id).into_val(env),
+    ];
+    const KEYS: &[&str] = &["outstanding_amount", "reason", "recipient"];
+    let values = [
+        (claim.amount).into_val(env),
+        (reason).into_val(env),
+        (claim.recipient).into_val(env),
+    ];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn claim_archived(env: &Env, claim: &PendingClaim, settled_at: u64, archived_at: u64) {
-    ClaimArchived {
-        recipient: claim.recipient.clone(),
-        token: claim.token.clone(),
-        claim_id: claim.id,
-        amount: claim.amount,
-        source_nonce: claim.source_nonce,
-        claim: claim.clone(),
-        provenance: crate::storage::claim_provenance(env, claim.id),
-        settled_at,
-        archived_at,
-    }
-    .publish(env);
+    <ClaimArchived as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::Symbol::new(env, "claim_archived").into_val(env),
+        (claim.recipient).into_val(env),
+        (claim.token).into_val(env),
+    ];
+    const KEYS: &[&str] = &[
+        "amount",
+        "archived_at",
+        "claim",
+        "claim_id",
+        "provenance",
+        "settled_at",
+        "source_nonce",
+    ];
+    let values = [
+        (claim.amount).into_val(env),
+        (archived_at).into_val(env),
+        (claim).into_val(env),
+        (claim.id).into_val(env),
+        (crate::storage::claim_provenance(env, claim.id)).into_val(env),
+        (settled_at).into_val(env),
+        (claim.source_nonce).into_val(env),
+    ];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn paused(env: &Env, by: &Address, state: bool) {
-    PauseSet {
-        by: by.clone(),
-        paused: state,
-    }
-    .publish(env);
+    <PauseSet as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("pause").into_val(env),
+        (by).into_val(env),
+    ];
+    const KEYS: &[&str] = &["paused"];
+    let values = [(state).into_val(env)];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn action_queued(env: &Env, action: QueuedAction) {
-    ActionQueued {
-        id: action.id,
-        action: action.action,
-        eta: action.eta,
-        expires_at: action.expires_at,
-    }
-    .publish(env);
+    <ActionQueued as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("queued").into_val(env),
+    ];
+    const KEYS: &[&str] = &["action", "eta", "expires_at", "id"];
+    let values = [
+        (action.action).into_val(env),
+        (action.eta).into_val(env),
+        (action.expires_at).into_val(env),
+        (action.id).into_val(env),
+    ];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn action_executed(env: &Env, action: QueuedAction) {
-    ActionExecuted {
-        id: action.id,
-        action: action.action,
-        queued_at: action.queued_at,
-    }
-    .publish(env);
+    <ActionExecuted as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("executed").into_val(env),
+    ];
+    const KEYS: &[&str] = &["action", "id", "queued_at"];
+    let values = [
+        (action.action).into_val(env),
+        (action.id).into_val(env),
+        (action.queued_at).into_val(env),
+    ];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn action_cancelled(env: &Env, id: u64, by: &Address) {
-    ActionCancelled { by: by.clone(), id }.publish(env);
+    <ActionCancelled as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("cancelled").into_val(env),
+        (by).into_val(env),
+    ];
+    const KEYS: &[&str] = &["id"];
+    let values = [(id).into_val(env)];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn action_audit(
@@ -278,52 +350,91 @@ pub fn action_audit(
     reason: CancelReason,
     note: soroban_sdk::String,
 ) {
-    ActionAuditRecorded {
-        id,
-        version: 1,
-        status,
-        actor: actor.clone(),
-        reason,
-        note,
-    }
-    .publish(env);
+    <ActionAuditRecorded as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("audit").into_val(env),
+        (id).into_val(env),
+    ];
+    const KEYS: &[&str] = &["actor", "note", "reason", "status", "version"];
+    let values = [
+        (actor).into_val(env),
+        (note).into_val(env),
+        (reason).into_val(env),
+        (status).into_val(env),
+        (1u32).into_val(env),
+    ];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn storage_migrated(env: &Env, by: &Address, status: &MigrationStatus) {
-    StorageMigrated {
-        version: 1,
-        by: by.clone(),
-        status: status.clone(),
-    }
-    .publish(env);
+    <StorageMigrated as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("migrated").into_val(env),
+        (by).into_val(env),
+    ];
+    const KEYS: &[&str] = &["status", "version"];
+    let values = [(status).into_val(env), (1u32).into_val(env)];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
+#[cfg(test)]
 pub fn config_changed(env: &Env, cfg: &Config) {
-    ConfigChanged {
-        config: cfg.clone(),
-    }
-    .publish(env);
+    config_changed_encoded(env, cfg.into_val(env));
 }
 
+pub(crate) fn config_changed_encoded(env: &Env, encoded: Val) {
+    <ConfigChanged as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("config").into_val(env),
+    ];
+    const KEYS: &[&str] = &["config"];
+    let values = [encoded];
+    publish_raw(env, &topics, KEYS, &values);
+}
+
+#[cfg(test)]
 pub fn token_registered(env: &Env, token: &Address, cfg: &TokenConfig) {
-    TokenRegistered {
-        token: token.clone(),
-        config: cfg.clone(),
-    }
-    .publish(env);
+    token_registered_encoded(env, token, cfg.into_val(env));
+}
+
+pub(crate) fn token_registered_encoded(env: &Env, token: &Address, encoded: Val) {
+    <TokenRegistered as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("token").into_val(env),
+        (token).into_val(env),
+    ];
+    const KEYS: &[&str] = &["config"];
+    let values = [encoded];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn route_configured(env: &Env, route: RouteKind, enabled: bool) {
-    RouteConfigured { route, enabled }.publish(env);
+    <RouteConfigured as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("route").into_val(env),
+        (route).into_val(env),
+    ];
+    const KEYS: &[&str] = &["enabled"];
+    let values = [(enabled).into_val(env)];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 pub fn flow_limit_lowered(env: &Env, token: &Address, limit: i128, by: &Address) {
-    FlowLimitLowered {
-        token: token.clone(),
-        by: by.clone(),
-        limit,
-    }
-    .publish(env);
+    <FlowLimitLowered as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("flow").into_val(env),
+        (token).into_val(env),
+        (by).into_val(env),
+    ];
+    const KEYS: &[&str] = &["limit"];
+    let values = [(limit).into_val(env)];
+    publish_raw(env, &topics, KEYS, &values);
 }
 
 // Durable journal identity for each successfully processed message; consumers archive all bytes.
@@ -340,12 +451,48 @@ pub struct ReplayRecorded {
 }
 
 pub fn replay_recorded(env: &Env, route: RouteKind, message_id: &BytesN<32>) {
-    ReplayRecorded {
-        route,
-        message_id: message_id.clone(),
-        version: 1,
-        ledger: env.ledger().sequence(),
-        timestamp: env.ledger().timestamp(),
+    <ReplayRecorded as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    let topics = [
+        soroban_sdk::symbol_short!("hyperion").into_val(env),
+        soroban_sdk::symbol_short!("replay").into_val(env),
+        (route).into_val(env),
+        (message_id).into_val(env),
+    ];
+    const KEYS: &[&str] = &["ledger", "timestamp", "version"];
+    let values = [
+        (env.ledger().sequence()).into_val(env),
+        (env.ledger().timestamp()).into_val(env),
+        (1u32).into_val(env),
+    ];
+    publish_raw(env, &topics, KEYS, &values);
+}
+
+// Borrow record values directly and share the topic/map host-call framing.
+// Event specifications and sparse map encoding remain the SDK definitions above.
+struct RawEvent<'a> {
+    topics: &'a [Val],
+    keys: &'a [&'a str],
+    values: &'a [Val],
+}
+
+impl soroban_sdk::Event for RawEvent<'_> {
+    fn topics(&self, env: &Env) -> soroban_sdk::Vec<Val> {
+        soroban_sdk::Vec::from_slice(env, self.topics)
     }
-    .publish(env);
+
+    fn data(&self, env: &Env) -> Val {
+        use soroban_sdk::unwrap::UnwrapInfallible;
+        env.sparse_map_new_from_slices(self.keys, self.values)
+            .unwrap_infallible()
+            .into()
+    }
+}
+
+#[inline(never)]
+fn publish_raw(env: &Env, topics: &[Val], keys: &[&str], values: &[Val]) {
+    env.events().publish_event(&RawEvent {
+        topics,
+        keys,
+        values,
+    });
 }

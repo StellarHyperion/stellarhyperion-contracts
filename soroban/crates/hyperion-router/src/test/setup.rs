@@ -11,6 +11,9 @@ use soroban_sdk::{
 };
 
 use crate::test::doubles::{FailableToken, FailableTokenClient, MockRail, MockRailClient};
+use crate::test::hostile::{
+    HostileReceiver, HostileReceiverClient, HostileToken, HostileTokenClient,
+};
 use crate::types::AdminAction;
 use crate::{HyperionRouter, HyperionRouterClient, MIN_TIMELOCK_DELAY};
 
@@ -178,5 +181,28 @@ impl World {
 
     pub fn failable(&self, id: &Address) -> FailableTokenClient<'_> {
         FailableTokenClient::new(&self.env, id)
+    }
+
+    /// Register a [`HostileToken`] through the same timelocked path as any other token. It
+    /// starts honest on every leg until a test installs a rule.
+    pub fn with_hostile_token(&self) -> Address {
+        let id = self.env.register(HostileToken, ());
+        HostileTokenClient::new(&self.env, &id).init(&STELLAR_DECIMALS);
+        self.register_token(id.clone(), STELLAR_DECIMALS, FLOW_LIMIT);
+        id
+    }
+
+    pub fn hostile(&self, id: &Address) -> HostileTokenClient<'_> {
+        HostileTokenClient::new(&self.env, id)
+    }
+
+    /// Replace `route`'s rail receiver with a [`HostileReceiver`] via the timelock. The
+    /// receiver starts in `ReceiverMode::Honest`.
+    pub fn with_hostile_receiver(&self, route: RouteKind) -> HostileReceiverClient<'_> {
+        let id = self.env.register(HostileReceiver, ());
+        let receiver = HostileReceiverClient::new(&self.env, &id);
+        receiver.init(&self.router_id);
+        self.run_action(AdminAction::SetRailReceiver(route, id));
+        receiver
     }
 }

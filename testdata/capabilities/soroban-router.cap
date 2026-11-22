@@ -12,8 +12,12 @@ status active
 method archive_settled_claims
 method bridge_in
 method bridge_out
+method bridge_out_batch
+method bridge_out_batch_items
 method bridge_out_bounded
+method bridge_out_gas_preconditions
 method bridge_out_with_gas
+method bridge_out_with_preconditions
 method cancel_action
 method cancel_action_with_reason
 method check_token_behavior
@@ -21,8 +25,11 @@ method claim_count
 method claim_failure_reason
 method claim_history
 method claim_liability
+method destination_flow_available
+method destination_flow_limit
 method disable_route
 method disable_token
+method effective_destination_flow_limit
 method execute_action
 method explain_outbound
 method flow_available
@@ -43,13 +50,16 @@ method is_route_enabled
 method keep_alive
 method keep_alive_replays
 method last_out_nonce
+method lower_destination_flow_limit
 method lower_token_flow_limit
 method migrate_storage
 method pause
 method preview_claim_recipient
 method queue_action
 method queue_count
+method quote_fingerprint
 method quote_routes
+method quote_routes_for_destination
 method quote_routes_v2
 method settle_claim
 method settle_claims
@@ -69,5 +79,7 @@ paid-route cctp
 paid-route axelar-its
 
 # Entry points that attach a provider payment.
+paid-method bridge_out_batch_items
 paid-method bridge_out_bounded
+paid-method bridge_out_gas_preconditions
 paid-method bridge_out_with_gas

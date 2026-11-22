@@ -48,22 +48,28 @@ pub fn roll_forward(
     ledger: u32,
     window_ledgers: u32,
 ) -> Result<FlowWindow, HyperionError> {
+    let mut rolled = window.clone();
+    roll_forward_in_place(&mut rolled, ledger, window_ledgers)?;
+    Ok(rolled)
+}
+
+#[inline(never)]
+fn roll_forward_in_place(
+    window: &mut FlowWindow,
+    ledger: u32,
+    window_ledgers: u32,
+) -> Result<(), HyperionError> {
     let epoch = epoch_of(ledger, window_ledgers)?;
-    if epoch == window.epoch {
-        return Ok(window.clone());
+    if epoch != window.epoch {
+        window.prev_consumed = if epoch == window.epoch.saturating_add(1) {
+            window.consumed
+        } else {
+            0
+        };
+        window.epoch = epoch;
+        window.consumed = 0;
     }
-    if epoch == window.epoch.saturating_add(1) {
-        return Ok(FlowWindow {
-            epoch,
-            consumed: 0,
-            prev_consumed: window.consumed,
-        });
-    }
-    Ok(FlowWindow {
-        epoch,
-        consumed: 0,
-        prev_consumed: 0,
-    })
+    Ok(())
 }
 
 /// How much of the limit is considered spent right now.
@@ -75,7 +81,8 @@ pub fn effective_consumed(
     ledger: u32,
     window_ledgers: u32,
 ) -> Result<i128, HyperionError> {
-    let rolled = roll_forward(window, ledger, window_ledgers)?;
+    let mut rolled = window.clone();
+    roll_forward_in_place(&mut rolled, ledger, window_ledgers)?;
     effective_consumed_rolled(&rolled, ledger, window_ledgers)
 }
 
@@ -90,11 +97,9 @@ fn effective_consumed_rolled(
     let elapsed = (ledger % window_ledgers) as i128;
     let span = window_ledgers as i128;
     let remaining = span - elapsed;
-    let decayed = rolled
-        .prev_consumed
-        .checked_mul(remaining)
-        .ok_or(HyperionError::DecimalOverflow)?
-        / span;
+    let weighted = crate::numeric::multiply_small(rolled.prev_consumed, remaining as u32)
+        .ok_or(HyperionError::DecimalOverflow)?;
+    let decayed = crate::numeric::divide_small(weighted, window_ledgers);
     decayed
         .checked_add(rolled.consumed)
         .ok_or(HyperionError::DecimalOverflow)
@@ -131,7 +136,8 @@ pub fn consume(
     if limit < 0 {
         return Err(HyperionError::InvalidLimit);
     }
-    let mut rolled = roll_forward(window, ledger, window_ledgers)?;
+    let mut rolled = window.clone();
+    roll_forward_in_place(&mut rolled, ledger, window_ledgers)?;
     let used = effective_consumed_rolled(&rolled, ledger, window_ledgers)?;
     let would_be = used
         .checked_add(amount)
@@ -144,6 +150,54 @@ pub fn consume(
         .checked_add(amount)
         .ok_or(HyperionError::DecimalOverflow)?;
     Ok(rolled)
+}
+
+/// Advance a local outbound window once and return its current headroom.
+/// The caller keeps this prepared record until both lane limits have been checked.
+#[inline(never)]
+pub fn prepare_window(
+    window: &mut FlowWindow,
+    limit: i128,
+    ledger: u32,
+    window_ledgers: u32,
+) -> Result<i128, HyperionError> {
+    if limit < 0 {
+        return Err(HyperionError::InvalidLimit);
+    }
+    roll_forward_in_place(window, ledger, window_ledgers)?;
+    let used = effective_consumed_rolled(window, ledger, window_ledgers)?;
+    Ok(if used >= limit { 0 } else { limit - used })
+}
+
+/// Consume a prepared window after a positive amount passed its headroom check.
+/// Headroom then retains the exact effective usage, including legacy signed records.
+#[inline(never)]
+pub fn consume_prepared(
+    window: &mut FlowWindow,
+    limit: i128,
+    amount: i128,
+    headroom: i128,
+) -> Result<(), HyperionError> {
+    if amount <= 0 {
+        return Err(HyperionError::InvalidAmount);
+    }
+    if limit < 0 {
+        return Err(HyperionError::InvalidLimit);
+    }
+    let used = limit
+        .checked_sub(headroom)
+        .ok_or(HyperionError::DecimalOverflow)?;
+    let would_be = used
+        .checked_add(amount)
+        .ok_or(HyperionError::DecimalOverflow)?;
+    if would_be > limit {
+        return Err(HyperionError::FlowLimitExceeded);
+    }
+    window.consumed = window
+        .consumed
+        .checked_add(amount)
+        .ok_or(HyperionError::DecimalOverflow)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -348,6 +402,113 @@ mod tests {
                     prop_assert!(used <= limit, "used {} exceeded limit {}", used, limit);
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod prepared_tests {
+    use super::*;
+    use proptest::prelude::*;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    // Frozen pre-refactor implementation: independent of the new in-place helper.
+    fn original_roll_forward(
+        window: &FlowWindow,
+        ledger: u32,
+        window_ledgers: u32,
+    ) -> Result<FlowWindow, HyperionError> {
+        let epoch = epoch_of(ledger, window_ledgers)?;
+        if epoch == window.epoch {
+            return Ok(window.clone());
+        }
+        if epoch == window.epoch.saturating_add(1) {
+            return Ok(FlowWindow {
+                epoch,
+                consumed: 0,
+                prev_consumed: window.consumed,
+            });
+        }
+        Ok(FlowWindow {
+            epoch,
+            consumed: 0,
+            prev_consumed: 0,
+        })
+    }
+
+    fn compare(window: FlowWindow, limit: i128, ledger: u32, span: u32, seed: u128) {
+        assert_eq!(
+            roll_forward(&window, ledger, span),
+            original_roll_forward(&window, ledger, span)
+        );
+        let reference = catch_unwind(|| available(&window, limit, ledger, span));
+        let mut prepared = window.clone();
+        let actual = catch_unwind(AssertUnwindSafe(|| {
+            prepare_window(&mut prepared, limit, ledger, span)
+        }));
+        match (reference, actual) {
+            (Err(_), Err(_)) => {}
+            (Ok(expected), Ok(actual)) => {
+                assert_eq!(actual, expected);
+                if let Ok(headroom) = expected {
+                    // The router reaches consume only after its positive amount
+                    // has passed the route and destination headroom comparisons.
+                    if headroom > 0 {
+                        let amount = 1 + (seed % headroom as u128) as i128;
+                        let expected = consume(&window, limit, amount, ledger, span);
+                        let actual = consume_prepared(&mut prepared, limit, amount, headroom)
+                            .map(|()| prepared);
+                        assert_eq!(actual, expected);
+                    }
+                }
+            }
+            _ => panic!("prepared and reference arithmetic disagree on panic behavior"),
+        }
+    }
+
+    #[test]
+    fn prepared_signed_boundaries_and_epoch_saturation_match_reference() {
+        for consumed in [i128::MIN, -1, 0, 1, i128::MAX] {
+            for previous in [i128::MIN, -1, 0, 1, i128::MAX] {
+                for limit in [-1, 0, 1, i128::MAX] {
+                    for (epoch, ledger, span) in [
+                        (0, 0, 0),
+                        (0, 0, 1),
+                        (0, 1, 1),
+                        (0, 2, 1),
+                        (u32::MAX, u32::MAX, 1),
+                        (1, u32::MAX, u32::MAX),
+                        (0, 17_280, 17_280),
+                        (1, 17_281, 17_280),
+                    ] {
+                        for seed in [0, u128::MAX] {
+                            compare(
+                                FlowWindow {
+                                    epoch,
+                                    consumed,
+                                    prev_consumed: previous,
+                                },
+                                limit,
+                                ledger,
+                                span,
+                                seed,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn prepared_full_width_window_and_spend_match_reference(
+            consumed in any::<i128>(), previous in -1_000_000_000_000_000_000_000_000i128..=1_000_000_000_000_000_000_000_000i128,
+            limit in 0i128..=i128::MAX, ledger in any::<u32>(), span in 1u32..=u32::MAX,
+            epoch_offset in 0u32..4, seed in any::<u128>(),
+        ) {
+            let epoch = (ledger / span).saturating_sub(epoch_offset);
+            compare(FlowWindow { epoch, consumed, prev_consumed: previous }, limit, ledger, span, seed);
         }
     }
 }

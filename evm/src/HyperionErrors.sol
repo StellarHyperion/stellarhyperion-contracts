@@ -128,3 +128,12 @@ error RecoveryExceedsSurplus();
 
 /// @notice Tracked claim liabilities cannot cover a claim being settled.
 error ClaimLiabilityInsufficient();
+// Outbound preconditions, batching, and destination flow controls.
+/// @notice The reviewed outbound configuration no longer matches the current quote.
+error FingerprintMismatch();
+/// @notice The caller's outbound deadline has passed.
+error RequestExpired();
+/// @notice The outbound batch exceeds its item or aggregate amount bound.
+error BatchLimitExceeded();
+/// @notice The destination's outbound flow window cannot accept this transfer.
+error DestinationFlowLimitExceeded();

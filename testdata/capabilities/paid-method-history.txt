@@ -13,3 +13,5 @@ paid-method evm/router bridgeOutWithPermit
 paid-method evm/router bridgeOutWithRefundCredit
 paid-method evm/router bridgeOutWithIntent
 paid-method evm/router bridgeOutWithRelayerFee
+paid-method soroban/router bridge_out_batch_items
+paid-method soroban/router bridge_out_gas_preconditions

@@ -154,7 +154,7 @@ const COPY: Record<QuoteBlocker, BlockerCopy> = {
   [QuoteBlocker.CircuitBreakerTripped]: {
     label: "Asset emergency stop",
     detail:
-      "This asset's token-wide emergency threshold has been reached, or this transfer would cross it. Departures for this asset are stopped until an operator resets the breaker; arrivals and existing claims still work.",
+      "This asset's emergency breaker is latched, or this transfer exceeds its remaining headroom. A latched breaker requires a reviewed reset; otherwise reduce the amount or wait for rolling headroom. Arrivals and existing claims still work.",
     owner: "operator",
     transient: true,
   },

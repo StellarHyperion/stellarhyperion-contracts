@@ -21,15 +21,17 @@ the same net amount that crosses the bridge, across all rails for one token, in 
 flow window. A token can therefore be well inside its per-rail flow limits and still trip its
 token-wide breaker.
 
-The breaker has no separate manual-trip entry point. Guardians already have an immediate token-wide
-stop in the existing `lowerTokenFlowLimit(token, 0)`, and adding a second emergency function would
-have cost router bytecode without adding a capability. What the breaker adds is the automatic
-cumulative trip and a reviewed way to re-arm it.
+The breaker has no separate manual-trip entry point. Guardians can immediately pause the router
+or individual rails. `lowerTokenFlowLimit(token, 0)` narrows the token's default allowance, but
+per-rail overrides can still allow departures; it is not a universal token stop. The breaker adds
+an automatic token-wide cumulative trip and a reviewed way to re-arm it.
 
 ## Behaviour
 
 - A departure whose net amount would cross the threshold is refused with
   `CircuitBreakerLatched(token, observedAmount, threshold)` before any token or fee movement.
+  A reverted crossing attempt does not latch or consume headroom. A smaller transfer can still
+  fit, and the rolling observation can decay. Resetting an unlatched breaker is refused.
 - The departure that reaches the threshold exactly completes, then latches the breaker and emits
   `CircuitBreakerTripped(token, observedAmount, threshold)`.
 - Once latched, every new departure for that token is refused, whichever rail is selected.
@@ -75,9 +77,9 @@ same decision through the optional `RouterSnapshot.circuitBreakerTripped` and
 `RouterSnapshot.circuitBreakerAvailable` fields; snapshots that do not provide them behave exactly
 as before.
 
-`BLOCKER_COPY` describes the refusal as an asset-level emergency stop that still allows arrivals
-and existing claims. It is marked transient because an operator can re-arm the breaker, but the
-app should not promise a time.
+`BLOCKER_COPY` distinguishes a latched stop, which requires a reviewed reset, from a transfer that
+does not fit the remaining rolling headroom. The latter may fit after reducing its amount or
+waiting for headroom. Both allow arrivals and existing claims. The app should not promise a time.
 
 ## Compatibility and migration
 
@@ -86,8 +88,10 @@ app should not promise a time.
   and three error names.
 - **No router storage change.** Breaker state lives in the immutable provenance child that the
   router already deploys and trusts for quotes, action validation and outbound records. The router
-  storage layout, token configuration and per-route flow records are untouched, so an upgrade path
-  that preserves existing storage remains possible. No upgrade is performed by this change.
+  storage layout, token configuration and per-route flow records are untouched. Both the router
+  and its child are nonupgradeable: an existing deployed child cannot acquire this state through
+  a storage-only upgrade. Adopting this implementation requires a separately reviewed deployment
+  and migration plan. No upgrade is performed by this change.
 - **Additive action kinds.** `SetTokenCircuitBreakerThreshold` and `ResetTokenCircuitBreaker` are
   appended to `ActionKind`. Existing action integers keep their meaning.
 - **Additive error names.** `CircuitBreakerLatched`, `CircuitBreakerNotTripped` and

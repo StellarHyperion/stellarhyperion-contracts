@@ -41,13 +41,14 @@ pub mod flow;
 pub mod inbound;
 pub mod maintenance;
 pub mod model;
+mod numeric;
 pub mod route;
 pub mod strkey;
 
 pub use address::{AddressKind, StellarDestination};
 pub use amount::{
-    convert_decimals, convert_decimals_exact, floor_to_representable, scale_amount, Conversion,
-    FeeSplit,
+    compute_quote_fingerprint, convert_decimals, convert_decimals_exact, floor_to_representable,
+    scale_amount, Conversion, FeeSplit,
 };
 pub use axelar::{
     inspect_auth_tree_snapshot, AuthorizedDebit, PaidDispatchAuthSnapshot, PrivilegeExpansion,

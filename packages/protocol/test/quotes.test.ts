@@ -215,6 +215,47 @@ describe("the reasons a quote comes back empty", () => {
   });
 });
 
+describe("token-wide emergency quote diagnostics", () => {
+  it("checks net exposure at the exact headroom boundary on every rail and v2", () => {
+    for (const route of ROUTE_KINDS) {
+      const input = { ...request, route };
+      expect(planQuote(input, snapshot({ circuitBreakerAvailable: 997_000n })).available).toBe(
+        true,
+      );
+      const blockedSnapshot = snapshot({ circuitBreakerAvailable: 996_999n });
+      expect(planQuote(input, blockedSnapshot).reason).toBe(QuoteBlocker.CircuitBreakerTripped);
+      expect(planQuoteV2(input, blockedSnapshot).quote.reason).toBe(
+        QuoteBlocker.CircuitBreakerTripped,
+      );
+    }
+  });
+
+  it("preserves earlier address/token errors and gives the breaker priority over route flow", () => {
+    const input = { ...request, route: RouteKind.Cctp };
+    const stopped = { circuitBreakerTripped: true, flowAvailable: {} } as const;
+    expect(planQuote(input, snapshot(stopped)).reason).toBe(QuoteBlocker.CircuitBreakerTripped);
+    expect(planQuote({ ...input, strkey: "invalid" }, snapshot(stopped)).reason).toBe(
+      QuoteBlocker.InvalidDestination,
+    );
+    expect(planQuote(input, snapshot({ ...stopped, tokenEnabled: false })).reason).toBe(
+      QuoteBlocker.TokenDisabled,
+    );
+    expect(planQuotes(request, snapshot(stopped)).every((q) => !q.available)).toBe(true);
+  });
+
+  it("keeps older snapshots usable and requires an explicit latch to override fitting headroom", () => {
+    const input = { ...request, route: RouteKind.Cctp };
+    const legacy = planQuote(input, snapshot());
+    expect(planQuote(input, snapshot({ circuitBreakerTripped: false }))).toEqual(legacy);
+    expect(
+      planQuote(
+        input,
+        snapshot({ circuitBreakerTripped: true, circuitBreakerAvailable: 10n ** 20n }),
+      ).reason,
+    ).toBe(QuoteBlocker.CircuitBreakerTripped);
+  });
+});
+
 describe("the copy", () => {
   it("has a label and a sentence for every blocker", () => {
     for (const value of Object.values(QuoteBlocker)) {

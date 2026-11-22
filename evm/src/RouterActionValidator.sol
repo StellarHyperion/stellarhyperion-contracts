@@ -25,7 +25,7 @@ import {AmountMath} from "./libraries/AmountMath.sol";
 import {FlowGuard, FlowWindow} from "./libraries/FlowGuard.sol";
 
 /// @title Current router proposal constraints
-/// @notice Read-only getters used by the immutable action validator.
+/// @notice Read-only getters used by the immutable action validator and token-wide breaker.
 interface IRouterActionState {
     /// @notice Read the router's current constraint.
     function tokenConfig(address token) external view returns (TokenConfig memory);
@@ -41,9 +41,10 @@ interface IRouterActionState {
     function flowWindow() external view returns (uint64);
 }
 
-/// @title Immutable read-only governance action validation
-/// @notice Evaluates the creating router's current configuration and candidate adapter probes.
-/// It has no privileged call, storage writer, upgrade hook or authority over the router.
+/// @title Immutable governance validation and token-wide breaker accounting
+/// @notice Evaluates the creating router's proposals and maintains its emergency breaker state.
+/// Only the creating router can charge or configure breakers. This child cannot write router
+/// storage, move funds or change either contract's code.
 contract RouterActionValidator {
     using FlowGuard for FlowWindow;
 

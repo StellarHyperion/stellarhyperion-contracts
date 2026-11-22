@@ -1,0 +1,964 @@
+{
+  "schemaSetVersion": 1,
+  "schemas": [
+    {
+      "kind": "message",
+      "id": "note.outbound",
+      "version": 1,
+      "description": "Stellar to EVM note: version, twenty byte EVM recipient, eight byte nonce",
+      "size": {
+        "kind": "fixed",
+        "bytes": 29
+      },
+      "fields": [
+        {
+          "name": "version",
+          "encoding": "uint",
+          "offset": 0,
+          "length": 1,
+          "constant": 1
+        },
+        {
+          "name": "recipient",
+          "encoding": "bytes",
+          "offset": 1,
+          "length": 20
+        },
+        {
+          "name": "nonce",
+          "encoding": "uint",
+          "offset": 21,
+          "length": 8
+        }
+      ]
+    },
+    {
+      "kind": "message",
+      "id": "note.inbound",
+      "version": 1,
+      "description": "EVM to Stellar note: version, address kind, strkey length, ascii strkey, nonce",
+      "size": {
+        "kind": "one-of",
+        "bytes": [
+          67,
+          80
+        ]
+      },
+      "fields": [
+        {
+          "name": "version",
+          "encoding": "uint",
+          "offset": 0,
+          "length": 1,
+          "constant": 1
+        },
+        {
+          "name": "kind",
+          "encoding": "uint",
+          "offset": 1,
+          "length": 1,
+          "values": {
+            "account": 0,
+            "contract": 1,
+            "muxed": 2
+          }
+        },
+        {
+          "name": "strkeyLength",
+          "encoding": "uint",
+          "offset": 2,
+          "length": 1,
+          "values": {
+            "plain": 56,
+            "muxed": 69
+          }
+        },
+        {
+          "name": "strkey",
+          "encoding": "ascii",
+          "offset": 3,
+          "length": {
+            "from": "strkeyLength"
+          }
+        },
+        {
+          "name": "nonce",
+          "encoding": "uint",
+          "offset": {
+            "after": "strkey"
+          },
+          "length": 8
+        }
+      ]
+    },
+    {
+      "kind": "message",
+      "id": "cctp.hook",
+      "version": 1,
+      "description": "CCTP hook data: version, address kind tag, key, muxed id for muxed destinations",
+      "size": {
+        "kind": "one-of",
+        "bytes": [
+          34,
+          42
+        ]
+      },
+      "fields": [
+        {
+          "name": "version",
+          "encoding": "uint",
+          "offset": 0,
+          "length": 1,
+          "constant": 1
+        },
+        {
+          "name": "kind",
+          "encoding": "uint",
+          "offset": 1,
+          "length": 1,
+          "values": {
+            "account": 0,
+            "contract": 1,
+            "muxed": 2
+          }
+        },
+        {
+          "name": "key",
+          "encoding": "bytes",
+          "offset": 2,
+          "length": 32
+        },
+        {
+          "name": "muxedId",
+          "encoding": "uint",
+          "offset": 34,
+          "length": 8,
+          "presentWhen": {
+            "field": "kind",
+            "equals": 2
+          }
+        }
+      ]
+    },
+    {
+      "kind": "message",
+      "id": "cctp.header",
+      "version": 1,
+      "description": "CCTP V2 message header, followed by the message body",
+      "size": {
+        "kind": "open",
+        "min": 148
+      },
+      "fields": [
+        {
+          "name": "version",
+          "encoding": "uint",
+          "offset": 0,
+          "length": 4,
+          "constant": 1
+        },
+        {
+          "name": "sourceDomain",
+          "encoding": "uint",
+          "offset": 4,
+          "length": 4
+        },
+        {
+          "name": "destinationDomain",
+          "encoding": "uint",
+          "offset": 8,
+          "length": 4
+        },
+        {
+          "name": "nonce",
+          "encoding": "bytes",
+          "offset": 12,
+          "length": 32
+        },
+        {
+          "name": "sender",
+          "encoding": "bytes",
+          "offset": 44,
+          "length": 32
+        },
+        {
+          "name": "recipient",
+          "encoding": "bytes",
+          "offset": 76,
+          "length": 32
+        },
+        {
+          "name": "destinationCaller",
+          "encoding": "bytes",
+          "offset": 108,
+          "length": 32
+        },
+        {
+          "name": "minFinalityThreshold",
+          "encoding": "uint",
+          "offset": 140,
+          "length": 4
+        },
+        {
+          "name": "finalityThresholdExecuted",
+          "encoding": "uint",
+          "offset": 144,
+          "length": 4
+        },
+        {
+          "name": "body",
+          "encoding": "bytes",
+          "offset": 148,
+          "length": "rest"
+        }
+      ]
+    },
+    {
+      "kind": "message",
+      "id": "cctp.burn",
+      "version": 1,
+      "description": "CCTP V2 burn message body, followed by hook data",
+      "size": {
+        "kind": "open",
+        "min": 228
+      },
+      "fields": [
+        {
+          "name": "version",
+          "encoding": "uint",
+          "offset": 0,
+          "length": 4,
+          "constant": 1
+        },
+        {
+          "name": "burnToken",
+          "encoding": "bytes",
+          "offset": 4,
+          "length": 32
+        },
+        {
+          "name": "mintRecipient",
+          "encoding": "bytes",
+          "offset": 36,
+          "length": 32
+        },
+        {
+          "name": "amount",
+          "encoding": "uint",
+          "offset": 68,
+          "length": 32
+        },
+        {
+          "name": "messageSender",
+          "encoding": "bytes",
+          "offset": 100,
+          "length": 32
+        },
+        {
+          "name": "maxFee",
+          "encoding": "uint",
+          "offset": 132,
+          "length": 32
+        },
+        {
+          "name": "feeExecuted",
+          "encoding": "uint",
+          "offset": 164,
+          "length": 32
+        },
+        {
+          "name": "expirationBlock",
+          "encoding": "uint",
+          "offset": 196,
+          "length": 32
+        },
+        {
+          "name": "hookData",
+          "encoding": "bytes",
+          "offset": 228,
+          "length": "rest"
+        }
+      ]
+    },
+    {
+      "kind": "message",
+      "id": "axelar.metadata",
+      "version": 1,
+      "description": "Axelar ITS metadata: four byte contract-call version, then the note",
+      "size": {
+        "kind": "open",
+        "min": 4
+      },
+      "fields": [
+        {
+          "name": "metadataVersion",
+          "encoding": "uint",
+          "offset": 0,
+          "length": 4,
+          "constant": 0
+        },
+        {
+          "name": "note",
+          "encoding": "bytes",
+          "offset": 4,
+          "length": "rest"
+        }
+      ]
+    },
+    {
+      "kind": "message",
+      "id": "address.strkey",
+      "version": 1,
+      "description": "SEP-23 strkey after base32: version byte, key, muxed id, CRC16 little endian",
+      "size": {
+        "kind": "one-of",
+        "bytes": [
+          35,
+          43
+        ]
+      },
+      "fields": [
+        {
+          "name": "versionByte",
+          "encoding": "uint",
+          "offset": 0,
+          "length": 1,
+          "values": {
+            "account": 48,
+            "contract": 16,
+            "muxed": 96
+          }
+        },
+        {
+          "name": "key",
+          "encoding": "bytes",
+          "offset": 1,
+          "length": 32
+        },
+        {
+          "name": "muxedId",
+          "encoding": "uint",
+          "offset": 33,
+          "length": 8,
+          "presentWhen": {
+            "field": "versionByte",
+            "equals": 96
+          }
+        },
+        {
+          "name": "checksum",
+          "encoding": "uint-le",
+          "offset": {
+            "after": "muxedId"
+          },
+          "length": 2
+        }
+      ]
+    },
+    {
+      "kind": "error-table",
+      "id": "errors.soroban",
+      "version": 1,
+      "description": "hyperion_core::HyperionError contract error numbers, append only",
+      "codeSpace": "soroban-contract-error",
+      "entries": [
+        {
+          "name": "AlreadyInitialized",
+          "code": 1
+        },
+        {
+          "name": "NotInitialized",
+          "code": 2
+        },
+        {
+          "name": "Unauthorized",
+          "code": 3
+        },
+        {
+          "name": "NotRailReceiver",
+          "code": 4
+        },
+        {
+          "name": "Paused",
+          "code": 5
+        },
+        {
+          "name": "RouteDisabled",
+          "code": 6
+        },
+        {
+          "name": "AdapterNotSet",
+          "code": 7
+        },
+        {
+          "name": "FlowLimitExceeded",
+          "code": 8
+        },
+        {
+          "name": "InvalidAmount",
+          "code": 9
+        },
+        {
+          "name": "AmountNotRepresentable",
+          "code": 10
+        },
+        {
+          "name": "DecimalOverflow",
+          "code": 11
+        },
+        {
+          "name": "InvalidDecimals",
+          "code": 12
+        },
+        {
+          "name": "SlippageExceeded",
+          "code": 13
+        },
+        {
+          "name": "FeeTooHigh",
+          "code": 14
+        },
+        {
+          "name": "InvalidDestination",
+          "code": 15
+        },
+        {
+          "name": "ZeroAddressKey",
+          "code": 16
+        },
+        {
+          "name": "MuxedNotSupported",
+          "code": 17
+        },
+        {
+          "name": "NotEvmAddress",
+          "code": 18
+        },
+        {
+          "name": "UnknownChain",
+          "code": 19
+        },
+        {
+          "name": "ReplayedMessage",
+          "code": 20
+        },
+        {
+          "name": "UnknownNonce",
+          "code": 21
+        },
+        {
+          "name": "TimelockNotQueued",
+          "code": 22
+        },
+        {
+          "name": "TimelockNotReady",
+          "code": 23
+        },
+        {
+          "name": "TimelockExpired",
+          "code": 24
+        },
+        {
+          "name": "TimelockDelayOutOfRange",
+          "code": 25
+        },
+        {
+          "name": "ClaimNotFound",
+          "code": 26
+        },
+        {
+          "name": "ClaimAlreadySettled",
+          "code": 27
+        },
+        {
+          "name": "RecipientNotReady",
+          "code": 28
+        },
+        {
+          "name": "InvalidLimit",
+          "code": 29
+        },
+        {
+          "name": "InvalidWindow",
+          "code": 30
+        },
+        {
+          "name": "TokenNotRegistered",
+          "code": 31
+        },
+        {
+          "name": "MalformedMessage",
+          "code": 32
+        },
+        {
+          "name": "UnsupportedHookVersion",
+          "code": 33
+        },
+        {
+          "name": "RailNotConfigured",
+          "code": 34
+        },
+        {
+          "name": "WrongDomain",
+          "code": 35
+        },
+        {
+          "name": "NotMintRecipient",
+          "code": 36
+        },
+        {
+          "name": "UnexpectedRailContract",
+          "code": 37
+        },
+        {
+          "name": "NothingMinted",
+          "code": 38
+        },
+        {
+          "name": "TokenNotMapped",
+          "code": 39
+        },
+        {
+          "name": "AlreadyConfigured",
+          "code": 40
+        },
+        {
+          "name": "InsufficientLiquidity",
+          "code": 41
+        },
+        {
+          "name": "UnsupportedMessageVersion",
+          "code": 42
+        },
+        {
+          "name": "NotTheRail",
+          "code": 43
+        },
+        {
+          "name": "UnsupportedRoute",
+          "code": 44
+        },
+        {
+          "name": "GasFloatTooLow",
+          "code": 45
+        },
+        {
+          "name": "ProtectedAsset",
+          "code": 46
+        },
+        {
+          "name": "ExceedsRouteLimit",
+          "code": 47
+        },
+        {
+          "name": "ProviderBudgetExceeded",
+          "code": 48
+        },
+        {
+          "name": "AdapterMethodUnavailable",
+          "code": 49
+        },
+        {
+          "name": "RotationAlreadyPending",
+          "code": 50
+        },
+        {
+          "name": "RotationNotPending",
+          "code": 51
+        },
+        {
+          "name": "RotationNotReady",
+          "code": 52
+        },
+        {
+          "name": "MessengerUnchanged",
+          "code": 53
+        },
+        {
+          "name": "OldMessengerExpired",
+          "code": 54
+        },
+        {
+          "name": "FingerprintMismatch",
+          "code": 55
+        },
+        {
+          "name": "RequestExpired",
+          "code": 56
+        },
+        {
+          "name": "BatchLimitExceeded",
+          "code": 57
+        },
+        {
+          "name": "DestinationFlowLimitExceeded",
+          "code": 58
+        }
+      ]
+    },
+    {
+      "kind": "error-table",
+      "id": "errors.evm",
+      "version": 1,
+      "description": "Errors the compiled EVM contracts can revert with, by selector",
+      "codeSpace": "evm-selector",
+      "entries": [
+        {
+          "name": "AccessControlBadConfirmation",
+          "code": "0x6697b232",
+          "signature": "AccessControlBadConfirmation()"
+        },
+        {
+          "name": "AccessControlUnauthorizedAccount",
+          "code": "0xe2517d3f",
+          "signature": "AccessControlUnauthorizedAccount(address,bytes32)"
+        },
+        {
+          "name": "ActionFieldNotEmpty",
+          "code": "0x44e23f21",
+          "signature": "ActionFieldNotEmpty()"
+        },
+        {
+          "name": "AdapterCodeMissing",
+          "code": "0x6f4636ea",
+          "signature": "AdapterCodeMissing()"
+        },
+        {
+          "name": "AdapterIdentityMismatch",
+          "code": "0x69254d1b",
+          "signature": "AdapterIdentityMismatch()"
+        },
+        {
+          "name": "AdapterMethodUnavailable",
+          "code": "0x6027aab3",
+          "signature": "AdapterMethodUnavailable()"
+        },
+        {
+          "name": "AdapterNotSet",
+          "code": "0xa091855e",
+          "signature": "AdapterNotSet()"
+        },
+        {
+          "name": "AlreadyConfigured",
+          "code": "0x11b61b6a",
+          "signature": "AlreadyConfigured()"
+        },
+        {
+          "name": "AmountNotRepresentable",
+          "code": "0x9d7a7801",
+          "signature": "AmountNotRepresentable()"
+        },
+        {
+          "name": "CircuitBreakerLatched",
+          "code": "0x6099982e",
+          "signature": "CircuitBreakerLatched(address,uint256,uint256)"
+        },
+        {
+          "name": "CircuitBreakerNotTripped",
+          "code": "0x359a93f8",
+          "signature": "CircuitBreakerNotTripped()"
+        },
+        {
+          "name": "ClaimAlreadySettled",
+          "code": "0x44b39ad8",
+          "signature": "ClaimAlreadySettled()"
+        },
+        {
+          "name": "ClaimLiabilityInsufficient",
+          "code": "0xc3f35927",
+          "signature": "ClaimLiabilityInsufficient()"
+        },
+        {
+          "name": "ClaimNotFound",
+          "code": "0x0455eeee",
+          "signature": "ClaimNotFound()"
+        },
+        {
+          "name": "DecimalOverflow",
+          "code": "0xa1d40c9a",
+          "signature": "DecimalOverflow()"
+        },
+        {
+          "name": "EnforcedPause",
+          "code": "0xd93c0665",
+          "signature": "EnforcedPause()"
+        },
+        {
+          "name": "ExpectedPause",
+          "code": "0x8dfc202b",
+          "signature": "ExpectedPause()"
+        },
+        {
+          "name": "FeeTokenNotSupported",
+          "code": "0x4c593a22",
+          "signature": "FeeTokenNotSupported()"
+        },
+        {
+          "name": "FeeTooHigh",
+          "code": "0xcd4e6167",
+          "signature": "FeeTooHigh()"
+        },
+        {
+          "name": "FlowLimitExceeded",
+          "code": "0xdf359a15",
+          "signature": "FlowLimitExceeded(uint256,uint256)"
+        },
+        {
+          "name": "IntentDomainMismatch",
+          "code": "0x0ddfe8bc",
+          "signature": "IntentDomainMismatch()"
+        },
+        {
+          "name": "IntentExpired",
+          "code": "0x7d372854",
+          "signature": "IntentExpired(uint256)"
+        },
+        {
+          "name": "IntentNonceMismatch",
+          "code": "0x214ee5a2",
+          "signature": "IntentNonceMismatch(uint256,uint256)"
+        },
+        {
+          "name": "InvalidAmount",
+          "code": "0x2c5211c6",
+          "signature": "InvalidAmount()"
+        },
+        {
+          "name": "InvalidDecimals",
+          "code": "0xd25598a0",
+          "signature": "InvalidDecimals()"
+        },
+        {
+          "name": "InvalidDestination",
+          "code": "0xac6b05f5",
+          "signature": "InvalidDestination()"
+        },
+        {
+          "name": "InvalidLimit",
+          "code": "0xe55fb509",
+          "signature": "InvalidLimit()"
+        },
+        {
+          "name": "InvalidRelayerFee",
+          "code": "0x45f6f27a",
+          "signature": "InvalidRelayerFee()"
+        },
+        {
+          "name": "InvalidSignature",
+          "code": "0x8baa579f",
+          "signature": "InvalidSignature()"
+        },
+        {
+          "name": "InvalidThreshold",
+          "code": "0xaabd5a09",
+          "signature": "InvalidThreshold()"
+        },
+        {
+          "name": "InvalidWindow",
+          "code": "0x392334ed",
+          "signature": "InvalidWindow()"
+        },
+        {
+          "name": "LimitNotRaised",
+          "code": "0x9289bf61",
+          "signature": "LimitNotRaised()"
+        },
+        {
+          "name": "MalformedMessage",
+          "code": "0x16509b9a",
+          "signature": "MalformedMessage()"
+        },
+        {
+          "name": "MuxedNotSupported",
+          "code": "0x87afb842",
+          "signature": "MuxedNotSupported()"
+        },
+        {
+          "name": "NoRefundCredit",
+          "code": "0x1d59da8e",
+          "signature": "NoRefundCredit()"
+        },
+        {
+          "name": "NotMintRecipient",
+          "code": "0x95348d59",
+          "signature": "NotMintRecipient()"
+        },
+        {
+          "name": "NotRailReceiver",
+          "code": "0xe93a7ad0",
+          "signature": "NotRailReceiver()"
+        },
+        {
+          "name": "NothingMinted",
+          "code": "0x0f7e2b52",
+          "signature": "NothingMinted()"
+        },
+        {
+          "name": "OwnableInvalidOwner",
+          "code": "0x1e4fbdf7",
+          "signature": "OwnableInvalidOwner(address)"
+        },
+        {
+          "name": "OwnableUnauthorizedAccount",
+          "code": "0x118cdaa7",
+          "signature": "OwnableUnauthorizedAccount(address)"
+        },
+        {
+          "name": "ProviderBudgetExceeded",
+          "code": "0x3305d9c0",
+          "signature": "ProviderBudgetExceeded()"
+        },
+        {
+          "name": "RailNotConfigured",
+          "code": "0x7f356a63",
+          "signature": "RailNotConfigured()"
+        },
+        {
+          "name": "RecipientNotReady",
+          "code": "0x78c488a4",
+          "signature": "RecipientNotReady()"
+        },
+        {
+          "name": "RecoveryExceedsSurplus",
+          "code": "0x73c48d61",
+          "signature": "RecoveryExceedsSurplus()"
+        },
+        {
+          "name": "ReentrancyGuardReentrantCall",
+          "code": "0x3ee5aeb5",
+          "signature": "ReentrancyGuardReentrantCall()"
+        },
+        {
+          "name": "RefundFailed",
+          "code": "0xf0c49d44",
+          "signature": "RefundFailed()"
+        },
+        {
+          "name": "ReplayedMessage",
+          "code": "0x469eb53c",
+          "signature": "ReplayedMessage()"
+        },
+        {
+          "name": "RouteDisabled",
+          "code": "0x17d0b6db",
+          "signature": "RouteDisabled()"
+        },
+        {
+          "name": "RouteIsPaused",
+          "code": "0xd7940766",
+          "signature": "RouteIsPaused(uint8)"
+        },
+        {
+          "name": "SafeERC20FailedOperation",
+          "code": "0x5274afe7",
+          "signature": "SafeERC20FailedOperation(address)"
+        },
+        {
+          "name": "SlippageExceeded",
+          "code": "0x71c4efed",
+          "signature": "SlippageExceeded(uint256,uint256)"
+        },
+        {
+          "name": "TimelockAlreadyExecuted",
+          "code": "0xf6432eb1",
+          "signature": "TimelockAlreadyExecuted()"
+        },
+        {
+          "name": "TimelockDelayOutOfRange",
+          "code": "0xcc3da7e0",
+          "signature": "TimelockDelayOutOfRange()"
+        },
+        {
+          "name": "TimelockExpired",
+          "code": "0x768fade0",
+          "signature": "TimelockExpired(uint64)"
+        },
+        {
+          "name": "TimelockNotQueued",
+          "code": "0xdfc44acf",
+          "signature": "TimelockNotQueued()"
+        },
+        {
+          "name": "TimelockNotReady",
+          "code": "0x72942d97",
+          "signature": "TimelockNotReady(uint64)"
+        },
+        {
+          "name": "TokenDisabled",
+          "code": "0x1931ea85",
+          "signature": "TokenDisabled()"
+        },
+        {
+          "name": "TokenNotMapped",
+          "code": "0x828d5663",
+          "signature": "TokenNotMapped()"
+        },
+        {
+          "name": "TokenNotRegistered",
+          "code": "0x259ba1ad",
+          "signature": "TokenNotRegistered()"
+        },
+        {
+          "name": "TokenRecoveryForbidden",
+          "code": "0xbe3a7f80",
+          "signature": "TokenRecoveryForbidden()"
+        },
+        {
+          "name": "TopUpBindingMismatch",
+          "code": "0x6f2bffac",
+          "signature": "TopUpBindingMismatch()"
+        },
+        {
+          "name": "TopUpIntentNotFound",
+          "code": "0xd74d2f15",
+          "signature": "TopUpIntentNotFound()"
+        },
+        {
+          "name": "Unauthorized",
+          "code": "0x82b42900",
+          "signature": "Unauthorized()"
+        },
+        {
+          "name": "UnexpectedRailContract",
+          "code": "0xb3c237e0",
+          "signature": "UnexpectedRailContract()"
+        },
+        {
+          "name": "UnknownChain",
+          "code": "0x05a1a5df",
+          "signature": "UnknownChain()"
+        },
+        {
+          "name": "UnsupportedHookVersion",
+          "code": "0x88bb59d2",
+          "signature": "UnsupportedHookVersion()"
+        },
+        {
+          "name": "UnsupportedMessageVersion",
+          "code": "0x32f899d2",
+          "signature": "UnsupportedMessageVersion()"
+        },
+        {
+          "name": "UpgradeableAdapterUnsupported",
+          "code": "0xa2168faf",
+          "signature": "UpgradeableAdapterUnsupported()"
+        },
+        {
+          "name": "WrongDomain",
+          "code": "0xd52bd3c9",
+          "signature": "WrongDomain()"
+        },
+        {
+          "name": "ZeroAddress",
+          "code": "0xd92e233d",
+          "signature": "ZeroAddress()"
+        },
+        {
+          "name": "ZeroAddressKey",
+          "code": "0x276f9a65",
+          "signature": "ZeroAddressKey()"
+        }
+      ]
+    }
+  ]
+}

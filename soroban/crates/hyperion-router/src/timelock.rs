@@ -4,8 +4,8 @@ use soroban_sdk::{Address, ContractExecutable, Env, String};
 
 use crate::storage;
 use crate::types::{
-    ActionAuditStatus, AdminAction, CancelReason, Config, MigrationStatus, QueuedAction,
-    RouteConfig, TokenConfig, CURRENT_SCHEMA_VERSION, MAX_REASON_LEN,
+    ActionAuditStatus, AdminAction, CancelReason, Config, MigrationStatus, ParsedAction,
+    QueuedAction, RouteConfig, TokenConfig, CURRENT_SCHEMA_VERSION, MAX_REASON_LEN,
 };
 
 /// Shortest and longest delay the router will accept.
@@ -32,8 +32,14 @@ pub fn queue(
     queued_by: &Address,
     action: AdminAction,
 ) -> Result<QueuedAction, HyperionError> {
-    validate(&action)?;
-    if let AdminAction::RegisterToken(token, decimals, _) = &action {
+    #[cfg(target_family = "wasm")]
+    let parsed = action.parsed(env);
+    #[cfg(target_family = "wasm")]
+    let validation_action = &parsed;
+    #[cfg(not(target_family = "wasm"))]
+    let validation_action = &action;
+    validate(validation_action)?;
+    if let ParsedAction::RegisterToken(token, decimals, _) = validation_action {
         validate_token_behavior(env, token, *decimals)?;
     }
     let now = env.ledger().timestamp();
@@ -66,8 +72,7 @@ pub fn take_matured(env: &Env, caller: &Address, id: u64) -> Result<QueuedAction
     if now > queued.expires_at {
         return Err(HyperionError::TimelockExpired);
     }
-    storage::retain_action(env, &queued);
-    storage::clear_queued(env, id);
+    storage::resolve_queued(env, id, &queued);
     crate::events::action_audit(
         env,
         id,
@@ -98,8 +103,7 @@ pub fn cancel(
         return Err(HyperionError::InvalidLimit);
     }
     let queued = storage::queued(env, id).ok_or(HyperionError::TimelockNotQueued)?;
-    storage::retain_action(env, &queued);
-    storage::clear_queued(env, id);
+    storage::resolve_queued(env, id, &queued);
     crate::events::action_cancelled(env, id, caller);
     crate::events::action_audit(env, id, ActionAuditStatus::Cancelled, caller, reason, note);
     Ok(())
@@ -110,24 +114,24 @@ pub fn cancel(
 /// Catching this at queue time rather than at execute time matters: a bad parameter that only
 /// fails after the delay has elapsed costs another full delay to fix, and during an incident
 /// that is the difference between a bad afternoon and a bad week.
-fn validate(action: &AdminAction) -> Result<(), HyperionError> {
+fn validate(action: &ParsedAction) -> Result<(), HyperionError> {
     match action {
-        AdminAction::SetFeeBps(bps) => {
+        ParsedAction::SetFeeBps(bps) => {
             if *bps > MAX_FEE_BPS {
                 return Err(HyperionError::FeeTooHigh);
             }
         }
-        AdminAction::SetTimelockDelay(delay) => {
+        ParsedAction::SetTimelockDelay(delay) => {
             if *delay < MIN_TIMELOCK_DELAY || *delay > MAX_TIMELOCK_DELAY {
                 return Err(HyperionError::TimelockDelayOutOfRange);
             }
         }
-        AdminAction::SetFlowWindow(window) => {
+        ParsedAction::SetFlowWindow(window) => {
             if *window == 0 {
                 return Err(HyperionError::InvalidWindow);
             }
         }
-        AdminAction::RegisterToken(_, decimals, limit) => {
+        ParsedAction::RegisterToken(_, decimals, limit) => {
             if *limit < 0 {
                 return Err(HyperionError::InvalidLimit);
             }
@@ -135,17 +139,18 @@ fn validate(action: &AdminAction) -> Result<(), HyperionError> {
                 return Err(HyperionError::InvalidDecimals);
             }
         }
-        AdminAction::RaiseTokenFlowLimit(_, limit)
-        | AdminAction::SetRouteFlowLimit(_, _, limit)
-        | AdminAction::SetRouteMaxSingleTransfer(_, limit)
+        ParsedAction::RaiseTokenFlowLimit(_, limit)
+        | ParsedAction::SetRouteFlowLimit(_, _, limit)
+        | ParsedAction::SetRouteMaxSingleTransfer(_, limit)
+        | ParsedAction::SetDestinationFlowLimit(_, _, _, limit)
             if *limit < 0 =>
         {
             return Err(HyperionError::InvalidLimit)
         }
-        AdminAction::SetRouteConfig(_, cfg) if cfg.max_single_transfer < 0 => {
+        ParsedAction::SetRouteConfig(_, cfg) if cfg.max_single_transfer < 0 => {
             return Err(HyperionError::InvalidLimit);
         }
-        AdminAction::BeginStorageMigration(version) if *version != CURRENT_SCHEMA_VERSION => {
+        ParsedAction::BeginStorageMigration(version) if *version != CURRENT_SCHEMA_VERSION => {
             return Err(HyperionError::InvalidLimit);
         }
         _ => {}
@@ -182,37 +187,42 @@ pub fn validate_token_behavior(
 
 pub fn apply(env: &Env, action: &AdminAction) -> Result<(), HyperionError> {
     let mut cfg = storage::config(env)?;
+    #[cfg(target_family = "wasm")]
+    let parsed = action.parsed(env);
+    #[cfg(target_family = "wasm")]
+    let action = &parsed;
+    let mut changed_config = false;
     match action {
-        AdminAction::SetFeeBps(bps) => {
+        ParsedAction::SetFeeBps(bps) => {
             if *bps > MAX_FEE_BPS {
                 return Err(HyperionError::FeeTooHigh);
             }
             cfg.fee_bps = *bps;
-            write_config_event(env, &cfg);
+            changed_config = true;
         }
-        AdminAction::SetTreasury(addr) => {
+        ParsedAction::SetTreasury(addr) => {
             cfg.treasury = addr.clone();
-            write_config_event(env, &cfg);
+            changed_config = true;
         }
-        AdminAction::SetAdmin(addr) => {
+        ParsedAction::SetAdmin(addr) => {
             cfg.admin = addr.clone();
-            write_config_event(env, &cfg);
+            changed_config = true;
         }
-        AdminAction::SetGuardian(addr) => {
+        ParsedAction::SetGuardian(addr) => {
             cfg.guardian = addr.clone();
-            write_config_event(env, &cfg);
+            changed_config = true;
         }
-        AdminAction::SetAdapter(route, addr) => {
+        ParsedAction::SetAdapter(route, addr) => {
             storage::set_adapter(env, *route, addr);
         }
-        AdminAction::SetRailReceiver(route, addr) => {
+        ParsedAction::SetRailReceiver(route, addr) => {
             storage::set_rail_receiver(env, *route, addr);
         }
-        AdminAction::EnableRoute(route) => {
+        ParsedAction::EnableRoute(route) => {
             storage::set_route_enabled(env, *route, true);
             crate::events::route_configured(env, *route, true);
         }
-        AdminAction::RegisterToken(token, decimals, limit) => {
+        ParsedAction::RegisterToken(token, decimals, limit) => {
             if *limit < 0 {
                 return Err(HyperionError::InvalidLimit);
             }
@@ -225,43 +235,43 @@ pub fn apply(env: &Env, action: &AdminAction) -> Result<(), HyperionError> {
                 flow_limit: *limit,
                 enabled: true,
             };
-            storage::set_token_config(env, token, &token_cfg);
-            crate::events::token_registered(env, token, &token_cfg);
+            let encoded = storage::set_token_config(env, token, &token_cfg);
+            crate::events::token_registered_encoded(env, token, encoded);
         }
-        AdminAction::RaiseTokenFlowLimit(token, limit) => {
+        ParsedAction::RaiseTokenFlowLimit(token, limit) => {
             if *limit < 0 {
                 return Err(HyperionError::InvalidLimit);
             }
             let mut token_cfg = storage::token_config(env, token)?;
             token_cfg.flow_limit = *limit;
-            storage::set_token_config(env, token, &token_cfg);
-            crate::events::token_registered(env, token, &token_cfg);
+            let encoded = storage::set_token_config(env, token, &token_cfg);
+            crate::events::token_registered_encoded(env, token, encoded);
         }
-        AdminAction::SetRouteFlowLimit(token, route, limit) => {
+        ParsedAction::SetRouteFlowLimit(token, route, limit) => {
             if *limit < 0 {
                 return Err(HyperionError::InvalidLimit);
             }
             storage::set_route_flow_limit(env, token, *route, *limit);
         }
-        AdminAction::SetTimelockDelay(delay) => {
+        ParsedAction::SetTimelockDelay(delay) => {
             if *delay < MIN_TIMELOCK_DELAY || *delay > MAX_TIMELOCK_DELAY {
                 return Err(HyperionError::TimelockDelayOutOfRange);
             }
             cfg.timelock_delay = *delay;
-            write_config_event(env, &cfg);
+            changed_config = true;
         }
-        AdminAction::SetFlowWindow(window) => {
+        ParsedAction::SetFlowWindow(window) => {
             if *window == 0 {
                 return Err(HyperionError::InvalidWindow);
             }
             cfg.flow_window_ledgers = *window;
-            write_config_event(env, &cfg);
+            changed_config = true;
         }
-        AdminAction::Upgrade(wasm_hash) => {
+        ParsedAction::Upgrade(wasm_hash) => {
             env.deployer()
                 .update_current_contract(ContractExecutable::Wasm(wasm_hash.clone()));
         }
-        AdminAction::BeginStorageMigration(version) => {
+        ParsedAction::BeginStorageMigration(version) => {
             // The fixed high-water marks keep concurrent new deliveries from moving the goal.
             // Repeating a reviewed authorization never resets an interrupted migration.
             if storage::schema_version(env) < *version
@@ -283,13 +293,13 @@ pub fn apply(env: &Env, action: &AdminAction) -> Result<(), HyperionError> {
                 );
             }
         }
-        AdminAction::SetRouteConfig(route, route_cfg) => {
+        ParsedAction::SetRouteConfig(route, route_cfg) => {
             if route_cfg.max_single_transfer < 0 {
                 return Err(HyperionError::InvalidLimit);
             }
             storage::set_route_config(env, *route, route_cfg);
         }
-        AdminAction::SetRouteMaxSingleTransfer(route, limit) => {
+        ParsedAction::SetRouteMaxSingleTransfer(route, limit) => {
             if *limit < 0 {
                 return Err(HyperionError::InvalidLimit);
             }
@@ -298,6 +308,15 @@ pub fn apply(env: &Env, action: &AdminAction) -> Result<(), HyperionError> {
             };
             storage::set_route_config(env, *route, &route_cfg);
         }
+        ParsedAction::SetDestinationFlowLimit(token, route, chain, limit) => {
+            if *limit < 0 {
+                return Err(HyperionError::InvalidLimit);
+            }
+            storage::set_destination_flow_limit(env, token, *route, chain, *limit);
+        }
+    }
+    if changed_config {
+        write_config_event(env, &cfg);
     }
     Ok(())
 }
@@ -305,6 +324,6 @@ pub fn apply(env: &Env, action: &AdminAction) -> Result<(), HyperionError> {
 // Keep the existing write-before-event order for all six configuration mutations.
 #[inline(never)]
 fn write_config_event(env: &Env, cfg: &Config) {
-    storage::set_config(env, cfg);
-    crate::events::config_changed(env, cfg);
+    let encoded = storage::set_config(env, cfg);
+    crate::events::config_changed_encoded(env, encoded);
 }

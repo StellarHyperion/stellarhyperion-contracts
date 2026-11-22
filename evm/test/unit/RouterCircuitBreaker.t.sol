@@ -8,7 +8,9 @@ import {
     CircuitBreakerLatched,
     CircuitBreakerNotTripped,
     InvalidThreshold,
-    TimelockNotReady
+    TimelockExpired,
+    TimelockNotReady,
+    Unauthorized
 } from "../../src/HyperionErrors.sol";
 import {
     ActionKind,
@@ -19,9 +21,11 @@ import {
     RouteKind,
     RouteQuote
 } from "../../src/HyperionTypes.sol";
+import {OutboundProvenance} from "../../src/OutboundProvenance.sol";
 import {IHyperionRouter} from "../../src/interfaces/IHyperionRouter.sol";
 import {Fixture} from "../Fixture.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
+import {MockRailAdapter} from "../mocks/MockRailAdapter.sol";
 
 /// @title A token-wide emergency stop, distinct from the ordinary flow limit
 /// @notice The breaker latches on a tighter rolling ceiling than the token's flow limit, refuses
@@ -391,6 +395,147 @@ contract RouterCircuitBreakerTest is Fixture {
     // -------------------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------------------
+
+    function test_crossing_refusal_does_not_latch_and_headroom_decays_without_a_boundary_reset() public {
+        _setBreakerThreshold(address(usdc), 500e6);
+        uint256 epochStart = (block.timestamp / FLOW_WINDOW + 1) * FLOW_WINDOW;
+        vm.warp(epochStart + FLOW_WINDOW - 1);
+        vm.prank(alice);
+        router.bridgeOut(_usdcRequest(300e6));
+
+        // Crossing a calendar boundary retains the previous window's full observation.
+        vm.warp(epochStart + FLOW_WINDOW);
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(CircuitBreakerLatched.selector, address(usdc), 299_700_000, 500e6)
+        );
+        router.bridgeOut(_usdcRequest(300e6));
+        (, bool tripped) = router.circuitBreaker(address(usdc));
+        assertFalse(tripped);
+        assertEq(router.outboundNonce(), 1);
+        assertEq(cctpRail.callCount(), 1);
+
+        AdminAction memory reset = _empty(ActionKind.ResetTokenCircuitBreaker);
+        reset.subject = address(usdc);
+        vm.prank(admin);
+        vm.expectRevert(CircuitBreakerNotTripped.selector);
+        router.queueAction(reset);
+
+        vm.warp(epochStart + FLOW_WINDOW + FLOW_WINDOW / 2);
+        vm.prank(alice);
+        router.bridgeOut(_usdcRequest(300e6));
+        assertEq(router.outboundNonce(), 2);
+        (, tripped) = router.circuitBreaker(address(usdc));
+        assertFalse(tripped);
+    }
+
+    function test_a_latched_stop_survives_the_rolling_observation_expiring() public {
+        _setBreakerThreshold(address(usdc), 999e6);
+        vm.prank(alice);
+        router.bridgeOut(_usdcRequest(1000e6));
+        vm.warp(block.timestamp + 3 * FLOW_WINDOW);
+        (, bool tripped) = router.circuitBreaker(address(usdc));
+        assertTrue(tripped);
+        assertEq(uint8(_quote(1e6).reason), uint8(QuoteBlocker.CircuitBreakerTripped));
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(CircuitBreakerLatched.selector, address(usdc), 0, 999e6));
+        router.bridgeOut(_usdcRequest(1e6));
+    }
+
+    function test_provider_failure_rolls_back_breaker_latch_flow_nonce_and_funds() public {
+        _setBreakerThreshold(address(usdc), 999e6);
+        uint256 senderBefore = usdc.balanceOf(alice);
+        uint256 flowBefore = router.flowAvailable(address(usdc), RouteKind.Cctp);
+        cctpRail.setDispatchReverts(true);
+        vm.prank(alice);
+        vm.expectRevert(MockRailAdapter.Rejected.selector);
+        router.bridgeOut(_usdcRequest(1000e6));
+        (, bool tripped) = router.circuitBreaker(address(usdc));
+        assertFalse(tripped);
+        assertEq(router.flowAvailable(address(usdc), RouteKind.Cctp), flowBefore);
+        assertEq(router.outboundNonce(), 0);
+        assertEq(cctpRail.callCount(), 0);
+        assertEq(usdc.balanceOf(alice), senderBefore);
+        assertEq(usdc.balanceOf(treasury), 0);
+        assertEq(usdc.balanceOf(address(cctpRail)), 0);
+
+        cctpRail.setDispatchReverts(false);
+        vm.prank(alice);
+        router.bridgeOut(_usdcRequest(1000e6));
+        (, tripped) = router.circuitBreaker(address(usdc));
+        assertTrue(tripped);
+        assertEq(router.outboundNonce(), 1);
+    }
+
+    function test_breaker_child_refuses_external_accounting_and_configuration() public {
+        // The creating router deploys its immutable provenance child at CREATE nonce one.
+        address provenanceAddress =
+            address(uint160(uint256(keccak256(abi.encodePacked(hex"d694", address(router), hex"01")))));
+        OutboundProvenance provenance = OutboundProvenance(provenanceAddress);
+        assertEq(provenance.ROUTER(), address(router));
+        AdminAction memory reset = _empty(ActionKind.ResetTokenCircuitBreaker);
+        reset.subject = address(usdc);
+        vm.expectRevert(Unauthorized.selector);
+        provenance.consumeBreaker(address(usdc), 1);
+        vm.expectRevert(Unauthorized.selector);
+        provenance.configureBreaker(reset);
+    }
+
+    function test_threshold_execution_rechecks_a_limit_lowered_while_queued() public {
+        AdminAction memory action = _empty(ActionKind.SetTokenCircuitBreakerThreshold);
+        action.subject = address(usdc);
+        action.amount = 500e6;
+        vm.prank(admin);
+        uint64 id = router.queueAction(action);
+        uint64 eta = router.queuedAction(id).eta;
+        vm.prank(guardian);
+        router.lowerTokenFlowLimit(address(usdc), 400e6);
+        vm.warp(eta);
+        vm.prank(admin);
+        vm.expectRevert(InvalidThreshold.selector);
+        router.executeAction(id);
+        assertFalse(router.queuedAction(id).executed);
+        (uint256 threshold,) = router.circuitBreaker(address(usdc));
+        assertEq(threshold, BREAKER_THRESHOLD);
+    }
+
+    function test_queued_reset_cannot_execute_after_another_reset_rearms_the_breaker() public {
+        _setBreakerThreshold(address(usdc), 999e6);
+        vm.prank(alice);
+        router.bridgeOut(_usdcRequest(1000e6));
+        AdminAction memory reset = _empty(ActionKind.ResetTokenCircuitBreaker);
+        reset.subject = address(usdc);
+        vm.startPrank(admin);
+        uint64 first = router.queueAction(reset);
+        uint64 second = router.queueAction(reset);
+        vm.stopPrank();
+        vm.warp(router.queuedAction(first).eta);
+        vm.prank(admin);
+        router.executeAction(first);
+        vm.prank(admin);
+        vm.expectRevert(CircuitBreakerNotTripped.selector);
+        router.executeAction(second);
+        assertFalse(router.queuedAction(second).executed);
+    }
+
+    function test_threshold_action_accepts_the_expiry_boundary_and_refuses_after_it() public {
+        AdminAction memory action = _empty(ActionKind.SetTokenCircuitBreakerThreshold);
+        action.subject = address(usdc);
+        action.amount = 500e6;
+        vm.startPrank(admin);
+        uint64 first = router.queueAction(action);
+        uint64 second = router.queueAction(action);
+        vm.stopPrank();
+        uint64 expiresAt = router.queuedAction(first).expiresAt;
+        vm.warp(expiresAt);
+        vm.prank(admin);
+        router.executeAction(first);
+        vm.warp(uint256(expiresAt) + 1);
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(TimelockExpired.selector, expiresAt));
+        router.executeAction(second);
+        assertFalse(router.queuedAction(second).executed);
+    }
 
     function _quote(uint256 amount) private view returns (RouteQuote memory) {
         return router.quote(RouteKind.Cctp, address(usdc), amount, _dest(G_ADDR), STELLAR_DECIMALS);

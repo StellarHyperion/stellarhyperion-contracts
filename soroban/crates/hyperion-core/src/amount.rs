@@ -1,5 +1,6 @@
 use crate::error::HyperionError;
 use crate::{BPS_DENOMINATOR, MAX_FEE_BPS};
+use soroban_sdk::xdr::ToXdr;
 
 /// Largest decimal exponent we will scale by. i128 tops out a little above 1.7e38, so 38 is
 /// the point past which no useful amount survives a scale-up anyway.
@@ -28,13 +29,7 @@ pub fn pow10(exp: u32) -> Option<i128> {
     if exp > MAX_DECIMALS {
         return None;
     }
-    let mut acc: i128 = 1;
-    let mut i = 0u32;
-    while i < exp {
-        acc = acc.checked_mul(10)?;
-        i += 1;
-    }
-    Some(acc)
+    crate::numeric::multiply_power_of_ten(1, exp)
 }
 
 /// Move `amount` from a `from`-decimal base into a `to`-decimal base.
@@ -56,19 +51,19 @@ pub fn convert_decimals(amount: i128, from: u32, to: u32) -> Result<Conversion, 
     }
 
     if to > from {
-        let factor = pow10(to - from).ok_or(HyperionError::DecimalOverflow)?;
-        let scaled = amount
-            .checked_mul(factor)
+        let scaled = crate::numeric::multiply_power_of_ten(amount, to - from)
             .ok_or(HyperionError::DecimalOverflow)?;
         Ok(Conversion {
             amount: scaled,
             dust: 0,
         })
     } else {
-        let factor = pow10(from - to).ok_or(HyperionError::DecimalOverflow)?;
+        let quotient = crate::numeric::divide_power_of_ten(amount, from - to);
+        let represented = crate::numeric::multiply_power_of_ten(quotient, from - to)
+            .ok_or(HyperionError::DecimalOverflow)?;
         Ok(Conversion {
-            amount: amount / factor,
-            dust: amount % factor,
+            amount: quotient,
+            dust: amount - represented,
         })
     }
 }
@@ -107,8 +102,8 @@ pub fn floor_to_representable(amount: i128, from: u32, to: u32) -> Result<i128, 
     if to >= from {
         return Ok(amount);
     }
-    let factor = pow10(from - to).ok_or(HyperionError::DecimalOverflow)?;
-    Ok(amount - (amount % factor))
+    let quotient = crate::numeric::divide_power_of_ten(amount, from - to);
+    crate::numeric::multiply_power_of_ten(quotient, from - to).ok_or(HyperionError::DecimalOverflow)
 }
 
 /// How a gross amount divides between the recipient and the protocol.
@@ -135,10 +130,9 @@ pub fn apply_fee(amount: i128, fee_bps: u32) -> Result<FeeSplit, HyperionError> 
     if fee_bps > MAX_FEE_BPS {
         return Err(HyperionError::FeeTooHigh);
     }
-    let fee = amount
-        .checked_mul(fee_bps as i128)
-        .ok_or(HyperionError::DecimalOverflow)?
-        / BPS_DENOMINATOR;
+    let product =
+        crate::numeric::multiply_small(amount, fee_bps).ok_or(HyperionError::DecimalOverflow)?;
+    let fee = crate::numeric::divide_small(product, BPS_DENOMINATOR as u32);
     let net = amount - fee;
     if net <= 0 {
         return Err(HyperionError::InvalidAmount);
@@ -223,6 +217,30 @@ pub fn assert_exact_transfer(
         return Err(HyperionError::InvalidAmount);
     }
     Ok(())
+}
+
+/// Compute a 32-byte deterministic fingerprint binding an outbound quote to its exact
+/// route, adapter contract, fee rate, source decimals, and destination decimals.
+pub fn compute_quote_fingerprint(
+    env: &soroban_sdk::Env,
+    route: crate::RouteKind,
+    adapter: &soroban_sdk::Address,
+    fee_bps: u32,
+    source_decimals: u32,
+    destination_decimals: u32,
+) -> soroban_sdk::BytesN<32> {
+    env.crypto()
+        .sha256(
+            &(
+                route as u32,
+                adapter.clone(),
+                fee_bps,
+                source_decimals,
+                destination_decimals,
+            )
+                .to_xdr(env),
+        )
+        .into()
 }
 
 #[cfg(test)]

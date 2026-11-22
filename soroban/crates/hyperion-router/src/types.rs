@@ -176,6 +176,7 @@ pub struct InboundRecord {
 // review; it never signs or submits them. Adding or renaming a variant means updating that tool
 // and the protocol parity tests in the same change, or a reviewer will be shown an action the
 // router cannot accept.
+#[cfg(not(target_family = "wasm"))]
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AdminAction {
@@ -194,8 +195,55 @@ pub enum AdminAction {
     Upgrade(BytesN<32>),
     SetRouteConfig(RouteKind, RouteConfig),
     SetRouteMaxSingleTransfer(RouteKind, i128),
+    SetDestinationFlowLimit(Address, RouteKind, String, i128),
     // Authorize a fixed, bounded migration only after the ordinary review delay.
     BeginStorageMigration(u32),
+}
+
+#[cfg(not(target_family = "wasm"))]
+pub(crate) use AdminAction as ParsedAction;
+
+#[cfg(target_family = "wasm")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ParsedAction {
+    SetFeeBps(u32),
+    SetTreasury(Address),
+    SetAdmin(Address),
+    SetGuardian(Address),
+    SetAdapter(RouteKind, Address),
+    SetRailReceiver(RouteKind, Address),
+    EnableRoute(RouteKind),
+    RegisterToken(Address, u32, i128),
+    RaiseTokenFlowLimit(Address, i128),
+    SetRouteFlowLimit(Address, RouteKind, i128),
+    SetTimelockDelay(u64),
+    SetFlowWindow(u32),
+    Upgrade(BytesN<32>),
+    SetRouteConfig(RouteKind, RouteConfig),
+    SetRouteMaxSingleTransfer(RouteKind, i128),
+    SetDestinationFlowLimit(Address, RouteKind, String, i128),
+    // Authorize a fixed, bounded migration only after the ordinary review delay.
+    BeginStorageMigration(u32),
+}
+
+// Guest storage and events retain the validated original action Val instead of
+// decoding a large enum and encoding it again at each queued-record boundary.
+#[cfg(target_family = "wasm")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminAction {
+    value: soroban_sdk::Vec<soroban_sdk::Val>,
+}
+
+#[cfg(target_family = "wasm")]
+impl AdminAction {
+    pub(crate) fn parsed(&self, env: &soroban_sdk::Env) -> ParsedAction {
+        use soroban_sdk::unwrap::UnwrapOptimized;
+        crate::action_codec::decode(env, &self.value.to_val()).unwrap_optimized()
+    }
+
+    pub const fn spec_xdr() -> [u8; action_spec::AdminAction::spec_xdr().len()] {
+        action_spec::AdminAction::spec_xdr()
+    }
 }
 
 #[contracttype]
@@ -287,6 +335,26 @@ pub struct OutboundRequest {
     pub min_destination_amount: i128,
 }
 
+/// Optional preconditions validated before dispatch.
+#[contracttype]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct OutboundPreconditions {
+    /// Expected 32-byte hash binding route, adapter, fee, and precision. If present and mismatched,
+    /// the transfer is refused before any token debit or state change.
+    pub quote_fingerprint: Option<BytesN<32>>,
+    /// Ledger sequence or timestamp boundary after which the request is refused as expired.
+    pub deadline: Option<u64>,
+}
+
+/// A single transfer request within an atomic batch operation.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchOutboundItem {
+    pub request: OutboundRequest,
+    pub preconditions: OutboundPreconditions,
+    pub gas_amount: Option<i128>,
+}
+
 // Where an outbound transfer is going, in the form the caller supplies it.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -339,4 +407,66 @@ pub struct MigrationStatus {
     pub migrated_claims: u64,
     pub total_transfers: u64,
     pub total_claims: u64,
+}
+
+#[cfg(target_family = "wasm")]
+mod action_spec {
+    use super::*;
+    #[contracttype]
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub enum AdminAction {
+        SetFeeBps(u32),
+        SetTreasury(Address),
+        SetAdmin(Address),
+        SetGuardian(Address),
+        SetAdapter(RouteKind, Address),
+        SetRailReceiver(RouteKind, Address),
+        EnableRoute(RouteKind),
+        RegisterToken(Address, u32, i128),
+        RaiseTokenFlowLimit(Address, i128),
+        SetRouteFlowLimit(Address, RouteKind, i128),
+        SetTimelockDelay(u64),
+        SetFlowWindow(u32),
+        Upgrade(BytesN<32>),
+        SetRouteConfig(RouteKind, RouteConfig),
+        SetRouteMaxSingleTransfer(RouteKind, i128),
+        SetDestinationFlowLimit(Address, RouteKind, String, i128),
+        // Authorize a fixed, bounded migration only after the ordinary review delay.
+        BeginStorageMigration(u32),
+    }
+}
+
+#[cfg(target_family = "wasm")]
+impl soroban_sdk::SpecShakingMarker for AdminAction {
+    fn spec_shaking_marker() {
+        <action_spec::AdminAction as soroban_sdk::SpecShakingMarker>::spec_shaking_marker();
+    }
+}
+
+#[cfg(target_family = "wasm")]
+impl soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val> for AdminAction {
+    type Error = soroban_sdk::ConversionError;
+    fn try_from_val(env: &soroban_sdk::Env, val: &soroban_sdk::Val) -> Result<Self, Self::Error> {
+        Ok(Self {
+            value: crate::action_codec::canonical(env, val)?,
+        })
+    }
+}
+
+#[cfg(target_family = "wasm")]
+impl soroban_sdk::TryFromVal<soroban_sdk::Env, AdminAction> for soroban_sdk::Val {
+    type Error = soroban_sdk::ConversionError;
+    fn try_from_val(env: &soroban_sdk::Env, val: &AdminAction) -> Result<Self, Self::Error> {
+        let _ = env;
+        Ok(val.value.to_val())
+    }
+}
+
+#[cfg(target_family = "wasm")]
+impl soroban_sdk::TryFromVal<soroban_sdk::Env, &AdminAction> for soroban_sdk::Val {
+    type Error = soroban_sdk::ConversionError;
+    fn try_from_val(env: &soroban_sdk::Env, val: &&AdminAction) -> Result<Self, Self::Error> {
+        let _ = env;
+        Ok(val.value.to_val())
+    }
 }

@@ -12,8 +12,12 @@
 //! funds it was promised, and either delivers them or writes down who they belong to.
 #![no_std]
 
+#[cfg(any(target_family = "wasm", test))]
+mod action_codec;
 mod adapter;
 mod events;
+#[cfg(any(target_family = "wasm", test))]
+mod key_codec;
 mod storage;
 mod timelock;
 mod types;
@@ -25,11 +29,12 @@ pub use adapter::{PaidRailAdapter, PaidRailAdapterClient, RailAdapter, RailAdapt
 pub use storage::DataKey;
 pub use timelock::{GRACE_PERIOD, MAX_TIMELOCK_DELAY, MIN_TIMELOCK_DELAY};
 pub use types::{
-    ActionAuditStatus, AdminAction, CancelReason, ClaimHistory, ClaimLiability, ClaimProvenance,
-    ClaimSettlementResult, Config, DebitBreakdown, Destination, InboundRecord, MigrationStatus,
-    Origin, OutboundRequest, PendingClaim, QueuedAction, Recipient, RecipientEligibility,
-    RouteConfig, RouteQuote, RouteQuoteV2, SourceDebit, TokenConfig, TransferRecord,
-    CURRENT_SCHEMA_VERSION, LEGACY_SCHEMA_VERSION, MAX_MAINTENANCE_BATCH, MAX_REASON_LEN,
+    ActionAuditStatus, AdminAction, BatchOutboundItem, CancelReason, ClaimHistory, ClaimLiability,
+    ClaimProvenance, ClaimSettlementResult, Config, DebitBreakdown, Destination, InboundRecord,
+    MigrationStatus, Origin, OutboundPreconditions, OutboundRequest, PendingClaim, QueuedAction,
+    Recipient, RecipientEligibility, RouteConfig, RouteQuote, RouteQuoteV2, SourceDebit,
+    TokenConfig, TransferRecord, CURRENT_SCHEMA_VERSION, LEGACY_SCHEMA_VERSION,
+    MAX_MAINTENANCE_BATCH, MAX_REASON_LEN,
 };
 
 use hyperion_core::{
@@ -37,7 +42,10 @@ use hyperion_core::{
     amount::{assert_exact_transfer, convert_decimals_exact, fee_and_floor},
     flow, HyperionError, RouteKind, MAX_FEE_BPS,
 };
-use soroban_sdk::{contract, contractimpl, token, vec, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    contract, contractimpl, token, vec, Address, BytesN, Env, EnvBase, IntoVal, String, TryFromVal,
+    Vec,
+};
 
 // Every rail Hyperion knows how to speak, in the order the app shows them.
 const ALL_ROUTES: [RouteKind; 4] = [
@@ -85,10 +93,10 @@ impl HyperionRouter {
             timelock_delay,
             paused: false,
         };
-        storage::set_config(&env, &cfg);
+        let encoded = storage::set_config(&env, &cfg);
         storage::set_schema_version(&env, CURRENT_SCHEMA_VERSION);
         storage::set_liability_tracking(&env);
-        events::config_changed(&env, &cfg);
+        events::config_changed_encoded(&env, encoded);
         Ok(())
     }
 
@@ -111,7 +119,7 @@ impl HyperionRouter {
         request: OutboundRequest,
     ) -> Result<u64, HyperionError> {
         sender.require_auth();
-        let plan = plan_outbound(&env, &request, None)?;
+        let plan = plan_outbound(&env, &request, None, None)?;
         bridge_out_inner(env, sender, request, None, plan)
     }
 
@@ -121,14 +129,43 @@ impl HyperionRouter {
         request: OutboundRequest,
         gas_amount: i128,
     ) -> Result<u64, HyperionError> {
+        sender.require_auth();
         if request.route != RouteKind::AxelarIts && request.route != RouteKind::Cctp {
             return Err(HyperionError::UnsupportedRoute);
         }
         if gas_amount <= 0 {
             return Err(HyperionError::InvalidAmount);
         }
+        let plan = plan_outbound(&env, &request, Some(gas_amount), None)?;
+        bridge_out_inner(env, sender, request, Some(gas_amount), plan)
+    }
+
+    pub fn bridge_out_with_preconditions(
+        env: Env,
+        sender: Address,
+        request: OutboundRequest,
+        preconditions: OutboundPreconditions,
+    ) -> Result<u64, HyperionError> {
         sender.require_auth();
-        let plan = plan_outbound(&env, &request, Some(gas_amount))?;
+        let plan = plan_outbound(&env, &request, None, Some(&preconditions))?;
+        bridge_out_inner(env, sender, request, None, plan)
+    }
+
+    pub fn bridge_out_gas_preconditions(
+        env: Env,
+        sender: Address,
+        request: OutboundRequest,
+        gas_amount: i128,
+        preconditions: OutboundPreconditions,
+    ) -> Result<u64, HyperionError> {
+        sender.require_auth();
+        if request.route != RouteKind::AxelarIts && request.route != RouteKind::Cctp {
+            return Err(HyperionError::UnsupportedRoute);
+        }
+        if gas_amount <= 0 {
+            return Err(HyperionError::InvalidAmount);
+        }
+        let plan = plan_outbound(&env, &request, Some(gas_amount), Some(&preconditions))?;
         bridge_out_inner(env, sender, request, Some(gas_amount), plan)
     }
 
@@ -158,6 +195,29 @@ impl HyperionRouter {
             Ok(_) => 0,
             Err(error) => error as u32,
         }
+    }
+
+    pub fn bridge_out_batch(
+        env: Env,
+        sender: Address,
+        requests: Vec<OutboundRequest>,
+        max_total_amount: i128,
+    ) -> Result<Vec<u64>, HyperionError> {
+        bridge_out_batch_inner(
+            env,
+            sender,
+            BatchSource::Requests(requests),
+            max_total_amount,
+        )
+    }
+
+    pub fn bridge_out_batch_items(
+        env: Env,
+        sender: Address,
+        items: Vec<BatchOutboundItem>,
+        max_total_amount: i128,
+    ) -> Result<Vec<u64>, HyperionError> {
+        bridge_out_batch_inner(env, sender, BatchSource::Items(items), max_total_amount)
     }
 
     pub fn supports_paid_route(_env: Env, route: RouteKind) -> bool {
@@ -215,7 +275,7 @@ impl HyperionRouter {
                 created_at: env.ledger().timestamp(),
                 settled: false,
             };
-            storage::set_claim(&env, &claim);
+            let encoded_claim = storage::set_claim(&env, &claim);
             let reason = payout_failure_reason(&client, &this, amount);
             storage::set_claim_failure(&env, id, reason);
             if storage::liability_tracking(&env) {
@@ -230,7 +290,7 @@ impl HyperionRouter {
                     message_id: origin.message_id.clone(),
                 },
             );
-            events::claim_parked(&env, &claim);
+            events::claim_parked_encoded(&env, &claim.recipient, &claim.token, encoded_claim);
             events::claim_payout_failure_v1(&env, &claim, reason);
             id
         };
@@ -331,32 +391,42 @@ impl HyperionRouter {
         amount: i128,
         destination_decimals: u32,
     ) -> Vec<RouteQuote> {
-        let mut out = vec![&env];
-        let cfg = match storage::config(&env) {
-            Ok(cfg) => cfg,
-            Err(e) => {
-                for route in ALL_ROUTES {
-                    out.push_back(unavailable(route, amount, e));
-                }
-                return out;
-            }
-        };
-        let token_cfg = storage::token_config_opt(&env, &token);
-        let ledger = env.ledger().sequence();
+        quote_routes_inner(&env, &token, amount, destination_decimals, None)
+    }
 
-        for route in ALL_ROUTES {
-            out.push_back(quote_one(
-                &env,
-                &cfg,
-                &token,
-                token_cfg.as_ref(),
-                route,
-                amount,
-                destination_decimals,
-                ledger,
-            ));
-        }
-        out
+    pub fn quote_routes_for_destination(
+        env: Env,
+        token: Address,
+        amount: i128,
+        destination_decimals: u32,
+        destination_chain: Option<String>,
+    ) -> Vec<RouteQuote> {
+        quote_routes_inner(
+            &env,
+            &token,
+            amount,
+            destination_decimals,
+            destination_chain.as_ref(),
+        )
+    }
+
+    pub fn quote_fingerprint(
+        env: Env,
+        route: RouteKind,
+        token: Address,
+        destination_decimals: u32,
+    ) -> Result<BytesN<32>, HyperionError> {
+        let cfg = storage::config(&env)?;
+        let token_cfg = storage::token_config(&env, &token)?;
+        let adapter_addr = storage::adapter(&env, route)?;
+        Ok(hyperion_core::compute_quote_fingerprint(
+            &env,
+            route,
+            &adapter_addr,
+            cfg.fee_bps,
+            token_cfg.decimals,
+            destination_decimals,
+        ))
     }
 
     // Versioned quote wrapper; legacy quote_routes retains its exact schema.
@@ -371,32 +441,9 @@ impl HyperionRouter {
             .as_ref()
             .ok()
             .and_then(|_| storage::token_config_opt(&env, &token));
-        let breakdown = cfg
-            .as_ref()
-            .ok()
-            .and_then(|cfg| {
-                token_cfg.as_ref().and_then(|t| {
-                    hyperion_core::amount::compute_quote_breakdown(
-                        amount,
-                        cfg.fee_bps,
-                        t.decimals,
-                        destination_decimals,
-                    )
-                    .ok()
-                })
-            })
-            .map(|b| {
-                DebitBreakdown::Known(SourceDebit {
-                    requested_amount: b.requested_amount,
-                    fee: b.fee,
-                    net_amount: b.net_amount,
-                    retained_dust: b.retained_dust,
-                    actual_debit: b.actual_debit,
-                    destination_amount: b.destination_amount,
-                })
-            })
-            .unwrap_or(DebitBreakdown::Unavailable);
-        let mut out = vec![&env];
+        let breakdown_val =
+            quote_breakdown_value(&env, &cfg, token_cfg.as_ref(), amount, destination_decimals);
+        let mut out: Vec<soroban_sdk::Val> = vec![&env];
         let ledger = env.ledger().sequence();
         for route in ALL_ROUTES {
             let quote = match &cfg {
@@ -409,15 +456,18 @@ impl HyperionRouter {
                     amount,
                     destination_decimals,
                     ledger,
+                    None,
                 ),
-                Err(error) => unavailable(route, amount, *error),
+                Err(error) => unavailable(&env, route, amount, *error),
             };
-            out.push_back(RouteQuoteV2 {
-                quote,
-                breakdown: breakdown.clone(),
-            });
+            let quote_val: soroban_sdk::Val = quote;
+            let encoded: soroban_sdk::Val = env
+                .map_new_from_slices(&["breakdown", "quote"], &[breakdown_val, quote_val])
+                .unwrap()
+                .into();
+            out.push_back(encoded);
         }
-        out
+        Vec::try_from_val(&env, &&out).unwrap()
     }
 
     // ---------------------------------------------------------------------------------------
@@ -453,8 +503,8 @@ impl HyperionRouter {
         require_authority(&env, &caller, true)?;
         let mut token_cfg = storage::token_config(&env, &token)?;
         token_cfg.enabled = false;
-        storage::set_token_config(&env, &token, &token_cfg);
-        events::token_registered(&env, &token, &token_cfg);
+        let encoded = storage::set_token_config(&env, &token, &token_cfg);
+        events::token_registered_encoded(&env, &token, encoded);
         Ok(())
     }
 
@@ -478,6 +528,28 @@ impl HyperionRouter {
         token_cfg.flow_limit = limit;
         storage::set_token_config(&env, &token, &token_cfg);
         events::flow_limit_lowered(&env, &token, limit, &caller);
+        Ok(())
+    }
+
+    /// Tighten a destination-specific flow limit immediately. Raising one goes through the timelock;
+    /// lowering one does not.
+    pub fn lower_destination_flow_limit(
+        env: Env,
+        caller: Address,
+        token: Address,
+        route: RouteKind,
+        chain: String,
+        limit: i128,
+    ) -> Result<(), HyperionError> {
+        require_authority(&env, &caller, true)?;
+        if limit < 0 {
+            return Err(HyperionError::InvalidLimit);
+        }
+        let current_limit = storage::effective_destination_flow_limit(&env, &token, route, &chain)?;
+        if limit >= current_limit {
+            return Err(HyperionError::InvalidLimit);
+        }
+        storage::set_destination_flow_limit(&env, &token, route, &chain, limit);
         Ok(())
     }
 
@@ -858,6 +930,41 @@ impl HyperionRouter {
         )
     }
 
+    pub fn destination_flow_limit(
+        env: Env,
+        token: Address,
+        route: RouteKind,
+        chain: String,
+    ) -> Option<i128> {
+        storage::destination_flow_limit(&env, &token, route, &chain)
+    }
+
+    pub fn effective_destination_flow_limit(
+        env: Env,
+        token: Address,
+        route: RouteKind,
+        chain: String,
+    ) -> Result<i128, HyperionError> {
+        storage::effective_destination_flow_limit(&env, &token, route, &chain)
+    }
+
+    pub fn destination_flow_available(
+        env: Env,
+        token: Address,
+        route: RouteKind,
+        chain: String,
+    ) -> Result<i128, HyperionError> {
+        let cfg = storage::config(&env)?;
+        let limit = storage::effective_destination_flow_limit(&env, &token, route, &chain)?;
+        let window = storage::destination_flow_window(&env, &token, route, &chain);
+        flow::available(
+            &window,
+            limit,
+            env.ledger().sequence(),
+            cfg.flow_window_ledgers,
+        )
+    }
+
     pub fn was_processed(env: Env, route: RouteKind, message_id: BytesN<32>) -> bool {
         storage::is_processed(&env, route, &message_id)
     }
@@ -912,21 +1019,122 @@ fn set_pause_state(env: &Env, caller: &Address, state: bool) -> Result<(), Hyper
     Ok(())
 }
 
-// A quote for a route that cannot be used, carrying the reason it cannot.
 #[inline(never)]
-fn unavailable(route: RouteKind, amount: i128, reason: HyperionError) -> RouteQuote {
-    RouteQuote {
-        route,
-        available: false,
-        reason: reason as u32,
-        gross_amount: amount,
-        fee: 0,
-        net_amount: 0,
-        destination_amount: 0,
-        flow_available: 0,
-        waits_on_attestation: route.waits_on_attestation(),
-        is_canonical: route.is_canonical(),
+fn quote_routes_inner(
+    env: &Env,
+    token: &Address,
+    amount: i128,
+    destination_decimals: u32,
+    destination_chain: Option<&String>,
+) -> Vec<RouteQuote> {
+    let mut out: Vec<soroban_sdk::Val> = vec![env];
+    let cfg = match storage::config(env) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            for route in ALL_ROUTES {
+                out.push_back(unavailable(env, route, amount, e));
+            }
+            return Vec::try_from_val(env, &&out).unwrap();
+        }
+    };
+    let token_cfg = storage::token_config_opt(env, token);
+    let ledger = env.ledger().sequence();
+
+    for route in ALL_ROUTES {
+        out.push_back(quote_one(
+            env,
+            &cfg,
+            token,
+            token_cfg.as_ref(),
+            route,
+            amount,
+            destination_decimals,
+            ledger,
+            destination_chain,
+        ));
     }
+    Vec::try_from_val(env, &&out).unwrap()
+}
+
+#[inline(never)]
+fn quote_breakdown_value(
+    env: &Env,
+    cfg: &Result<Config, HyperionError>,
+    token_cfg: Option<&TokenConfig>,
+    amount: i128,
+    destination_decimals: u32,
+) -> soroban_sdk::Val {
+    let breakdown = match (cfg, token_cfg) {
+        (Ok(cfg), Some(token_cfg)) => hyperion_core::amount::compute_quote_breakdown(
+            amount,
+            cfg.fee_bps,
+            token_cfg.decimals,
+            destination_decimals,
+        )
+        .ok(),
+        _ => None,
+    };
+    match breakdown {
+        Some(b) => {
+            let encoded: soroban_sdk::Val = env
+                .map_new_from_slices(
+                    &[
+                        "actual_debit",
+                        "destination_amount",
+                        "fee",
+                        "net_amount",
+                        "requested_amount",
+                        "retained_dust",
+                    ],
+                    &[
+                        b.actual_debit.into_val(env),
+                        b.destination_amount.into_val(env),
+                        b.fee.into_val(env),
+                        b.net_amount.into_val(env),
+                        b.requested_amount.into_val(env),
+                        b.retained_dust.into_val(env),
+                    ],
+                )
+                .unwrap()
+                .into();
+            let tag: soroban_sdk::Val = soroban_sdk::symbol_short!("Known").into_val(env);
+            env.vec_new_from_slice(&[tag, encoded]).unwrap().into()
+        }
+        None => {
+            let tag: soroban_sdk::Val = soroban_sdk::Symbol::new(env, "Unavailable").into_val(env);
+            env.vec_new_from_slice(&[tag]).unwrap().into()
+        }
+    }
+}
+
+// A quote for a route that cannot be used, carrying the reason it cannot.
+#[inline(always)]
+fn unavailable(
+    env: &Env,
+    route: RouteKind,
+    amount: i128,
+    reason: HyperionError,
+) -> soroban_sdk::Val {
+    encode_quote(
+        env,
+        route,
+        amount,
+        QuoteDetails {
+            reason: reason as u32,
+            fee: 0,
+            net: 0,
+            destination_amount: 0,
+            flow_available: 0,
+        },
+    )
+}
+
+struct QuoteDetails {
+    reason: u32,
+    fee: i128,
+    net: i128,
+    destination_amount: i128,
+    flow_available: i128,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -940,76 +1148,241 @@ fn quote_one(
     amount: i128,
     destination_decimals: u32,
     ledger: u32,
-) -> RouteQuote {
+    destination_chain: Option<&String>,
+) -> soroban_sdk::Val {
+    match quote_details(
+        env,
+        cfg,
+        token,
+        token_cfg,
+        route,
+        amount,
+        destination_decimals,
+        ledger,
+        destination_chain,
+    ) {
+        Ok(details) => encode_quote(env, route, amount, details),
+        Err(error) => unavailable(env, route, amount, error),
+    }
+}
+
+#[inline(never)]
+fn encode_quote(
+    env: &Env,
+    route: RouteKind,
+    amount: i128,
+    details: QuoteDetails,
+) -> soroban_sdk::Val {
+    let available = details.reason == 0;
+    let gross_amount = if available {
+        details.fee + details.net
+    } else {
+        amount
+    };
+    env.map_new_from_slices(
+        &[
+            "available",
+            "destination_amount",
+            "fee",
+            "flow_available",
+            "gross_amount",
+            "is_canonical",
+            "net_amount",
+            "reason",
+            "route",
+            "waits_on_attestation",
+        ],
+        &[
+            available.into_val(env),
+            details.destination_amount.into_val(env),
+            details.fee.into_val(env),
+            details.flow_available.into_val(env),
+            gross_amount.into_val(env),
+            route.is_canonical().into_val(env),
+            details.net.into_val(env),
+            details.reason.into_val(env),
+            route.into_val(env),
+            route.waits_on_attestation().into_val(env),
+        ],
+    )
+    .unwrap()
+    .into()
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn quote_details(
+    env: &Env,
+    cfg: &Config,
+    token: &Address,
+    token_cfg: Option<&TokenConfig>,
+    route: RouteKind,
+    amount: i128,
+    destination_decimals: u32,
+    ledger: u32,
+    destination_chain: Option<&String>,
+) -> Result<QuoteDetails, HyperionError> {
     let token_cfg = match token_cfg {
         Some(c) if c.enabled => c,
-        Some(_) | None => return unavailable(route, amount, HyperionError::TokenNotRegistered),
+        Some(_) | None => return Err(HyperionError::TokenNotRegistered),
     };
     if amount <= 0 {
-        return unavailable(route, amount, HyperionError::InvalidAmount);
+        return Err(HyperionError::InvalidAmount);
     }
     if cfg.paused {
-        return unavailable(route, amount, HyperionError::Paused);
+        return Err(HyperionError::Paused);
     }
     if !storage::route_enabled(env, route) {
-        return unavailable(route, amount, HyperionError::RouteDisabled);
+        return Err(HyperionError::RouteDisabled);
     }
     if storage::adapter(env, route).is_err() {
-        return unavailable(route, amount, HyperionError::AdapterNotSet);
+        return Err(HyperionError::AdapterNotSet);
     }
     if let Some(route_cfg) = storage::route_config(env, route) {
         if route_cfg.max_single_transfer > 0 && amount > route_cfg.max_single_transfer {
-            return unavailable(route, amount, HyperionError::ExceedsRouteLimit);
+            return Err(HyperionError::ExceedsRouteLimit);
         }
     }
 
-    let split = match fee_and_floor(
+    let split = fee_and_floor(
         amount,
         cfg.fee_bps,
         token_cfg.decimals,
         destination_decimals,
-    ) {
-        Ok(v) => v,
-        Err(e) => return unavailable(route, amount, e),
-    };
+    )?;
     let fee = split.fee;
     let net = split.net;
     if net <= 0 {
-        return unavailable(route, amount, HyperionError::AmountNotRepresentable);
+        return Err(HyperionError::AmountNotRepresentable);
     }
-    let destination_amount =
-        match convert_decimals_exact(net, token_cfg.decimals, destination_decimals) {
-            Ok(v) => v,
-            Err(e) => return unavailable(route, amount, e),
-        };
+    let destination_amount = convert_decimals_exact(net, token_cfg.decimals, destination_decimals)?;
 
-    let limit = match storage::effective_flow_limit(env, token, route) {
-        Ok(v) => v,
-        Err(e) => return unavailable(route, amount, e),
-    };
+    let limit = storage::effective_flow_limit(env, token, route)?;
     let window = storage::flow_window(env, token, route);
-    let headroom = flow::available(&window, limit, ledger, cfg.flow_window_ledgers).unwrap_or(0);
-    if net > headroom {
-        let mut quote = unavailable(route, amount, HyperionError::FlowLimitExceeded);
-        quote.flow_available = headroom;
-        quote.fee = fee;
-        quote.net_amount = net;
-        quote.destination_amount = destination_amount;
-        return quote;
+    let route_headroom =
+        flow::available(&window, limit, ledger, cfg.flow_window_ledgers).unwrap_or(0);
+
+    let (effective_headroom, bound_by_dest) = if let Some(chain) = destination_chain {
+        let dest_limit = storage::effective_destination_flow_limit(env, token, route, chain)?;
+        let dest_window = storage::destination_flow_window(env, token, route, chain);
+        let dest_headroom =
+            flow::available(&dest_window, dest_limit, ledger, cfg.flow_window_ledgers).unwrap_or(0);
+        if dest_headroom < route_headroom {
+            (dest_headroom, true)
+        } else {
+            (route_headroom, false)
+        }
+    } else {
+        (route_headroom, false)
+    };
+
+    let reason = if net > effective_headroom {
+        if bound_by_dest {
+            HyperionError::DestinationFlowLimitExceeded as u32
+        } else {
+            HyperionError::FlowLimitExceeded as u32
+        }
+    } else {
+        0
+    };
+    Ok(QuoteDetails {
+        reason,
+        fee,
+        net,
+        destination_amount,
+        flow_available: effective_headroom,
+    })
+}
+
+// Both public batch formats share validation and dispatch without an intermediate
+// Soroban vector that would encode and then decode every legacy request again.
+enum BatchSource {
+    Requests(Vec<OutboundRequest>),
+    Items(Vec<BatchOutboundItem>),
+}
+
+impl BatchSource {
+    fn len(&self) -> u32 {
+        match self {
+            Self::Requests(requests) => requests.len(),
+            Self::Items(items) => items.len(),
+        }
     }
 
-    RouteQuote {
-        route,
-        available: true,
-        reason: 0,
-        gross_amount: fee + net,
-        fee,
-        net_amount: net,
-        destination_amount,
-        flow_available: headroom,
-        waits_on_attestation: route.waits_on_attestation(),
-        is_canonical: route.is_canonical(),
+    fn item(&self, index: u32) -> BatchOutboundItem {
+        match self {
+            Self::Requests(requests) => BatchOutboundItem {
+                request: requests.get_unchecked(index),
+                preconditions: OutboundPreconditions::default(),
+                gas_amount: None,
+            },
+            Self::Items(items) => items.get_unchecked(index),
+        }
     }
+}
+
+#[inline(never)]
+fn bridge_out_batch_inner(
+    env: Env,
+    sender: Address,
+    source: BatchSource,
+    max_total_amount: i128,
+) -> Result<Vec<u64>, HyperionError> {
+    // The legacy wrapper decoded its inputs before requesting sender authority.
+    // Preserve that error order while avoiding the temporary encoded item records.
+    if let BatchSource::Requests(requests) = &source {
+        for request in requests.iter() {
+            let _ = request;
+        }
+    }
+    sender.require_auth();
+    let count = source.len();
+    if count == 0 || count > 20 {
+        return Err(HyperionError::BatchLimitExceeded);
+    }
+    if max_total_amount <= 0 {
+        return Err(HyperionError::InvalidAmount);
+    }
+    let mut total_amount: i128 = 0;
+    for index in 0..count {
+        let item = source.item(index);
+        if item.request.amount <= 0 {
+            return Err(HyperionError::InvalidAmount);
+        }
+        total_amount = total_amount
+            .checked_add(item.request.amount)
+            .ok_or(HyperionError::DecimalOverflow)?;
+    }
+    if total_amount > max_total_amount {
+        return Err(HyperionError::BatchLimitExceeded);
+    }
+    let mut nonces = vec![&env];
+    for index in 0..count {
+        let item = source.item(index);
+        if let Some(gas) = item.gas_amount {
+            if item.request.route != RouteKind::AxelarIts && item.request.route != RouteKind::Cctp {
+                return Err(HyperionError::UnsupportedRoute);
+            }
+            if gas <= 0 {
+                return Err(HyperionError::InvalidAmount);
+            }
+        }
+        let plan = plan_outbound(
+            &env,
+            &item.request,
+            item.gas_amount,
+            Some(&item.preconditions),
+        )?;
+        let nonce = bridge_out_inner(
+            env.clone(),
+            sender.clone(),
+            item.request,
+            item.gas_amount,
+            plan,
+        )?;
+        nonces.push_back(nonce);
+    }
+    Ok(nonces)
 }
 
 struct OutboundPlan {
@@ -1018,6 +1391,7 @@ struct OutboundPlan {
     net: i128,
     gross: i128,
     updated: hyperion_core::FlowWindow,
+    updated_dest: hyperion_core::FlowWindow,
     adapter_addr: Address,
 }
 
@@ -1025,6 +1399,7 @@ fn plan_outbound(
     env: &Env,
     request: &OutboundRequest,
     gas_amount: Option<i128>,
+    preconditions: Option<&OutboundPreconditions>,
 ) -> Result<OutboundPlan, HyperionError> {
     let OutboundRequest {
         token,
@@ -1034,6 +1409,23 @@ fn plan_outbound(
         destination_decimals,
         min_destination_amount,
     } = request;
+
+    // Issue #58: Sender-specified expiry. Expired requests fail before nonce or flow allowance changes.
+    if let Some(pre) = preconditions {
+        if let Some(deadline) = pre.deadline {
+            if deadline > 0 {
+                let is_expired = if deadline < 1_000_000_000 {
+                    (env.ledger().sequence() as u64) > deadline
+                } else {
+                    env.ledger().timestamp() > deadline
+                };
+                if is_expired {
+                    return Err(HyperionError::RequestExpired);
+                }
+            }
+        }
+    }
+
     let (amount, route, destination_decimals, min_destination_amount) = (
         *amount,
         *route,
@@ -1069,6 +1461,25 @@ fn plan_outbound(
         return Err(HyperionError::TokenNotRegistered);
     }
 
+    // Issue #57: Bind paid dispatch to explicit quote configuration fingerprint.
+    // Rejection before debit on changed adapter or fee.
+    let adapter_addr = storage::adapter(env, route)?;
+    if let Some(pre) = preconditions {
+        if let Some(ref expected_fingerprint) = pre.quote_fingerprint {
+            let actual_fingerprint = hyperion_core::compute_quote_fingerprint(
+                env,
+                route,
+                &adapter_addr,
+                cfg.fee_bps,
+                token_cfg.decimals,
+                destination_decimals,
+            );
+            if actual_fingerprint != *expected_fingerprint {
+                return Err(HyperionError::FingerprintMismatch);
+            }
+        }
+    }
+
     let split = fee_and_floor(
         amount,
         cfg.fee_bps,
@@ -1098,19 +1509,44 @@ fn plan_outbound(
     }
     let gross = fee + net;
 
+    // Issue #60: Check and consume both global route flow limit and destination flow limit.
     // Charge the flow limit against what actually crosses, not against what the sender
     // handed over. The fee never leaves Stellar, so it is not cross-chain exposure.
     let limit = storage::effective_flow_limit(env, token, route)?;
-    let window = storage::flow_window(env, token, route);
+    let mut window = storage::flow_window(env, token, route);
     let ledger = env.ledger().sequence();
-    let updated = flow::consume(&window, limit, net, ledger, cfg.flow_window_ledgers)?;
-    let adapter_addr = storage::adapter(env, route)?;
+    let route_headroom = flow::prepare_window(&mut window, limit, ledger, cfg.flow_window_ledgers)?;
+
+    let dest_limit =
+        storage::effective_destination_flow_limit(env, token, route, &destination.chain)?;
+    let mut dest_window = storage::destination_flow_window(env, token, route, &destination.chain);
+    let dest_headroom = flow::prepare_window(
+        &mut dest_window,
+        dest_limit,
+        ledger,
+        cfg.flow_window_ledgers,
+    )?;
+
+    if dest_headroom < route_headroom && net > dest_headroom {
+        return Err(HyperionError::DestinationFlowLimitExceeded);
+    }
+    if net > route_headroom {
+        return Err(HyperionError::FlowLimitExceeded);
+    }
+    if net > dest_headroom {
+        return Err(HyperionError::DestinationFlowLimitExceeded);
+    }
+
+    flow::consume_prepared(&mut window, limit, net, route_headroom)?;
+    flow::consume_prepared(&mut dest_window, dest_limit, net, dest_headroom)?;
+
     Ok(OutboundPlan {
         treasury: cfg.treasury,
         fee,
         net,
         gross,
-        updated,
+        updated: window,
+        updated_dest: dest_window,
         adapter_addr,
     })
 }
@@ -1134,7 +1570,7 @@ fn bounded_plan(
     } else if max_provider_budget != 0 {
         return Err(HyperionError::InvalidAmount);
     }
-    let plan = plan_outbound(env, request, gas_amount)?;
+    let plan = plan_outbound(env, request, gas_amount, None)?;
     match RailAdapterClient::new(env, &plan.adapter_addr).try_check_dispatch(
         &env.current_contract_address(),
         &request.token,
@@ -1176,6 +1612,7 @@ fn bridge_out_inner(
         net,
         gross,
         updated,
+        updated_dest,
         adapter_addr,
     } = plan;
     let OutboundRequest {
@@ -1185,6 +1622,7 @@ fn bridge_out_inner(
         ..
     } = request;
     storage::set_flow_window(&env, &token, route, &updated);
+    storage::set_destination_flow_window(&env, &token, route, &destination.chain, &updated_dest);
 
     let this = env.current_contract_address();
     let client = token::Client::new(&env, &token);
@@ -1251,8 +1689,8 @@ fn bridge_out_inner(
         created_ledger: env.ledger().sequence(),
         created_at: env.ledger().timestamp(),
     };
-    storage::set_transfer(&env, &record);
-    events::bridge_out(&env, &record);
+    let encoded = storage::set_transfer(&env, &record);
+    events::bridge_out_encoded(&env, record.route, &record.sender, encoded);
     Ok(nonce)
 }
 

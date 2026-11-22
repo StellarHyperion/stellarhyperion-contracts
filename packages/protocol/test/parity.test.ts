@@ -35,6 +35,7 @@ import {
 } from "../src/cctp.js";
 import { MAX_DECIMALS, MAX_FEE_BPS } from "../src/amounts.js";
 import { NOTE_VERSION, OUTBOUND_NOTE_LEN } from "../src/notes.js";
+import { WIRE_SCHEMAS } from "../src/wire-compat.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, "..");
@@ -525,6 +526,48 @@ describe("the deterministic provider fault fixtures", () => {
   });
 });
 
+describe("the hostile Soroban token and receiver fixtures", () => {
+  const variants = (source: string, name: string): string[] => {
+    const body = new RegExp(`pub enum ${name}\\s*\\{([^}]*)\\}`, "s").exec(source)?.[1] ?? "";
+    return [...body.matchAll(/^\s*([A-Z]\w*)\s*[,(]/gm)].map((m) => m[1]!);
+  };
+
+  it("documents every fixture mode the Soroban source declares, and no others", () => {
+    const fixtures = read(join(sorobanRouterSrc, "test", "hostile.rs"));
+    const doc = read(join(repoRoot, "docs", "HOSTILE_FIXTURES.md"));
+    for (const [name, expected] of [
+      [
+        "Hostility",
+        ["Honest", "Frozen", "ShortCredit", "ExtraDebit", "RequireCosigner", "Reenter"],
+      ],
+      [
+        "ReceiverMode",
+        ["Honest", "SkipAuthorization", "AuthorizeAmount", "ReplayInSameInvocation"],
+      ],
+      ["Reentry", ["SettleClaim", "BridgeOut"]],
+    ] as const) {
+      expect(variants(fixtures, name), name).toEqual(expected);
+      for (const variant of expected) expect(doc, `${name}::${variant}`).toContain(`\`${variant}`);
+    }
+    // Determinism is a documented property; the fixture must not consult ledger time or a PRNG.
+    expect(fixtures).not.toMatch(/ledger\(\)|prng\(\)/);
+    expect(read(join(repoRoot, "docs", "README.md"))).toContain("HOSTILE_FIXTURES.md");
+  });
+
+  it("keeps the boundary suite on the real router entry points and the shared rollback books", () => {
+    const suite = read(join(sorobanRouterSrc, "test", "hostile_boundaries.rs"));
+    const modules = read(join(sorobanRouterSrc, "test", "mod.rs"));
+    expect(modules).toMatch(/^mod hostile;$/m);
+    expect(modules).toMatch(/^mod hostile_boundaries;$/m);
+    for (const call of ["try_bridge_out(", "try_deliver(", "try_settle_claim(", "set_auths(&[])"]) {
+      expect(suite, call).toContain(call);
+    }
+    for (const field of ["treasury", "nonce", "dispatches", "flow", "claims", "outstanding"]) {
+      expect(suite, field).toMatch(new RegExp(`^\\s*${field}: `, "m"));
+    }
+  });
+});
+
 describe("the stateful router reference model parity", () => {
   it("shares operation words across chains while conserving balances and fixed-recipient liabilities", () => {
     const root = resolve(evmRoot, "..");
@@ -631,6 +674,43 @@ describe("the constants both chains agree on", () => {
     expectConst("HOOK_VERSION", HOOK_VERSION);
     expectConst("MSG_BODY", 148);
     expectConst("BURN_HOOK_DATA", 228);
+  });
+
+  it("registers the same CCTP and note offsets as the Rust, field for field", () => {
+    // The compatibility report is only as good as the registry it compares, so the registry's
+    // offsets are pinned to the Rust constants rather than to the TypeScript parsers alone.
+    const cctp = read(join(coreSrc, "cctp.rs"));
+    const axelar = read(join(coreSrc, "axelar.rs"));
+    const rustConst = (source: string, name: string): number => {
+      const match = new RegExp(`const ${name}\\s*:\\s*[a-z0-9]+\\s*=\\s*(\\d+)`).exec(source);
+      expect(match, `${name} not found`).not.toBeNull();
+      return Number(match?.[1]);
+    };
+    const offsets = (id: string): Record<string, number> => {
+      const schema = WIRE_SCHEMAS.schemas.find((s) => s.id === id);
+      if (schema?.kind !== "message") throw new Error(`no ${id} schema`);
+      return Object.fromEntries(
+        schema.fields.flatMap((f) => (typeof f.offset === "number" ? [[f.name, f.offset]] : [])),
+      );
+    };
+    const snake = (name: string) => name.replace(/[A-Z]/g, (c) => `_${c}`).toUpperCase();
+    const header = offsets("cctp.header");
+    const headerNames: Record<string, string> = {
+      minFinalityThreshold: "MIN_FINALITY",
+      finalityThresholdExecuted: "FINALITY_EXECUTED",
+    };
+    for (const [name, offset] of Object.entries(header)) {
+      expect(offset, name).toBe(rustConst(cctp, `MSG_${headerNames[name] ?? snake(name)}`));
+    }
+    const burnNames: Record<string, string> = { burnToken: "TOKEN", hookData: "HOOK_DATA" };
+    for (const [name, offset] of Object.entries(offsets("cctp.burn"))) {
+      expect(offset, name).toBe(rustConst(cctp, `BURN_${burnNames[name] ?? snake(name)}`));
+    }
+    const outbound = WIRE_SCHEMAS.schemas.find((s) => s.id === "note.outbound");
+    expect(outbound?.kind === "message" ? outbound.size : null).toEqual({
+      kind: "fixed",
+      bytes: rustConst(axelar, "OUTBOUND_NOTE_LEN"),
+    });
   });
 
   it("has the same note layout in the Rust", () => {

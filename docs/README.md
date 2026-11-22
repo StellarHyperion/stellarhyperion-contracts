@@ -13,6 +13,8 @@ divergence.
 
 `claim-operations.md` documents claim provenance compatibility, liability and recipient preview views, and paused-departure behavior.
 
+`HOSTILE_FIXTURES.md` documents the test-only hostile Soroban token and rail-receiver fixtures, what each mode does at the router's real boundaries, and the rollback invariants the suite asserts.
+
 ## Compatibility and migration notes
 
 - Hyperion note version 1 remains the only supported wire layout. Decoders dispatch by version
