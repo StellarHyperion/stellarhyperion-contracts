@@ -184,6 +184,7 @@ fi
 say "Archived footprint planning: node script/stellar/restore-plan.mjs RPC_URL recorded-request.json"
 say "TTL evidence is host RPC live/archived/unavailable, never a fabricated guest TTL."
 say "Replay journal export: node script/stellar/replay-journal.mjs RPC_URL ROUTER ledger:START or cursor:SAVED"
+say "Consumer copies: node script/stellar/check-deployment-copies.mjs --copies deployment-copies.json"
 
 printf '\n'
 if [ "$problems" -eq 0 ]; then

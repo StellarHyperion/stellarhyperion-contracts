@@ -54,6 +54,81 @@ The current router uses WASM `281d946ea78b194c0ef44ad9488ed02b2aa6912fb4f6fbab52
 
 The older deployment is preserved in `deployments/archive/stellar-testnet-2026-10-01.json`. Its separate admin upgrade instructions are historical in `docs/LEGACY_TESTNET_UPGRADE.md`. Do not run those old-address commands against this fresh deployment.
 
+## Cross-repository copy verification
+
+The canonical record is copied by hand into the backend and frontend repositories, so a stale copy is
+silent: an address that parses, builds and points at a contract this deployment no longer monitors.
+The comparison is a read-only command rather than a deploy step, because it is asked weeks later
+from a machine that never ran the deployment:
+
+```bash
+node script/stellar/check-deployment-copies.mjs \
+  --canonical deployments/stellar-testnet-phase1.json \
+  --copies deployment-copies.json
+```
+
+`deployment-copies.json` names each consumer repository, a local clone of it, the exact commit that
+built it, and where the copy lives inside that commit:
+
+```json
+{
+  "copies": [
+    {
+      "repository": "backend",
+      "repo": "../stellarhyperion-backend",
+      "revision": "git:<full 40-character commit sha>",
+      "path": "deployments/stellar-testnet-phase1.json"
+    },
+    {
+      "repository": "frontend",
+      "repo": "../stellarhyperion-frontend",
+      "revision": "git:<full 40-character commit sha>",
+      "path": "src/deployment.json",
+      "pointer": "/deployment"
+    }
+  ]
+}
+```
+
+`repo` is resolved relative to the copies file. `pointer` is optional and is an RFC 6901 JSON
+pointer to the record inside a consumer document that wraps it. `--canonical` defaults to
+`deployments/stellar-testnet-phase1.json`. `--json` prints the machine-readable report.
+
+What the command guarantees:
+
+- It reads each copy out of the committed blob with `git rev-parse`, `git cat-file` and `git show`.
+  A consumer working tree is never read, and no file is written: copying a new record into a
+  consumer stays a separate, reviewed operation. Exit 0 means every copy matches, 1 means drift,
+  and 2 means a usage or read error.
+- Revisions are pinned. A short, symbolic or missing commit is refused, and the resolved commit must
+  equal the one requested, so a report cannot describe a tree that changed underneath it.
+- Every difference is reported as `repository field canonical copy`, with `field` the JSON path in
+  the canonical record and `copyField` the path in the consumer's document when a pointer was used.
+  The owning repository is the consumer whose copy is stale; `owners` lists them.
+- Comparison is exact. `"30"` does not match `30`, an amount stays the string the record wrote, and
+  an array is not the object that contains it. Nothing is coerced, because coercion would hide the
+  mistakes this check exists to find.
+- Archived records are refused as a baseline unless `--allow-archived` is passed, and an allowed
+  archived baseline is labelled `active: false` with its `successor` rather than presented as the
+  current deployment. Both metadata shapes already in the tree are parsed (`lifecycle.status` and
+  the `status`/`successorRouter` fields `write-record.mjs` writes), as is a file under a directory
+  named `archive`.
+
+Compatibility and migration implications:
+
+- The command interprets no deployment schema. It compares JSON values field by field, so the EVM
+  records under `evm/deployments/` are checked with the same command and the same spec shape; a flat
+  EVM record has no `networks` wrapper and is treated as the deployment itself.
+- It changes no wire format, no ABI, no note layout and no rail behaviour, so records already
+  committed stay valid and consumers need no migration. The only new input is the copies file,
+  which is configuration rather than deployment data.
+- Adopting it does not freeze the copies at their current revisions: the spec names a commit per
+  consumer, and updating that revision is the reviewed moment a new record is accepted. A record
+  that must stay archived is still compared as historical evidence, never as an activation target.
+- Reading is bounded: one canonical record and at most eight copies, each under 1 MiB. A path that
+  is not a regular file, escapes its clone, or does not name a blob in that commit is refused with
+  the repository named.
+
 ## Deprecated and archived deployments
 
 Deprecation is a status change, not a deletion. Archived records remain in the repository and their transaction evidence is retained in full; only their operational authority is withdrawn.

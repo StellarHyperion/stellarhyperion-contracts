@@ -226,7 +226,7 @@ characters returns wasm hashes and a tarball checksum and nothing else.
 
 ## Recorded Stellar testnet contracts
 
-`deployments/stellar-testnet-phase1.json` is the canonical active deployment. Its historical filename is retained. Identical copies supply the frontend and backend.
+`deployments/stellar-testnet-phase1.json` is the canonical active deployment. Its historical filename is retained. Identical copies supply the frontend and backend. `node script/stellar/check-deployment-copies.mjs --copies deployment-copies.json` is the read-only check that those committed copies still match, at pinned revisions; see [the activation runbook](docs/TESTNET_ACTIVATION.md#cross-repository-copy-verification).
 
 | Setting             | Active contract                                            |
 | ------------------- | ---------------------------------------------------------- |
