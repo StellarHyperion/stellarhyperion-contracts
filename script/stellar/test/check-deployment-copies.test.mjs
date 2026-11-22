@@ -62,6 +62,14 @@ function writeSpec(t, copies, name = "deployment-copies.json") {
   return filename;
 }
 
+function writeDocument(t, document, name) {
+  const directory = mkdtempSync(path.join(tmpdir(), "hyperion-record-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const filename = path.join(directory, name);
+  writeFileSync(filename, JSON.stringify(document, null, 2) + "\n");
+  return filename;
+}
+
 const copyEntry = (repository, repo, commit, file, extra = {}) => ({
   repository,
   repo,
@@ -303,16 +311,22 @@ test("the command reads committed blobs and leaves both repositories untouched",
   );
 });
 
-test("the active EVM record compares with the same command and no schema assumptions", (t) => {
-  const evmRecord = JSON.parse(readFileSync("evm/deployments/evm-31337-phase1.json", "utf8"));
-  const consumer = makeRepo(t, { "deployment.json": evmRecord });
+test("a flat record compares with the same command and no schema assumptions", (t) => {
+  // Written here rather than read from `evm/deployments/`, which is ignored by git: the deployment
+  // records there only exist after a local rehearsal, so reading one would pass on the machine that
+  // generated it and fail in a clean checkout.
+  const flat = {
+    chainId: 31337,
+    router: "0x00000000000000000000000000000000000000a1",
+    token: "0x00000000000000000000000000000000000000b2",
+    feeBps: 30,
+  };
+  const canonical = writeDocument(t, flat, "evm-31337-phase1.json");
+  const consumer = makeRepo(t, { "deployment.json": flat });
   const spec = writeSpec(t, [
     copyEntry("backend", consumer.directory, consumer.commit, "deployment.json"),
   ]);
-  const report = buildReport({
-    canonicalPath: "evm/deployments/evm-31337-phase1.json",
-    copiesPath: spec,
-  });
+  const report = buildReport({ canonicalPath: canonical, copiesPath: spec });
   assert.equal(report.healthy, true);
   assert.equal(report.canonical.network, null);
   assert.equal(report.canonical.active, true);
