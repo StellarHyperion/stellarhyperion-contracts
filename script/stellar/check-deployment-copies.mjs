@@ -50,7 +50,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstatSync, readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -69,21 +69,33 @@ const INACTIVE_STATUS = new Set(["archived", "deprecated", "retired"]);
 const plain = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 function boundedRead(filename, label) {
-  let stat;
-  try {
-    stat = lstatSync(filename);
-  } catch {
-    throw new Error(`${label} does not exist: ${filename}`);
-  }
+  // Opened once and inspected through the descriptor. Asking whether a path is a file and then
+  // reading it by name is a time-of-check/time-of-use race: the name can be replaced between the
+  // two calls. One open, one fstat and one read off the same descriptor cannot be swapped under us.
+  //
   // A symlink is refused rather than followed: the command is meant to compare the file that was
-  // named, and a link could be repointed between a review and a run.
-  if (!stat.isFile()) throw new Error(`${label} must be a regular file: ${filename}`);
-  if (stat.size > MAX_BYTES) throw new Error(`${label} exceeds ${MAX_BYTES} bytes: ${filename}`);
-  const bytes = readFileSync(filename);
-  return {
-    text: bytes.toString("utf8"),
-    sha256: createHash("sha256").update(bytes).digest("hex"),
-  };
+  // named, and a link could be repointed between a review and a run. O_NOFOLLOW turns that into an
+  // open failure instead of a second stat.
+  let fd;
+  try {
+    fd = openSync(filename, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new Error(`${label} does not exist: ${filename}`);
+    if (error?.code === "ELOOP") throw new Error(`${label} must be a regular file: ${filename}`);
+    throw error;
+  }
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) throw new Error(`${label} must be a regular file: ${filename}`);
+    if (stat.size > MAX_BYTES) throw new Error(`${label} exceeds ${MAX_BYTES} bytes: ${filename}`);
+    const bytes = readFileSync(fd);
+    return {
+      text: bytes.toString("utf8"),
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+    };
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function parseJson(filename, label) {
@@ -194,16 +206,16 @@ export function loadCopySpec(filename) {
     if (typeof repo !== "string" || repo.length === 0 || repo.length > 4096)
       throw new Error(`copy ${repository}: repo must be a directory path`);
     const directory = path.resolve(base, repo);
-    let stat;
+    // Canonicalised once and then used, so the directory git is handed is the one just resolved.
+    let resolved;
     try {
-      stat = lstatSync(directory);
+      resolved = realpathSync(directory);
     } catch {
       throw new Error(`copy ${repository}: no local clone at ${directory}`);
     }
-    if (!stat.isDirectory()) throw new Error(`copy ${repository}: ${directory} is not a directory`);
     return {
       repository,
-      repo: directory,
+      repo: resolved,
       revision,
       sha: validRevision(revision, repository),
       path: validCopyPath(file, repository),
